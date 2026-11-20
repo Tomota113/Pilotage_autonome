@@ -185,9 +185,9 @@ def main(argv: list[str] | None = None) -> Path:
 
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
-    validate_config(cfg)
     if args.steps is not None:
         cfg["total_steps"] = args.steps
+    validate_config(cfg)  # après --steps : la configuration réellement utilisée doit être valide
     if cfg["algo"] == "classic":
         raise SystemExit("le pilote classique ne s'entraîne pas : utiliser agents.evaluate")
 

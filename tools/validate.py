@@ -107,7 +107,9 @@ def validate_replay(data: dict) -> None:
     _check_schema(data["schema"], agent["algo"], REPLAY_SCHEMA)
     _require(_is_int(agent["train_steps"]) and agent["train_steps"] >= 0, "agent.train_steps must be an integer >= 0")
 
-    if "network" in data:  # absent pour le pilote classique et le Q-Learning
+    no_network = agent["algo"] in TABULAR_ALGOS + ("classic",)  # table Q ou règles : pas de couches cachées
+    _require(not (no_network and "network" in data), f"agent {agent['algo']!r} has no neural network")
+    if "network" in data:
         net = data["network"]
         _check_fields(net, ("layers", "activation"), "network")
         _require(isinstance(net["layers"], list) and all(_is_int(n) and n > 0 for n in net["layers"]),
@@ -126,6 +128,7 @@ def validate_replay(data: dict) -> None:
                  and all(_is_number(v) and v >= 0 for v in frame["sensors_m"]), f"{where}.sensors_m must be 7 distances")
         _require(_is_int(frame["checkpoint"]) and frame["checkpoint"] >= 0, f"{where}.checkpoint must be an integer >= 0")
         _require(isinstance(frame["slip"], bool) and isinstance(frame["off_track"], bool), f"{where}: slip/off_track must be booleans")
+        _require(not (no_network and "activations" in frame), f"{where}: agent {agent['algo']!r} has no activations")
         if "activations" in frame:
             _require(isinstance(frame["activations"], list)
                      and all(isinstance(layer, list) and all(_is_number(v) for v in layer) for layer in frame["activations"]),

@@ -60,3 +60,11 @@ def test_short_training_writes_run_files(tmp_path, algo, action_space, hyperpara
 
     policy = SB3Policy(algo, run_dir / "checkpoints" / f"step_{steps[-1]}.zip", steps[-1], False)
     assert policy.network["layers"][1:-1] == [64, 64]
+
+
+def test_steps_override_is_validated(tmp_path):
+    path = tmp_path / "cfg.yaml"
+    path.write_text(yaml.safe_dump(valid_config()), encoding="utf-8")
+    with pytest.raises(ValueError, match="total_steps"):
+        main([str(path), "--steps", "0", "--runs-dir", str(tmp_path / "runs")])
+    assert not (tmp_path / "runs").exists()

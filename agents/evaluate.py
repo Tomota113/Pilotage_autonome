@@ -32,7 +32,7 @@ import yaml
 from agents.classic_driver import ClassicDriver
 from env.f1_env import F1Env, load_tracks
 from sim.sensors import SENSOR_RANGE
-from tools.validate import EVAL_COLUMNS, REPLAY_SCHEMA, validate_replay
+from tools.validate import EVAL_COLUMNS, REPLAY_SCHEMA, validate_config, validate_replay
 
 ROOT = Path(__file__).resolve().parent.parent
 EVAL_CSV = ROOT / "results" / "eval.csv"
@@ -141,6 +141,7 @@ def load_policy(agent: str, with_activations: bool = False):
     run_dir = path.resolve().parent.parent  # runs/<run_id>/checkpoints/<fichier>
     with open(run_dir / "config.yaml", encoding="utf-8") as f:
         config = yaml.safe_load(f)
+    validate_config(config)  # on n'évalue que des runs dont la configuration respecte le contrat
     if path.suffix == ".npy":
         policy = QTablePolicy(config["algo"], path, _train_steps(path))
     else:

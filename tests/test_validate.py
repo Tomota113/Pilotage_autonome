@@ -156,3 +156,15 @@ def test_schema_1_1_adds_tabular_algorithms_and_keeps_1_0():
     replay["agent"]["algo"] = "montecarlo"
     with pytest.raises(ValueError):
         validate_replay(replay)
+
+
+def test_tabular_and_classic_replays_have_no_network():
+    replay = valid_replay()  # pilote classique
+    replay["network"] = {"layers": [12, 64, 64, 3], "activation": "tanh"}
+    with pytest.raises(ValueError, match="no neural network"):
+        validate_replay(replay)
+    replay = valid_replay()
+    replay["agent"]["algo"] = "montecarlo"
+    replay["frames"][0]["activations"] = [[0.0] * 64]
+    with pytest.raises(ValueError, match="no activations"):
+        validate_replay(replay)

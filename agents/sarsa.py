@@ -42,8 +42,9 @@ def train(
     action = agent.act(state, 0)
     for step in range(1, total_steps + 1):
         next_state, reward, terminated, truncated, _ = env.step(action)
-        # a' est choisi AVANT la mise à jour, par la même politique epsilon-greedy, puis joué au pas suivant
-        next_action = agent.act(next_state, step)
+        # a' est choisi AVANT la mise à jour, par la même politique epsilon-greedy, puis joué au pas
+        # suivant. Sur un état terminal il n'y a pas d'action suivante (la cible vaut r) : on n'en tire pas.
+        next_action = 0 if terminated else agent.act(next_state, step)
         agent.update(state, action, reward, next_state, next_action, terminated)
         if (terminated or truncated) and step < total_steps:
             state, _ = env.reset()

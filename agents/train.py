@@ -26,7 +26,7 @@ from typing import Callable
 import numpy as np
 import yaml
 
-from env.f1_env import F1Env, load_tracks
+from env.f1_env import TRACKS_DIR, F1Env, load_tracks
 from tools.validate import validate_config
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -101,13 +101,13 @@ def _print_row(row: dict) -> None:
           f"sorties/ép {row['offtracks_per_ep']}", flush=True)
 
 
-def train_sb3(cfg: dict, run_dir: Path, run_id: str) -> None:
+def train_sb3(cfg: dict, run_dir: Path, run_id: str, tracks_dir: Path = TRACKS_DIR) -> None:
     import stable_baselines3 as sb3
     from stable_baselines3.common.callbacks import BaseCallback
     from stable_baselines3.common.monitor import Monitor
     from stable_baselines3.common.vec_env import DummyVecEnv
 
-    train_tracks = load_tracks(cfg["tracks"]["train"])
+    train_tracks = load_tracks(cfg["tracks"]["train"], tracks_dir)
     vec_env = DummyVecEnv([lambda: Monitor(F1Env(cfg, train_tracks)) for _ in range(cfg["n_envs"])])
     eval_env = F1Env(cfg, train_tracks)
 
@@ -152,11 +152,11 @@ def train_sb3(cfg: dict, run_dir: Path, run_id: str) -> None:
         evaluate_now(step)
 
 
-def train_qlearning(cfg: dict, run_dir: Path, run_id: str) -> None:
+def train_qlearning(cfg: dict, run_dir: Path, run_id: str, tracks_dir: Path = TRACKS_DIR) -> None:
     from agents.discretize import DiscreteStateWrapper
     from agents.qlearning import QLearningAgent, train
 
-    train_tracks = load_tracks(cfg["tracks"]["train"])
+    train_tracks = load_tracks(cfg["tracks"]["train"], tracks_dir)
     env = DiscreteStateWrapper(F1Env(cfg, train_tracks))
     eval_env = DiscreteStateWrapper(F1Env(cfg, train_tracks))
     agent = QLearningAgent(env.observation_space.n, env.action_space.n, seed=cfg["seed"], **cfg["hyperparams"])
@@ -172,7 +172,8 @@ def main(argv: list[str] | None = None) -> Path:
     parser.add_argument("config", type=Path, help="configs/<file>.yaml")
     parser.add_argument("--steps", type=int, help="override total_steps (short trial runs)")
     parser.add_argument("--runs-dir", type=Path, default=ROOT / "runs")
-    parser.add_argument("--run-id", help="use an existing run identifier")
+    parser.add_argument("--run-id", help="override the generated run identifier")
+    parser.add_argument("--tracks-dir", type=Path, default=TRACKS_DIR, help="directory of the track.json files")
     args = parser.parse_args(argv)
 
     with open(args.config, encoding="utf-8") as f:
@@ -192,9 +193,9 @@ def main(argv: list[str] | None = None) -> Path:
 
     start = time.perf_counter()
     if cfg["algo"] == "qlearning":
-        train_qlearning(cfg, run_dir, run_id)
+        train_qlearning(cfg, run_dir, run_id, args.tracks_dir)
     else:
-        train_sb3(cfg, run_dir, run_id)
+        train_sb3(cfg, run_dir, run_id, args.tracks_dir)
     elapsed = time.perf_counter() - start
     print(f"terminé en {elapsed:.1f} s, soit {cfg['total_steps'] / elapsed:.0f} pas/s (évaluations comprises) "
           f"-> {run_dir}")

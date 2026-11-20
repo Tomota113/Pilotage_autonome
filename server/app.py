@@ -176,10 +176,12 @@ def create_app(root: Path | None = None) -> FastAPI:
     async def lifespan(_: FastAPI):
         for directory in (runs, tracks, root / "results", queue, logs):
             local_path(directory).mkdir(parents=True, exist_ok=True)
-        yield
-        for job in jobs.values():
-            job.stop()
-        await asyncio.gather(*(job.task for job in jobs.values()))
+        try:
+            yield
+        finally:
+            for job in jobs.values():
+                job.stop()
+            await asyncio.gather(*(job.task for job in jobs.values()))
 
     application = FastAPI(lifespan=lifespan)
     for name in ("tracks", "runs", "results"):
@@ -230,11 +232,10 @@ def create_app(root: Path | None = None) -> FastAPI:
             with tempfile.NamedTemporaryFile(dir=local_path(queue), suffix=".yaml", delete=False) as stream:
                 queued_config = Path(stream.name)
                 stream.write(content.encode("utf-8"))
-            # La racine personnalisée change aussi la provenance des circuits.
-            module = ["agents.train"] if root == REPO_ROOT else ["server.worker", "train"]
             with local_path(log_path).open("xb") as log:
                 process = subprocess.Popen(
-                    [sys.executable, "-m", *module, str(queued_config), "--runs-dir", str(runs), "--run-id", run_id],
+                    [sys.executable, "-m", "agents.train", str(queued_config), "--runs-dir", str(runs),
+                     "--run-id", run_id, "--tracks-dir", str(tracks)],
                     cwd=root, env=child_env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
                 )
         except (OSError, ValueError) as exc:
@@ -247,6 +248,21 @@ def create_app(root: Path | None = None) -> FastAPI:
         job.task = asyncio.create_task(job.reap(queued_config))
         return {"run_id": run_id, "state": job.state}
 
+    @application.get("/tracks")
+    async def get_tracks():
+        """Circuits available in <root>/tracks (id, name, split, length), for the application."""
+        result = []
+        for path in sorted(tracks.glob("*.json")):
+            if not COMPONENT.fullmatch(path.stem) or path.is_symlink():
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                result.append({"id": data["id"], "name": data["name"], "split": data["split"],
+                               "length": data["length"]})
+            except (OSError, ValueError, KeyError, TypeError):
+                continue  # fichier illisible : ignoré, validate.py dira pourquoi
+        return result
+
     @application.get("/runs")
     async def get_runs():
         run_ids = set(jobs) | {path.name for path in runs.iterdir() if COMPONENT.fullmatch(path.name)}
@@ -258,7 +274,10 @@ def create_app(root: Path | None = None) -> FastAPI:
                 continue
             config, last_step = {}, None
             try:
-                config = jobs[run_id].config if run_id in jobs else yaml.safe_load(config_file(run_id).read_text(encoding="utf-8"))
+                if job := jobs.get(run_id):
+                    config = job.config
+                else:
+                    config = yaml.safe_load(config_file(run_id).read_text(encoding="utf-8"))
                 if not isinstance(config, dict):
                     raise ValueError("Invalid stored run configuration")
                 rows, _ = read_progress(runs / run_id / "progress.csv")

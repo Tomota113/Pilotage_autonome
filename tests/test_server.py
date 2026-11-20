@@ -23,7 +23,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("F1RL_ROOT", str(tmp_path))
     monkeypatch.setenv("OMP_NUM_THREADS", "1")
     monkeypatch.setenv("MKL_NUM_THREADS", "1")
-    with TestClient(create_app()) as test_client:
+    # La boucle d'Uvicorn permet aussi à TestClient de tourner dans le bac à sable.
+    with TestClient(create_app(), backend_options={"use_uvloop": True}) as test_client:
         yield test_client
 
 
@@ -133,8 +134,13 @@ def test_train_and_watch(client, tmp_path):
     assert client.get("/files/results/eval.csv").text == "run_id\n"
 
 
-def test_stop_training(client):
-    run_id = start_run(client, short_config(total_steps=10_000_000))
+def test_stop_training(client, tmp_path):
+    # Ce nom de fichier n'existe que sous F1RL_ROOT.
+    tracks = tmp_path / "tracks"
+    shutil.copyfile(tracks / "demo_oval.json", tracks / "local_oval.json")
+    config = short_config(total_steps=10_000_000)
+    config["tracks"]["train"] = ["local_oval"]
+    run_id = start_run(client, config)
     wait_for_run(client, run_id, lambda row: row["last_step"] is not None)
     with client.websocket_connect(f"/ws/runs/{run_id}") as websocket:
         assert websocket.receive_json() == {"type": "status", "state": "running"}
@@ -148,3 +154,9 @@ def test_stop_training(client):
                 states.append(message["state"])
                 assert states == ["stopping", "finished"][:len(states)]
     assert client.post(f"/runs/{run_id}/stop").json()["state"] == "finished"
+
+
+def test_lists_tracks(client, tmp_path):
+    (tmp_path / "tracks" / "broken.json").write_text("{", encoding="utf-8")  # illisible : ignoré
+    tracks = client.get("/tracks").json()
+    assert tracks == [{"id": "demo_oval", "name": "Ovale de démonstration", "split": "demo", "length": 976.9}]

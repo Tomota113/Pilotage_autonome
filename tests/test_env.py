@@ -1,9 +1,7 @@
 """Tests de l'environnement F1Env (env/f1_env.py).
 
-Deux familles :
-- les méthodes d'aide (toujours testées, elles sont déjà écrites) ;
-- reset()/step() via la fixture ``make_env`` : le code de l'étudiant par défaut
-  (tests sautés tant qu'il n'est pas écrit), la référence avec ``--reference-env``.
+Deux familles : les méthodes d'aide, testées une à une sur un état posé à la
+main, puis reset()/step() sur des épisodes complets.
 """
 
 import math
@@ -20,7 +18,7 @@ OVAL = load_tracks(["demo_oval"])  # ovale : droite de 300 m en bas (y = -60), v
 
 
 def helper_env(config=None, tracks=OVAL) -> F1Env:
-    """Base F1Env with its episode state set by hand (no call to the student's reset)."""
+    """F1Env with its episode state set by hand, to test one helper at a time."""
     env = F1Env(config, tracks)
     _ = env.np_random  # premier accès : gymnasium initialise le générateur aléatoire
     env.track = tracks[0]
@@ -165,19 +163,8 @@ def test_truncation_rule():
     assert env._is_truncated(10, 100)
 
 
-def test_student_methods_are_left_to_write():
-    """reset()/step() de la classe de base : squelette pour l'étudiant (ce test signale quand ils sont écrits)."""
-    env = F1Env(tracks=OVAL)
-    try:
-        env.reset(seed=0)
-    except NotImplementedError as exc:
-        assert "étudiant" in str(exc)
-        return
-    pytest.skip("reset() de l'étudiant est écrit : les tests make_env le vérifient")
-
-
 # ======================================================================
-# reset() / step() (code de l'étudiant, ou référence avec --reference-env)
+# reset() / step()
 # ======================================================================
 
 

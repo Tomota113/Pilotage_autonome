@@ -1,8 +1,6 @@
 """Gymnasium environment: drive a single-seater around a 2D circuit.
 
-Ce fichier contient tout l'environnement SAUF le corps de ``reset()`` et de
-``step()``, que l'étudiant écrit lui-même (règle 4 de CLAUDE.md). Chaque
-morceau de calcul est déjà disponible sous forme de méthode d'aide testée
+Chaque morceau de calcul est une méthode d'aide testée séparément
 (``_compute_obs``, ``_progress``, ``_check_checkpoints``, ``_compute_reward``,
 ...) : ``reset()`` et ``step()`` se résument à les appeler dans le bon ordre
 et à tenir à jour l'état de l'épisode.
@@ -26,6 +24,7 @@ import numpy as np
 from gymnasium import spaces
 
 from sim.car import CarState
+from sim.car import step as car_step
 from sim.sensors import SENSOR_RANGE, read_sensors
 from sim.track import N_CHECKPOINTS, Track, TrackPosition
 
@@ -142,7 +141,7 @@ class F1Env(gym.Env):
         self.steps = 0
 
     # ------------------------------------------------------------------
-    # reset() et step() : À ÉCRIRE PAR L'ÉTUDIANT
+    # Boucle de l'environnement
     # ------------------------------------------------------------------
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
@@ -152,27 +151,50 @@ class F1Env(gym.Env):
         circuit and the grip (used by the evaluation).
         """
         super().reset(seed=seed)  # initialise self.np_random avec la graine
-        # Plan :
-        # 1. choisir le circuit (self._select_track) et le facteur d'adhérence (self._sample_mu_factor) ;
-        # 2. placer la voiture au départ, à l'arrêt (self._start_state) et calculer sa projection ;
-        # 3. remettre à zéro checkpoint, progress_m, best_progress, stall, steps ;
-        # 4. renvoyer l'observation (self._compute_obs) et le dictionnaire info (self._info).
-        raise NotImplementedError("À écrire par l'étudiant : corps de F1Env.reset() (voir le plan ci-dessus)")
+        # 1. Circuit et facteur d'adhérence de l'épisode
+        self.track = self._select_track(options)
+        self.mu_factor = self._sample_mu_factor(options)
+        # 2. Voiture à l'arrêt sur la ligne de départ, et sa projection sur la ligne centrale
+        self.car = self._start_state(self.track)
+        self.pos = self.track.project(self.car.x, self.car.y, hint_index=self.track.start_index)
+        # 3. Compteurs de l'épisode remis à zéro
+        self.checkpoint = 0
+        self.progress_m = self.best_progress = 0.0
+        self.stall = self.steps = 0
+        # 4. Première observation
+        obs = self._compute_obs(self.car, self.pos, self._effective_mu(self.pos))
+        return obs, self._info(slip=False, off_track=False, lap=False)
 
     def step(self, action):
         """Apply one decision; return ``(observation, reward, terminated, truncated, info)``."""
-        # Plan :
-        # 1. traduire l'action en commande (self._decode_action) ;
-        # 2. avancer la voiture avec sim.car.step pendant self.dt, en self.substeps sous-pas,
-        #    avec l'adhérence effective self._effective_mu(self.pos) ; garder l'ancien delta ;
-        # 3. projeter la nouvelle position (self.track.project, avec hint_index = ancien indice) ;
-        # 4. progression Δs (self._progress), checkpoints (self._check_checkpoints), sortie
-        #    de piste (self.track.is_off_track), tour validé (checkpoint == N_CHECKPOINTS) ;
-        # 5. récompense (self._compute_reward) ;
-        # 6. mettre à jour pos, steps, progress_m, best_progress et stall ;
-        # 7. terminated = sortie ou tour ; truncated = pas terminé et self._is_truncated(...) ;
-        # 8. renvoyer observation, récompense, terminated, truncated, info.
-        raise NotImplementedError("À écrire par l'étudiant : corps de F1Env.step() (voir le plan ci-dessus)")
+        # 1. Action de l'agent -> commande (steer, throttle, brake)
+        command = self._decode_action(action)
+        # 2. Physique pendant dt (substeps sous-pas), avec l'adhérence sous la voiture
+        old_delta = self.car.delta
+        self.car, slip = car_step(self.car, command, self._effective_mu(self.pos), self.dt, self.substeps)
+        # 3. Nouvelle projection, cherchée autour de l'ancien segment
+        pos = self.track.project(self.car.x, self.car.y, hint_index=self.pos.index)
+        # 4. Progression, checkpoints, sortie de piste, tour
+        ds_raw, ds = self._progress(self.pos.s, pos.s, self.car.v)
+        self.checkpoint = self._check_checkpoints(self.checkpoint, self.pos.s, ds_raw, ds)
+        lap = self.checkpoint == N_CHECKPOINTS
+        off_track = self.track.is_off_track(pos)
+        # 5. Récompense
+        reward = self._compute_reward(ds, off_track, lap, self.car.delta - old_delta)
+        # 6. État de l'épisode ; le compteur « sans progrès » repart à 0 dès qu'on bat son record
+        self.pos = pos
+        self.steps += 1
+        self.progress_m += ds
+        if self.progress_m > self.best_progress:
+            self.best_progress, self.stall = self.progress_m, 0
+        else:
+            self.stall += 1
+        # 7. Fin d'épisode
+        terminated = off_track or lap
+        truncated = not terminated and self._is_truncated(self.steps, self.stall)
+        # 8. Observation suivante
+        obs = self._compute_obs(self.car, pos, self._effective_mu(pos))
+        return obs, reward, terminated, truncated, self._info(slip, off_track, lap)
 
     # ------------------------------------------------------------------
     # Méthodes d'aide (écrites et testées)

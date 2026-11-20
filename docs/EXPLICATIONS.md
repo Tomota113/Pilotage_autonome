@@ -68,9 +68,9 @@ points à bien comprendre pour pouvoir les défendre.
   ou `discrete9`), récompense et fin d'épisode. Il est construit à partir des sections
   `env`, `reward` et `mu` de config.yaml (valeurs par défaut si absentes) et d'une liste de circuits.
 - Toutes les briques sont des méthodes d'aide testées : `_compute_obs`, `_progress`,
-  `_check_checkpoints`, `_compute_reward`, `_is_truncated`, `_info`... **`reset()` et `step()`
-  sont à écrire** (plan en commentaires dans le code) ; `env/reference_impl.py` contient une
-  version de référence, à ne lire qu'après avoir essayé.
+  `_check_checkpoints`, `_compute_reward`, `_is_truncated`, `_info`... `reset()` et `step()`
+  les appellent dans l'ordre, chaque étape est commentée (à savoir expliquer à l'oral :
+  à la demande de l'étudiant, elles ont été écrites par Claude et non par lui).
 - Δs est plafonné à ±(v dt + 1 m) : la voiture ne peut pas aller plus loin en une décision.
   Un Δs plus grand veut dire que la projection a « sauté » (virage coupé) : on ne le
   récompense pas et on ne valide aucun checkpoint sur ce pas.
@@ -82,6 +82,6 @@ points à bien comprendre pour pouvoir les défendre.
   ne le voit pas, sauf avec `observe_mu` (13e valeur = μ / 1,5).
 - Point d'attention : avec δ en radians, λ |Δδ| ≤ 0,05 × 0,1 = 0,005 par pas, très petit devant
   k Δs ≈ 0,1 à 0,3. L'ablation λ = 0 (mission 8) dira si ce terme change quelque chose.
-- Tests : `pytest` teste TON code (tests sautés tant qu'il lève NotImplementedError) ;
-  `pytest --reference-env` teste la référence. Débit de `env.step` complet (référence,
-  i3-1115G4) : ≈ 4 800 pas/s.
+- Tests : `check_env` de Gymnasium, marche arrière non récompensée, virage coupé sans
+  checkpoint, arrêt tronqué après 100 pas, épisodes aléatoires qui finissent, tour complet de
+  l'ovale. Débit de `env.step` complet (i3-1115G4, actions aléatoires) : ≈ 4 800 pas/s.

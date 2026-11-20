@@ -32,7 +32,7 @@ npm --prefix app test  # parties pures de l'application
 | Régénérer les circuits | `python -m tools.generate_tracks` |
 | Vérifier un fichier du contrat | `python tools/validate.py tracks/*.json results/eval.csv` |
 | Mesurer le débit du simulateur | `python -m tools.benchmark` |
-| Régénérer les 18 configurations | `python -m tools.make_configs` |
+| Régénérer les 24 configurations | `python -m tools.make_configs` |
 | Un entraînement | `python -m agents.train configs/ppo_mufixe_s0.yaml` (`--steps 20000` pour un essai court) |
 | Les entraînements de la nuit | `systemd-inhibit --what=sleep tools/run_night.sh` (reprend là où il s'est arrêté) |
 | Une partie seulement | `tools/run_night.sh configs/sac_*.yaml` |

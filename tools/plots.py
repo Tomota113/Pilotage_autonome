@@ -41,6 +41,8 @@ STYLE = {
     "sac_mufixe": ("#eda100", "D"),
     "qlearning_mufixe": ("#e87ba4", "v"),
     "ppo_mufixe_nolambda": ("#008300", "P"),
+    "sarsa_mufixe": ("#6250d6", "X"),
+    "montecarlo_mufixe": ("#e34948", "*"),
 }
 CLASSIC_COLOR = "#52514e"  # gris : référence, pas une série comparée
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"

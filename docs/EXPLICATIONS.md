@@ -190,3 +190,19 @@ points à bien comprendre pour pouvoir les défendre.
   suivant garde sa valeur. Puis Q(s, a) ← Q(s, a) + α (cible − Q(s, a)).
 - Vérification : sur le couloir 1D, la politique apprise va à droite depuis chaque case (test).
   Débit mesuré sur le vrai environnement : ≈ 4 000 pas/s, soit ≈ 5 min pour 1 M de pas.
+
+## SARSA et Monte-Carlo (ajoutés le 21/11/2026, à la demande de l'étudiant)
+
+- Deux nouvelles méthodes tabulaires, sur le même état discrétisé (768 états) et les mêmes actions
+  `discrete9` que le Q-Learning. `agents/tabular.py` regroupe ce qu'elles partagent : table Q,
+  ε-greedy, sauvegarde `.npy`, évaluation périodique. Seule la mise à jour de Q change :
+  - Q-Learning (hors politique) : cible r + γ max_a' Q(s', a') — la meilleure action suivante ;
+  - SARSA (sur politique) : cible r + γ Q(s', a') avec a' l'action ε-greedy réellement jouée ensuite.
+    SARSA apprend la valeur de la politique qui explore, donc plus prudente près des bords ;
+  - Monte-Carlo (première visite) : pas de bootstrap ; à la fin de l'épisode, Q(s, a) est corrigé vers
+    le retour réellement obtenu G_t = r_t + γ r_{t+1} + … (moins biaisé, plus variable, apprentissage
+    seulement en fin d'épisode ; un épisode tronqué a un retour coupé).
+- Contrat de données passé en version 1.1 (config.yaml, replay.json) pour autoriser `sarsa` et
+  `montecarlo` ; les fichiers 1.0 restent valides avec les anciens algorithmes (règle 5 de CLAUDE.md).
+- Conditions `sarsa_mufixe` et `montecarlo_mufixe` × graines 0, 1, 2 : 24 configurations au total.
+  Débit mesuré (20 000 pas, pendant qu'un PPO tournait) : ≈ 2 750 pas/s, soit ≈ 6 min pour 1 M de pas.

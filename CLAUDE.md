@@ -45,14 +45,20 @@ PC principal : Intel Core i3, pas de GPU utile. Donc :
   Claude peut les lancer lui-même quand tout est prêt.
 
 Débits mesurés sur l'i3-1115G4 (20 000 pas) : simulateur seul ≈ 10 000 pas/s,
-Q-Learning ≈ 4 000, PPO ≈ 1 240, DQN ≈ 1 210, SAC ≈ 190 pas/s.
+Q-Learning ≈ 4 000, SARSA et Monte-Carlo ≈ 2 750 (mesurés pendant un PPO),
+PPO ≈ 1 240, DQN ≈ 1 210, SAC ≈ 190 pas/s.
+
+Contrat de données : version 1.1 de config.yaml et replay.json (ajout de
+`sarsa` et `montecarlo`) ; les fichiers 1.0 restent valides avec les
+algorithmes de la 1.0.
 
 ## Pile technique
 
 - Simulateur : Python 3.11+, NumPy.
 - Environnement : Gymnasium (valider avec `gymnasium.utils.env_checker.check_env`).
-- Agents : PyTorch + Stable-Baselines3 (DQN, PPO, SAC) ; Q-Learning et
-  pilote classique écrits à la main.
+- Agents : PyTorch + Stable-Baselines3 (DQN, PPO, SAC) ; méthodes tabulaires
+  (Q-Learning, SARSA, Monte-Carlo, sur l'état discrétisé à 768 états) et pilote
+  classique écrits à la main.
 - Serveur : FastAPI + WebSockets, uniquement pour le Training Center.
 - Application : React + Canvas 2D ; lit les fichiers du contrat de données.
 - Tests : pytest.
@@ -62,7 +68,8 @@ Q-Learning ≈ 4 000, PPO ≈ 1 240, DQN ≈ 1 210, SAC ≈ 190 pas/s.
 ```
 sim/            simulateur physique (sans dépendance au RL)
 env/            F1Env (Gymnasium)
-agents/         qlearning.py, classic_driver.py, train.py, evaluate.py
+agents/         tabular.py, qlearning.py, sarsa.py, monte_carlo.py, discretize.py,
+                classic_driver.py, train.py, evaluate.py
 tracks/         circuits (track.json)
 configs/        configurations (config.yaml)
 runs/<run_id>/  config.yaml, progress.csv, checkpoints/, replays/

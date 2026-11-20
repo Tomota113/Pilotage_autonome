@@ -60,14 +60,13 @@ class ClassicPolicy:
 
 
 class QTablePolicy:
-    """Greedy policy of a Q-table saved by agents/qlearning.py (state from agents/discretize.py)."""
+    """Greedy policy of a Q-table saved by a tabular agent (state from agents/discretize.py)."""
 
-    algo = "qlearning"
     network = None
 
-    def __init__(self, path: Path, train_steps: int):
+    def __init__(self, algo: str, path: Path, train_steps: int):
         self.q = np.load(path)
-        self.checkpoint, self.train_steps = path.stem, train_steps
+        self.algo, self.checkpoint, self.train_steps = algo, path.stem, train_steps
 
     def act(self, env: F1Env, obs: np.ndarray):
         from agents.discretize import discrete_state
@@ -143,7 +142,7 @@ def load_policy(agent: str, with_activations: bool = False):
     with open(run_dir / "config.yaml", encoding="utf-8") as f:
         config = yaml.safe_load(f)
     if path.suffix == ".npy":
-        policy = QTablePolicy(path, _train_steps(path))
+        policy = QTablePolicy(config["algo"], path, _train_steps(path))
     else:
         policy = SB3Policy(config["algo"], path, _train_steps(path), with_activations)
     return policy, config, run_dir.name

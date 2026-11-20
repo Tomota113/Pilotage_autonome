@@ -25,7 +25,7 @@ def valid_replay() -> dict:
     }
     second = dict(frame, t=0.10)
     return {
-        "schema": "f1rl.replay/1.0", "run_id": "classic_demo",
+        "schema": "f1rl.replay/1.1", "run_id": "classic_demo",
         "agent": {"algo": "classic", "checkpoint": "none", "train_steps": 0},
         "track_id": "demo_oval", "mu_factor": 1.0, "seed": 0, "dt": 0.05,
         "frames": [frame, second],
@@ -35,7 +35,7 @@ def valid_replay() -> dict:
 
 def valid_config() -> dict:
     return {
-        "schema": "f1rl.config/1.0", "algo": "ppo", "seed": 0, "total_steps": 1000000, "n_envs": 1,
+        "schema": "f1rl.config/1.1", "algo": "ppo", "seed": 0, "total_steps": 1000000, "n_envs": 1,
         "tracks": {"train": ["gen_00", "gen_01"], "test": ["gen_10"]},
         "mu": {"mode": "fixed", "value": 1.0, "range": [0.5, 1.1]},
         "env": {"dt": 0.05, "action_repeat": 5, "action_space": "continuous", "max_steps": 3000,
@@ -134,3 +134,25 @@ def test_script_validates_committed_tracks():
     result = subprocess.run([sys.executable, "tools/validate.py", *tracks], cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.count("OK") == len(tracks) == 16
+
+
+def test_schema_1_1_adds_tabular_algorithms_and_keeps_1_0():
+    cfg = valid_config()
+    cfg["schema"] = "f1rl.config/1.0"
+    validate_config(cfg)  # ancienne version, ancien algorithme : toujours valide
+    cfg.update(algo="sarsa")
+    cfg["env"]["action_space"] = "discrete9"
+    with pytest.raises(ValueError, match="1.1"):
+        validate_config(cfg)  # sarsa n'existe pas en 1.0
+    cfg["schema"] = "f1rl.config/1.1"
+    validate_config(cfg)
+    cfg["env"]["action_space"] = "continuous"
+    with pytest.raises(ValueError):
+        validate_config(cfg)  # méthode tabulaire : discrete9 obligatoire
+
+    replay = valid_replay()
+    replay["schema"] = "f1rl.replay/1.0"
+    validate_replay(replay)
+    replay["agent"]["algo"] = "montecarlo"
+    with pytest.raises(ValueError):
+        validate_replay(replay)

@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { ALGO_LABELS } from "../data/algorithms.js";
 import { getMode, listRuns, loadEval, loadProgress } from "../data/api.js";
 
-const COLORS = { ppo: "#3987e5", dqn: "#199e70", sac: "#c98500", qlearning: "#d55181", classic: "#8c8b84" };
+const COLORS = {
+  ppo: "#3987e5", dqn: "#199e70", sac: "#c98500", qlearning: "#d55181",
+  sarsa: "#9085e9", montecarlo: "#e66767", classic: "#8c8b84",
+};
 const DASHES = [undefined, "7 4", "2 4", "8 3 2 3"];
 const MODE_LABELS = { fixed: "μ fixe", uniform: "μ aléatoire" };
 const METRICS = {
@@ -12,7 +16,10 @@ const METRICS = {
 };
 const FORMAT = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 3 });
 const STEPS = new Intl.NumberFormat("fr-FR");
-const algoLabel = (algo) => algo === "classic" ? "Pilote classique (référence)" : algo.toUpperCase();
+function algoLabel(algo) {
+  if (algo === "classic") return "Pilote classique (référence)";
+  return Object.hasOwn(ALGO_LABELS, algo) ? ALGO_LABELS[algo] : algo.toUpperCase();
+}
 
 const asNumber = (value) => value === "" || value == null ? NaN : Number(value);
 const sortedOptions = (values) => [...new Set(values.filter((value) => value != null && value !== ""))]
@@ -72,7 +79,8 @@ export function aggregateLearning(sources, metricKey) {
     const dashIndex = dashIndices.get(algo) ?? 0;
     dashIndices.set(algo, dashIndex + 1);
     const condition = noPenalty === true ? " · sans pénalité" : noPenalty == null ? " · λ inconnu" : "";
-    return { key, label: `${base} · ${MODE_LABELS[muMode] ?? muMode}${condition}`, algo, points,
+    const name = base.startsWith(`${algo}_`) ? base.slice(algo.length + 1) : base;
+    return { key, label: `${algoLabel(algo)} · ${name} · ${MODE_LABELS[muMode] ?? muMode}${condition}`, algo, points,
       seeds: runs.size, dash: DASHES[dashIndex % DASHES.length] };
   });
 }
@@ -235,7 +243,7 @@ function EvaluationChart({ entries, metricKey }) {
                                       fill={COLOR(algo)}>
                   <title>{`${algoLabel(algo)} · ${FORMAT.format(mean)} · ${count} graine(s)`}</title>
                 </rect>}
-                <text x={center} y="232" textAnchor="middle">{algo === "classic" ? "Classique" : algo.toUpperCase()}</text>
+                <text x={center} y="232" textAnchor="middle">{algo === "classic" ? "Classique" : algoLabel(algo)}</text>
               </g>
             );
           })}
@@ -346,7 +354,7 @@ export default function Analytics() {
           {!evaluation.length && (data.evaluation.length
             ? <p className="empty">Aucun épisode d’évaluation pour ces filtres.</p>
             : <p className="empty">Aucun eval.csv. Pour évaluer tout le protocole, lancez <code>.venv/bin/python -m tools.evaluate_all</code>.
-                Pour l’ovale de démonstration, utilisez <code>.venv/bin/python -m agents.evaluate runs/&lt;run_id&gt;/checkpoints/&lt;fichier&gt;.zip --tracks demo_oval</code>.</p>)}
+                Pour l’ovale de démonstration, utilisez <code>.venv/bin/python -m agents.evaluate runs/&lt;run_id&gt;/checkpoints/&lt;fichier&gt; --tracks demo_oval</code>.</p>)}
         </>
       )}
     </>

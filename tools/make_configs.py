@@ -3,7 +3,8 @@
 Usage : ``python -m tools.make_configs [--steps 1000000] [--out configs]``
 
 Conditions (même budget de pas, mêmes circuits, mêmes récompenses) :
-- ppo_mufixe, dqn_mufixe, sac_mufixe, qlearning_mufixe : mu fixé à 1,0 ;
+- ppo_mufixe, dqn_mufixe, sac_mufixe, qlearning_mufixe, sarsa_mufixe, montecarlo_mufixe :
+  mu fixé à 1,0 ;
 - ppo_mualea : mu tiré uniformément dans [0,5 ; 1,1] à chaque épisode ;
 - ppo_mufixe_nolambda : ablation, pénalité de braquage lambda = 0.
 Graines 0, 1 et 2 -> fichiers ``<condition>_s<graine>.yaml``.
@@ -32,6 +33,8 @@ CONDITIONS = {
     "dqn_mufixe": ("dqn", "fixed", {}),
     "sac_mufixe": ("sac", "fixed", {}),
     "qlearning_mufixe": ("qlearning", "fixed", {}),
+    "sarsa_mufixe": ("sarsa", "fixed", {}),
+    "montecarlo_mufixe": ("montecarlo", "fixed", {}),
     "ppo_mufixe_nolambda": ("ppo", "fixed", {"lambda_steer": 0.0}),
 }
 

@@ -1,5 +1,5 @@
 # Condition dqn_mufixe, graine 1 — généré par tools/make_configs.py
-schema: f1rl.config/1.0
+schema: f1rl.config/1.1
 algo: dqn
 seed: 1
 total_steps: 1000000

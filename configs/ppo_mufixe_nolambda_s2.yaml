@@ -1,5 +1,5 @@
 # Condition ppo_mufixe_nolambda, graine 2 — généré par tools/make_configs.py
-schema: f1rl.config/1.0
+schema: f1rl.config/1.1
 algo: ppo
 seed: 2
 total_steps: 1000000

@@ -5,7 +5,8 @@ Usage : ``python -m agents.train configs/<fichier>.yaml [--steps N]``
 - crée ``runs/<run_id>/`` avec une copie de la configuration effective
   (``total_steps`` remplacé par ``--steps`` s'il est donné) ;
 - entraîne PPO / SAC (actions continues) ou DQN (``discrete9``) de
-  Stable-Baselines3, politique MLP 2 × 64, ou le Q-Learning tabulaire ;
+  Stable-Baselines3, politique MLP 2 × 64, ou une méthode tabulaire (Q-Learning,
+  SARSA, Monte-Carlo) sur l'état discrétisé ;
 - checkpoint tous les ``checkpoint_every`` pas dans ``checkpoints/step_<N>`` ;
 - évaluation déterministe tous les ``eval_every`` pas (et à la fin) sur
   ``eval_episodes`` épisodes -> une ligne de ``progress.csv``.
@@ -27,7 +28,7 @@ import numpy as np
 import yaml
 
 from env.f1_env import TRACKS_DIR, F1Env, load_tracks
-from tools.validate import validate_config
+from tools.validate import TABULAR_ALGOS, validate_config
 
 ROOT = Path(__file__).resolve().parent.parent
 PROGRESS_COLUMNS = (
@@ -152,14 +153,20 @@ def train_sb3(cfg: dict, run_dir: Path, run_id: str, tracks_dir: Path = TRACKS_D
         evaluate_now(step)
 
 
-def train_qlearning(cfg: dict, run_dir: Path, run_id: str, tracks_dir: Path = TRACKS_DIR) -> None:
+def train_tabular(cfg: dict, run_dir: Path, run_id: str, tracks_dir: Path = TRACKS_DIR) -> None:
+    """Q-Learning, SARSA or Monte-Carlo on the discretized state (agents/discretize.py)."""
+    from agents import monte_carlo, qlearning, sarsa
     from agents.discretize import DiscreteStateWrapper
-    from agents.qlearning import QLearningAgent, train
 
+    agent_cls, train = {
+        "qlearning": (qlearning.QLearningAgent, qlearning.train),
+        "sarsa": (sarsa.SarsaAgent, sarsa.train),
+        "montecarlo": (monte_carlo.MonteCarloAgent, monte_carlo.train),
+    }[cfg["algo"]]
     train_tracks = load_tracks(cfg["tracks"]["train"], tracks_dir)
     env = DiscreteStateWrapper(F1Env(cfg, train_tracks))
     eval_env = DiscreteStateWrapper(F1Env(cfg, train_tracks))
-    agent = QLearningAgent(env.observation_space.n, env.action_space.n, seed=cfg["seed"], **cfg["hyperparams"])
+    agent = agent_cls(env.observation_space.n, env.action_space.n, seed=cfg["seed"], **cfg["hyperparams"])
     agent = train(agent, env, eval_env, cfg["total_steps"], cfg["eval_every"], cfg["eval_episodes"],
                   run_dir / "progress.csv", run_meta(cfg, run_id))
     ckpt_dir = run_dir / "checkpoints"
@@ -192,8 +199,8 @@ def main(argv: list[str] | None = None) -> Path:
     print(f"run {run_id} : {cfg['algo']} {cfg['total_steps']} pas, circuits {cfg['tracks']['train']}", flush=True)
 
     start = time.perf_counter()
-    if cfg["algo"] == "qlearning":
-        train_qlearning(cfg, run_dir, run_id, args.tracks_dir)
+    if cfg["algo"] in TABULAR_ALGOS:
+        train_tabular(cfg, run_dir, run_id, args.tracks_dir)
     else:
         train_sb3(cfg, run_dir, run_id, args.tracks_dir)
     elapsed = time.perf_counter() - start

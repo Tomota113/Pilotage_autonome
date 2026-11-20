@@ -73,7 +73,7 @@ export default function NetworkExplorer() {
                 </div>
               ) : (
                 <p className="empty">
-                  Ce replay ne contient pas d'activations (pilote classique, Q-Learning, ou évaluation lancée sans
+                  Ce replay ne contient pas d'activations (pilote classique, algorithme tabulaire ou évaluation lancée sans
                   <code> --with-activations</code>).
                 </p>
               )}

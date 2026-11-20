@@ -1,4 +1,7 @@
-export const ACTION_SPACES = { ppo: "continuous", dqn: "discrete9", sac: "continuous", qlearning: "discrete9" };
+export const ACTION_SPACES = {
+  ppo: "continuous", dqn: "discrete9", sac: "continuous",
+  qlearning: "discrete9", sarsa: "discrete9", montecarlo: "discrete9",
+};
 
 export const TRAINING_DEFAULTS = {
   algo: "ppo", seed: 0, totalSteps: 20000, trainTracks: [], testTracks: [],
@@ -49,7 +52,7 @@ export function buildTrainingYaml(form) {
   const reward = Object.fromEntries(Object.keys(TRAINING_DEFAULTS.reward).map((key) =>
     [key, readNumber(form.reward[key], key)]));
   return serializeConfig({
-    schema: "f1rl.config/1.0",
+    schema: "f1rl.config/1.1",
     algo: form.algo,
     seed: readNumber(form.seed, "Graine", { integer: true }),
     total_steps: readNumber(form.totalSteps, "Nombre de pas", positiveInteger),

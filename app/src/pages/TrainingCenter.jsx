@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import TrackCanvas from "../components/TrackCanvas.jsx";
+import { ALGO_LABELS } from "../data/algorithms.js";
 import { listCheckpoints, listRuns, listTracks, loadProgress, loadTrack, openRunSocket, startRun, stopRun } from "../data/api.js";
 import { ACTION_SPACES, buildTrainingYaml, TRAINING_DEFAULTS } from "../data/yaml.js";
 
-const ALGO_LABELS = { ppo: "PPO", dqn: "DQN", sac: "SAC", qlearning: "Q-Learning" };
 const STATES = { running: "En cours", stopping: "Arrêt en cours", finished: "Terminé", failed: "Échec" };
 const OUTCOMES = { lap: "Tour validé", off_track: "Sortie de piste", stalled: "Progression interrompue", timeout: "Temps écoulé" };
 const REWARDS = {
@@ -54,7 +54,7 @@ function ConfigForm({ form, setForm, tracks, yaml, error, onSubmit, launching, m
         <div className="module-fields">
           <label className="module-field">Algorithme
             <select value={form.algo} onChange={(event) => field("algo", event.target.value)}>
-              {Object.entries(ALGO_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              {Object.keys(ACTION_SPACES).map((algo) => <option key={algo} value={algo}>{ALGO_LABELS[algo]}</option>)}
             </select>
           </label>
           <label className="module-field">Espace d’actions

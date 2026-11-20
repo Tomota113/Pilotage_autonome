@@ -25,14 +25,19 @@ import yaml  # noqa: E402
 from sim.track import SCHEMA as TRACK_SCHEMA  # noqa: E402
 from sim.track import SPLITS, Track  # noqa: E402
 
-REPLAY_SCHEMA = "f1rl.replay/1.0"
-CONFIG_SCHEMA = "f1rl.config/1.0"
-ALGOS = ("qlearning", "dqn", "ppo", "sac", "classic")
+# Version 1.1 du contrat (21/11/2026) : ajout des algorithmes tabulaires sarsa et montecarlo.
+# Les fichiers en 1.0 restent valides, mais seulement avec les algorithmes de la 1.0.
+REPLAY_SCHEMA = "f1rl.replay/1.1"
+CONFIG_SCHEMA = "f1rl.config/1.1"
+ALGOS_1_0 = ("qlearning", "dqn", "ppo", "sac", "classic")
+ALGOS = ALGOS_1_0 + ("sarsa", "montecarlo")
 OUTCOMES = ("lap", "off_track", "timeout", "stalled")
 MU_MODES = ("fixed", "uniform")
 ACTION_SPACES = ("continuous", "discrete9")
 # Espace d'actions imposé par l'algorithme (le pilote classique n'en dépend pas)
-ALGO_ACTION_SPACE = {"qlearning": "discrete9", "dqn": "discrete9", "ppo": "continuous", "sac": "continuous"}
+ALGO_ACTION_SPACE = {"qlearning": "discrete9", "sarsa": "discrete9", "montecarlo": "discrete9",
+                     "dqn": "discrete9", "ppo": "continuous", "sac": "continuous"}
+TABULAR_ALGOS = ("qlearning", "sarsa", "montecarlo")  # table Q sauvegardée en .npy
 
 FRAME_NUMBERS = ("t", "x", "y", "psi", "v", "delta", "progress", "reward")
 SUMMARY_FIELDS = ("outcome", "lap_time", "total_reward", "steps", "off_tracks")
@@ -63,6 +68,13 @@ def _check_fields(data: dict, fields, where: str) -> None:
     _require(not missing, f"{where}: missing fields {missing}")
 
 
+def _check_schema(schema, algo: str, current: str) -> None:
+    """Accept the current version, or version 1.0 with an algorithm that existed in 1.0."""
+    old = current.rsplit("/", 1)[0] + "/1.0"
+    _require(schema in (current, old), f"unknown schema {schema!r}, expected {current!r}")
+    _require(schema == current or algo in ALGOS_1_0, f"algo {algo!r} needs schema {current!r}")
+
+
 def _check_lap_time(outcome: str, lap_time, where: str) -> None:
     """lap_time is a positive number for a valid lap, and null otherwise."""
     if outcome == "lap":
@@ -83,7 +95,6 @@ def validate_track(data: dict) -> None:
 
 def validate_replay(data: dict) -> None:
     _check_fields(data, ("schema", "run_id", "agent", "track_id", "mu_factor", "seed", "dt", "frames", "summary"), "replay")
-    _require(data["schema"] == REPLAY_SCHEMA, f"unknown schema {data['schema']!r}, expected {REPLAY_SCHEMA!r}")
     _require(isinstance(data["run_id"], str) and data["run_id"], "run_id must be a non-empty string")
     _require(isinstance(data["track_id"], str) and data["track_id"], "track_id must be a non-empty string")
     _require(_is_number(data["mu_factor"]) and data["mu_factor"] > 0, "mu_factor must be > 0")
@@ -93,6 +104,7 @@ def validate_replay(data: dict) -> None:
     agent = data["agent"]
     _check_fields(agent, ("algo", "checkpoint", "train_steps"), "agent")
     _require(agent["algo"] in ALGOS, f"agent.algo must be one of {ALGOS}")
+    _check_schema(data["schema"], agent["algo"], REPLAY_SCHEMA)
     _require(_is_int(agent["train_steps"]) and agent["train_steps"] >= 0, "agent.train_steps must be an integer >= 0")
 
     if "network" in data:  # absent pour le pilote classique et le Q-Learning
@@ -137,8 +149,8 @@ def validate_config(cfg: dict) -> None:
     fields = ("schema", "algo", "seed", "total_steps", "n_envs", "tracks", "mu", "env", "reward",
               "hyperparams", "checkpoint_every", "eval_every", "eval_episodes")
     _check_fields(cfg, fields, "config")
-    _require(cfg["schema"] == CONFIG_SCHEMA, f"unknown schema {cfg['schema']!r}, expected {CONFIG_SCHEMA!r}")
     _require(cfg["algo"] in ALGOS, f"algo must be one of {ALGOS}")
+    _check_schema(cfg["schema"], cfg["algo"], CONFIG_SCHEMA)
     _require(_is_int(cfg["seed"]) and cfg["seed"] >= 0, "seed must be an integer >= 0")
     for f in ("total_steps", "n_envs", "checkpoint_every", "eval_every", "eval_episodes"):
         _require(_is_int(cfg[f]) and cfg[f] > 0, f"{f} must be a positive integer")
@@ -221,7 +233,7 @@ def validate_file(path: str | Path) -> str:
         if schema == TRACK_SCHEMA:
             validate_track(data)
             return "track"
-        if schema == REPLAY_SCHEMA:
+        if schema in (REPLAY_SCHEMA, "f1rl.replay/1.0"):
             validate_replay(data)
             return "replay"
         raise ValueError(f"unknown schema {schema!r}")

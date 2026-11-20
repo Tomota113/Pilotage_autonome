@@ -1,56 +1,15 @@
-"""Tabular Q-learning agent and training loop."""
+"""Tabular Q-learning agent and training loop (off-policy temporal difference)."""
 
 from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
 
+from agents.tabular import Evaluator, TabularAgent
 
-class QLearningAgent:
-    """Store one Q-value per discrete state and action."""
 
-    def __init__(
-        self,
-        n_states: int,
-        n_actions: int,
-        alpha: float = 0.1,
-        gamma: float = 0.99,
-        epsilon_start: float = 1.0,
-        epsilon_end: float = 0.05,
-        epsilon_decay_steps: int = 200_000,
-        seed: int = 0,
-    ):
-        if epsilon_decay_steps < 0:
-            raise ValueError("epsilon_decay_steps must be non-negative")
-        self.n_actions = n_actions
-        self.alpha = alpha
-        self.gamma = gamma
-        self.epsilon_start = epsilon_start
-        self.epsilon_end = epsilon_end
-        self.epsilon_decay_steps = epsilon_decay_steps
-        self.q = np.zeros((n_states, n_actions))
-        self.rng = np.random.default_rng(seed)
-
-    def epsilon(self, step: int) -> float:
-        """Interpolate linearly between the initial and final exploration rates."""
-        if self.epsilon_decay_steps == 0:
-            return self.epsilon_end
-        fraction = min(max(step, 0), self.epsilon_decay_steps) / self.epsilon_decay_steps
-        return (1.0 - fraction) * self.epsilon_start + fraction * self.epsilon_end
-
-    def act(self, state: int, step: int, greedy: bool = False) -> int:
-        """Choose an action with epsilon-greedy exploration, or exploit in greedy mode."""
-        q_values = self.q[state]
-        if greedy:
-            # Évaluation : toujours la meilleure action (argmax), pour un résultat reproductible
-            return int(np.argmax(q_values))
-        if self.rng.random() < self.epsilon(step):
-            # Exploration : action tirée uniformément, avec probabilité epsilon
-            return int(self.rng.integers(self.n_actions))
-        # Exploitation : meilleure action ; les égalités (table encore à zéro au début) sont
-        # départagées au hasard, sinon l'agent choisirait toujours l'action 0
-        best = np.flatnonzero(q_values == q_values.max())
-        return int(self.rng.choice(best))
+class QLearningAgent(TabularAgent):
+    """Q-learning: bootstrap on the best next action, whatever the policy actually does next."""
 
     def update(self, state: int, action: int, reward: float, next_state: int, terminated: bool) -> None:
         """Adjust the Q-value for a single transition toward its Bellman target."""
@@ -61,17 +20,6 @@ class QLearningAgent:
         target = reward if terminated else reward + self.gamma * float(np.max(self.q[next_state]))
         # Q(s, a) <- Q(s, a) + alpha * (cible - Q(s, a)) : on corrige d'une fraction alpha de l'erreur
         self.q[state, action] += self.alpha * (target - self.q[state, action])
-
-    def save(self, path: str | Path) -> None:
-        """Save the Q-table to a .npy file."""
-        np.save(path, self.q, allow_pickle=False)
-
-    def load(self, path: str | Path) -> None:
-        """Restore a Q-table with the same state and action dimensions from a .npy file."""
-        table = np.load(path, allow_pickle=False)
-        if table.shape != self.q.shape:
-            raise ValueError(f"Expected Q-table shape {self.q.shape}, got {table.shape}")
-        self.q[:] = table
 
 
 def train(
@@ -89,9 +37,7 @@ def train(
     The evaluation environment must report ``off_track`` and ``lap_time`` in its info.
     The run metadata supplies ``run_id``, ``algo``, ``seed``, and ``mu_mode``.
     """
-    from agents.train import ProgressLog, evaluate_episodes
-
-    log = ProgressLog(Path(progress_path), meta)
+    evaluator = Evaluator(agent, eval_env, total_steps, eval_every, eval_episodes, progress_path, meta)
     state, _ = env.reset(seed=meta["seed"])
     for step in range(1, total_steps + 1):
         action = agent.act(state, step - 1)
@@ -100,9 +46,5 @@ def train(
         state = next_state
         if (terminated or truncated) and step < total_steps:
             state, _ = env.reset()
-
-        if step % eval_every == 0 or step == total_steps:
-            metrics = evaluate_episodes(eval_env, lambda obs: agent.act(obs, step, greedy=True), eval_episodes)
-            log.write(step, metrics)
-
+        evaluator.after_step(step)
     return agent

@@ -116,3 +116,13 @@ points à bien comprendre pour pouvoir les défendre.
 - Essai de vérification (20 000 pas, demo_oval, graine 0) : à 10 000 pas la politique boucle déjà
   l'ovale (66 s, 2 × plus lent que le pilote classique), puis à 20 000 pas elle sort de piste.
   C'est un seul essai court : il montre que la chaîne fonctionne, pas une performance.
+
+## Mission 6 — Q-Learning tabulaire
+
+- Trois distances aux bords, la vitesse et l’écart cap-piste sont regroupés en tranches pour obtenir 768 états.
+- Chaque état désigne une ligne de la table Q, avec une colonne pour chacune des 9 actions de la voiture.
+- Une politique ε-greedy explore avec une probabilité ε, qui décroît linéairement, et exploite sinon la meilleure valeur Q.
+- La mise à jour de Bellman rapproche Q(s,a) de la récompense immédiate augmentée de la meilleure valeur future actualisée.
+- `terminated` supprime ce terme futur. `truncated` interrompt l’épisode, mais la valeur de l’état suivant reste estimée.
+- La boucle journalise des évaluations greedy sur les mêmes graines et la table peut être sauvegardée au format `.npy`.
+- L’étudiant complète `act()` et `update()`, puis vérifie ses calculs et teste sa politique dans le couloir 1D.

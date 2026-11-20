@@ -4,7 +4,8 @@ Le circuit suit le format ``f1rl.track/1.0`` du contrat de données. Au
 chargement, on valide le fichier puis on précalcule tout ce qui sert à chaque
 pas (segments, abscisses curvilignes s, bords de piste, courbure), pour que
 les requêtes pendant l'entraînement soient de simples calculs NumPy
-vectorisés sur tous les segments, sans boucle Python.
+vectorisés, sans boucle Python. Pendant un épisode, la projection ne regarde
+que les segments proches du dernier indice connu (``hint_index``).
 """
 
 from __future__ import annotations
@@ -22,6 +23,9 @@ SPLITS = ("train", "test", "demo")
 MIN_POINTS = 50
 N_CHECKPOINTS = 20
 MU_RANGE = (0.3, 1.5)
+LENGTH_TOLERANCE = 0.005  # écart relatif admis entre le champ length et la longueur recalculée
+PROJECTION_WINDOW = 10  # segments examinés de part et d'autre de hint_index
+CURVATURE_SMOOTHING = 5  # points de la moyenne glissante sur la courbure (≈ 25 m)
 REQUIRED_FIELDS = ("schema", "id", "name", "split", "centerline", "width", "mu", "start", "checkpoints", "length")
 
 
@@ -72,7 +76,12 @@ class Track:
         # Courbure signée kappa_i en chaque point (positive = virage à gauche) :
         # angle entre E_{i-1} et E_i divisé par la longueur moyenne des deux segments
         turn = np.angle(np.exp(1j * (self.seg_heading - np.roll(self.seg_heading, 1))))
-        self.curvature_points = turn / (0.5 * (self.seg_len + np.roll(self.seg_len, 1)))
+        self.curvature_raw = turn / (0.5 * (self.seg_len + np.roll(self.seg_len, 1)))
+        # Lissage : moyenne glissante circulaire, pour que l'agent voie la forme du
+        # virage et non le bruit dû à la discrétisation en points
+        k = CURVATURE_SMOOTHING
+        padded = np.concatenate((self.curvature_raw[-(k // 2):], self.curvature_raw, self.curvature_raw[: k // 2]))
+        self.curvature_points = np.convolve(padded, np.ones(k) / k, mode="valid")
 
         # Bords de piste : P_i ± n_i * w_i / 2, avec n_i la normale à gauche de la
         # tangente centrée (P_{i+1} - P_{i-1})
@@ -98,21 +107,43 @@ class Track:
         x, y = self.points[self.start_index]
         return float(x), float(y), self.start_heading
 
-    def project(self, x: float, y: float) -> TrackPosition:
-        """Project the point (x, y) on the closest centreline segment."""
-        c = np.array((x, y))
-        w = c - self.points  # vecteur P_i -> point, pour chaque segment
-        # Paramètre t du projeté sur chaque segment : t = (w . E) / |E|², borné à [0, 1]
-        t = np.clip(np.einsum("ij,ij->i", w, self.seg_vec) / self.seg_len**2, 0.0, 1.0)
-        d = w - t[:, None] * self.seg_vec  # du projeté au point
-        dist2 = np.einsum("ij,ij->i", d, d)
-        i = int(np.argmin(dist2))
-        ti = float(t[i])
-        j = (i + 1) % len(self.points)
+    def window(self, index: int, half_size: int) -> np.ndarray:
+        """Indices of the segments index - half_size .. index + half_size, wrapped around the loop."""
+        return (index + np.arange(-half_size, half_size + 1)) % len(self.points)
 
+    def project(self, x: float, y: float, hint_index: int | None = None) -> TrackPosition:
+        """Project the point (x, y) on the closest centreline segment.
+
+        With ``hint_index`` (segment found at the previous step), only the
+        segments within ``PROJECTION_WINDOW`` of it are searched. If the best
+        one lies on the edge of that window, the car may have moved further,
+        so the search is redone on the whole track.
+        """
+        n = len(self.points)
+        if hint_index is not None and n > 2 * PROJECTION_WINDOW + 1:
+            candidates = self.window(hint_index, PROJECTION_WINDOW)
+            k, t, dist2, w = self._closest(x, y, candidates)
+            if 0 < k < len(candidates) - 1:
+                return self._position(int(candidates[k]), t, dist2, w)
+        k, t, dist2, w = self._closest(x, y, np.arange(n))
+        return self._position(k, t, dist2, w)
+
+    def _closest(self, x: float, y: float, idx: np.ndarray) -> tuple[int, float, float, np.ndarray]:
+        """Among segments ``idx``, the closest one to (x, y): (position in idx, t, squared distance, w)."""
+        w = np.array((x, y)) - self.points[idx]  # vecteur P_i -> point, pour chaque segment
+        e = self.seg_vec[idx]
+        # Paramètre t du projeté sur chaque segment : t = (w . E) / |E|², borné à [0, 1]
+        t = np.clip(np.einsum("ij,ij->i", w, e) / self.seg_len[idx] ** 2, 0.0, 1.0)
+        d = w - t[:, None] * e  # du projeté au point
+        dist2 = np.einsum("ij,ij->i", d, d)
+        k = int(np.argmin(dist2))
+        return k, float(t[k]), float(dist2[k]), w[k]
+
+    def _position(self, i: int, ti: float, dist2: float, w: np.ndarray) -> TrackPosition:
+        j = (i + 1) % len(self.points)
         # Signe de l'écart latéral : produit vectoriel E_i x w_i (> 0 si à gauche)
-        side = 1.0 if _cross(self.seg_vec[i], w[i]) >= 0.0 else -1.0
-        lateral = side * math.sqrt(float(dist2[i]))
+        side = 1.0 if _cross(self.seg_vec[i], w) >= 0.0 else -1.0
+        lateral = side * math.sqrt(dist2)
         s = float(self.s_points[i] + ti * self.seg_len[i]) % self.length
         # Largeur et adhérence interpolées linéairement le long du segment
         half_width = 0.5 * float((1.0 - ti) * self.width[i] + ti * self.width[j])
@@ -131,8 +162,12 @@ class Track:
         return (s_new - s_prev + half) % self.length - half
 
     def curvature_at(self, s: float) -> float:
-        """Signed curvature kappa (1/m) at arc length s, interpolated between points."""
+        """Smoothed signed curvature kappa (1/m) at arc length s, interpolated between points."""
         return float(np.interp(s % self.length, self.s_points, self.curvature_points, period=self.length))
+
+    def curvature_ahead(self, s: float, d: float) -> float:
+        """Smoothed signed curvature (1/m) at distance d ahead of arc length s."""
+        return self.curvature_at(s + d)
 
 
 def validate_track_dict(data: dict) -> None:
@@ -177,3 +212,9 @@ def validate_track_dict(data: dict) -> None:
         raise ValueError("checkpoints must be strictly increasing indices in range")
     if cps[0] != start["index"]:
         raise ValueError("first checkpoint must equal start.index")
+
+    # Le champ length doit correspondre à la longueur réelle de la ligne centrale fermée
+    seg = np.roll(points, -1, axis=0) - points
+    computed = float(np.hypot(seg[:, 0], seg[:, 1]).sum())
+    if not abs(float(data["length"]) - computed) <= LENGTH_TOLERANCE * computed:
+        raise ValueError(f"length {data['length']} does not match the centreline length {computed:.1f} m")

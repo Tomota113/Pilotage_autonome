@@ -144,3 +144,43 @@ def test_curvature_sign_clockwise_is_negative():
     d["start"]["heading"] = -math.pi / 2
     track = Track(d)
     assert track.curvature_at(10.0) == pytest.approx(-1.0 / R, rel=1e-2)
+
+
+def test_length_field_must_match_centreline(circle_dict):
+    circle_dict["length"] *= 1.05  # 5 % d'écart avec la longueur réelle
+    with pytest.raises(ValueError, match="length"):
+        Track(circle_dict)
+
+
+# --- Projection limitée à une fenêtre autour de hint_index ---
+
+
+@pytest.mark.parametrize("theta", [0.01, 0.3, 3.1, 6.2])  # pas sur un sommet : égalité entre deux segments
+def test_windowed_projection_equals_global_search(circle_dict, theta):
+    track = Track(circle_dict)
+    x, y = 97.0 * math.cos(theta), 97.0 * math.sin(theta)
+    full = track.project(x, y)
+    near = track.project(x, y, hint_index=(full.index + 3) % len(track.points))
+    assert near == full
+
+
+def test_projection_falls_back_to_global_search_when_hint_is_wrong(circle_dict):
+    track = Track(circle_dict)
+    # Indice de départ à l'opposé du cercle : la fenêtre ne contient pas le bon segment
+    pos = track.project(R, 0.5, hint_index=len(track.points) // 2)
+    assert pos.index == 0
+    assert pos.s == pytest.approx(0.5, abs=0.05)
+
+
+# --- Courbure devant la voiture ---
+
+
+def test_curvature_ahead_on_a_stadium():
+    from tools.generate_tracks import demo_oval
+
+    track = Track(demo_oval(straight=300.0, radius=60.0))
+    s_start = 0.0  # début de la ligne droite du bas, 300 m de droite devant
+    assert track.curvature_ahead(s_start, 30.0) == pytest.approx(0.0, abs=1e-6)
+    assert track.curvature_ahead(s_start, 80.0) == pytest.approx(0.0, abs=1e-6)
+    # 30 m avant la fin de la droite : à 80 m, on est déjà dans le virage à gauche de rayon 60 m
+    assert track.curvature_ahead(270.0, 80.0) == pytest.approx(1.0 / 60.0, rel=0.02)

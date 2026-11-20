@@ -102,3 +102,17 @@ points à bien comprendre pour pouvoir les défendre.
 - Point d'attention : le départ est fixe et les politiques évaluées sont déterministes, donc
   plusieurs épisodes sur le même circuit et le même μ donnent exactement le même résultat.
 - Premier vrai replay : `runs/classic_demo/` (tour de demo_oval en 33,7 s, noté dans le journal).
+
+## Mission 7 — entraînement Deep RL (`agents/train.py`)
+
+- `python -m agents.train configs/<fichier>.yaml [--steps N]` : valide la config, crée
+  `runs/<run_id>/` avec la copie de la config réellement utilisée (`total_steps` compris), entraîne,
+  sauvegarde `checkpoints/step_<N>.zip` et écrit `progress.csv`.
+- PPO et SAC pilotent en actions continues, DQN en `discrete9` (DQN ne sait choisir que parmi un
+  nombre fini d'actions). Les trois ont une politique MLP 2 × 64 (`net_arch`), réglages SB3 par
+  défaut sauf `hyperparams`. Attention : SAC a 2 × 256 par défaut dans SB3, on le force à 2 × 64.
+- Évaluation périodique déterministe (moyenne de la politique, sans exploration) sur les graines
+  0..n−1 : toujours les mêmes épisodes, donc la courbe d'apprentissage est comparable d'un point à l'autre.
+- Essai de vérification (20 000 pas, demo_oval, graine 0) : à 10 000 pas la politique boucle déjà
+  l'ovale (66 s, 2 × plus lent que le pilote classique), puis à 20 000 pas elle sort de piste.
+  C'est un seul essai court : il montre que la chaîne fonctionne, pas une performance.

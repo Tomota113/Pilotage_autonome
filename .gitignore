@@ -1,21 +1,37 @@
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
 .pytest_cache/
 *.egg-info/
+.coverage
+htmlcov/
 
-# Environnements virtuels
+# Environments
 .venv/
 venv/
+ENV/
+env/
 
-# Sorties d'entraînement et d'évaluation (régénérables)
+# Environment variables & secrets
+.env
+.env.*
+*.env
+*.key
+*.pem
+credentials*
+
+# Training runs & evaluation outputs (reproducible)
 runs/
 results/
 
-# Application (React)
+# Application (React / Node)
 node_modules/
+dist/
+build/
 
-# Éditeurs / système
+# Editors & OS
 .vscode/
 .idea/
 .DS_Store
+*.swp

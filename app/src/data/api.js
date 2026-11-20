@@ -84,3 +84,35 @@ export async function loadProgress(runId) {
     return [];
   }
 }
+
+export async function startRun(yamlText) {
+  const response = await fetch("/runs", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+    body: yamlText,
+  });
+  if (!response.ok) {
+    const { detail } = await response.json().catch(() => ({}));
+    throw new Error(detail ?? `Lancement refusé (HTTP ${response.status}).`);
+  }
+  return response.json();
+}
+
+export async function stopRun(id) {
+  const response = await fetch(`/runs/${encodeURIComponent(id)}/stop`, { method: "POST" });
+  if (!response.ok) {
+    const { detail } = await response.json().catch(() => ({}));
+    throw new Error(detail ?? `Arrêt refusé (HTTP ${response.status}).`);
+  }
+  return response.json();
+}
+
+export function listCheckpoints(id) {
+  return fetchJSON(`/runs/${encodeURIComponent(id)}/checkpoints`);
+}
+
+export function openRunSocket(id) {
+  const url = new URL(`/ws/runs/${encodeURIComponent(id)}`, window.location.href);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return new WebSocket(url);
+}

@@ -52,3 +52,34 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .warn { color: var(--fixture); font-size: 13px; }
 .empty { color: var(--muted); padding: 24px; text-align: center; }
 canvas { display: block; width: 100%; background: #151514; border-radius: 4px; }
+
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+.module-section, .training-config { margin: 12px 0 18px; }
+.panel h3, .panel h4 { margin: 0 0 10px; }
+.panel :is(.module-table, .controls) + h4 { margin-top: 16px; }
+.module-aside { flex: 0 1 320px; }
+.module-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.module-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 13px; color: var(--muted); }
+.module-field :is(input, select, output) { min-width: 0; }
+.module-field output { padding: 5px 0; color: var(--text); }
+.panel fieldset { margin: 12px 0; border: 1px solid var(--line); border-radius: 4px; min-width: 0; }
+.panel legend { padding: 0 4px; font-size: 13px; color: var(--muted); }
+.analytics-filters { flex-wrap: nowrap; overflow-x: auto; padding: 4px 2px; }
+.analytics-filters .module-field { flex: 0 0 auto; }
+.analytics-metric { width: fit-content; max-width: 100%; }
+.module-chart { display: block; width: 100%; max-width: 900px; height: auto; }
+.module-chart text { font-size: 12px; fill: var(--muted); }
+.module-legend { display: flex; gap: 6px 16px; flex-wrap: wrap; padding: 0; list-style: none; font-size: 13px; }
+.module-legend li { display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.module-table { overflow: auto; max-height: 240px; margin-top: 8px; }
+.module-table thead { position: sticky; top: 0; background: var(--panel-2); }
+.module-table tbody th { color: var(--text); }
+.training-chart { max-width: 520px; }
+.yaml-preview { overflow: auto; max-height: 520px; padding: 12px; margin: 0; background: var(--bg); font-size: 13px; }
+.run-picker { width: min(100%, 520px); }
+
+@media (max-width: 650px) {
+  .grow { min-width: 0; flex-basis: 100%; }
+  main { padding-inline: 12px; }
+  .sidebar { width: 135px; }
+}

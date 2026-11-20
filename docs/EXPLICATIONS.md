@@ -155,3 +155,27 @@ points à bien comprendre pour pouvoir les défendre.
 - `/files/tracks`, `/files/runs` et `/files/results` servent les fichiers en lecture seule.
 - Le WebSocket transmet les nouvelles lignes de progression et les checkpoints ainsi que les changements d’état.
 - `watch_live` rejoue un checkpoint dans un processus dédié et transmet les frames du contrat à 20 images/s.
+
+## Mission 10 — application (partie Codex)
+
+- L’éditeur modifie la ligne centrale, la largeur et l’adhérence par portion, puis valide le circuit avant de télécharger `track.json`.
+- L’analyse groupe les runs par condition et compare les graines aux pas d’évaluation communs.
+- Les barres résument les épisodes filtrés par algorithme, en donnant le même poids à chaque graine.
+- Le centre génère le YAML de la configuration et suit les entraînements et les checkpoints par WebSocket.
+- En mode fixtures, la configuration reste disponible et le lancement exige le serveur FastAPI.
+
+## Mission 10 — application (partie Claude)
+
+- `app/` : React + Vite + Canvas 2D, une page par module, navigation latérale, thème sombre.
+  Les données viennent du serveur (`/files/...`, `/runs`, `/tracks`) ; sans serveur, l'application lit
+  les `fixture_*.json` (données synthétiques de `app/scripts/make_fixtures.py`) et affiche un bandeau
+  « FIXTURE » sur toutes les pages.
+- Race Simulator : circuit, voiture orientée, rayons des capteurs, trajectoire, vitesse, chrono, jauges
+  direction / accélérateur / frein, lecture ×0,5 à ×8 et curseur temporel. Le replay choisi est partagé
+  avec le Neural Network Explorer (même image affichée dans les deux modules).
+- AI Championship : replays d'un même circuit superposés (voitures fantômes de couleurs fixes),
+  classement par temps au tour, trajectoires affichables.
+- Neural Network Explorer : 12 entrées nommées, couches cachées (couleur divergente bleu / gris / orange),
+  sorties ; mention « représentation pédagogique, pas une explication causale ».
+- Vérifié dans Chrome (captures) : Race Simulator et Championship sur les vrais replays du pilote
+  classique, lancement d'un essai PPO de 4 000 pas depuis le Training Center et visionnage en direct.

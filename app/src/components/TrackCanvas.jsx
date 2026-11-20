@@ -6,8 +6,8 @@ import { bounds, fitView, SENSOR_ANGLES_DEG, trackBorders } from "../data/geomet
 
 const CAR_LENGTH = 5; // m
 
-function path(ctx, pts, view, close) {
-  ctx.beginPath();
+function path(ctx, pts, view, close, append = false) {
+  if (!append) ctx.beginPath();
   pts.forEach((p, i) => {
     const [x, y] = view.toScreen(p);
     if (i === 0) ctx.moveTo(x, y);
@@ -36,7 +36,7 @@ export function drawCar(ctx, view, { x, y, psi, color }) {
 }
 
 export default function TrackCanvas({ track, cars = [], trails = [], rays = null, draw = null, onPointer = null,
-                                      height = 520, extraPoints = [] }) {
+                                      height = 520, extraPoints = [], fixedView = null, label }) {
   const ref = useRef(null);
   const geom = useMemo(() => (track ? trackBorders(track) : null), [track]);
 
@@ -50,16 +50,14 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
     const ctx = canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    const view = fitView(bounds([...geom.left, ...geom.right, ...extraPoints], 10), width, height);
+    const view = fixedView ?? fitView(bounds([...geom.left, ...geom.right, ...extraPoints], 10), width, height);
     canvas._view = view;
 
     // Piste : surface entre les deux bords, puis les bords
     ctx.fillStyle = "#2b2b29";
     path(ctx, geom.left, view, true);
-    ctx.fill();
-    ctx.fillStyle = "#151514";
-    path(ctx, geom.right, view, true);
-    ctx.fill();
+    path(ctx, geom.right, view, true, true);
+    ctx.fill("evenodd");
     ctx.strokeStyle = "#8c8b84";
     ctx.lineWidth = 1.5;
     path(ctx, geom.left, view, true);
@@ -111,7 +109,10 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
 
   if (!track) return <div className="empty">Aucun circuit chargé.</div>;
   return (
-    <canvas ref={ref} style={{ height }} onPointerDown={handler("down")} onPointerMove={handler("move")}
-            onPointerUp={handler("up")} />
+    <canvas ref={ref} style={{ height, touchAction: onPointer ? "none" : undefined }}
+            aria-label={label} tabIndex={onPointer ? 0 : undefined}
+            onPointerDown={handler("down")} onPointerMove={handler("move")} onPointerUp={handler("up")}
+            onPointerCancel={handler("cancel")} onLostPointerCapture={handler("cancel")}
+            onDoubleClick={handler("double")} onContextMenu={handler("context")} />
   );
 }

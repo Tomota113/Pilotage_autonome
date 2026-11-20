@@ -7,7 +7,8 @@ Figures (PNG) :
   entre graines, par condition (récompense et taux de tours, deux figures : jamais deux axes y) ;
 - ``laps_test_mu1.png`` / ``lap_time_test_mu1.png`` : taux de tours et temps au tour sur les
   circuits de test à μ = 1,0, par condition, avec le pilote classique en référence ;
-- ``robustness_mu.png`` : taux de tours sur les circuits de test selon le facteur μ ;
+- ``robustness_mu.png`` / ``robustness_lap_time.png`` : taux de tours et temps au tour (tours valides)
+  sur les circuits de test selon le facteur μ ;
 - ``train_vs_test.png`` : taux de tours à μ = 1,0 sur les circuits d'entraînement et de test.
 
 Seuls les runs retenus par ``tools/evaluate_all.find_runs`` (une condition de
@@ -153,6 +154,28 @@ def _bars(stats: pd.DataFrame, classic: float | None, title: str, ylabel: str, s
     _save(fig, out, name, written)
 
 
+def _robustness(test: pd.DataFrame, value: str, ylabel: str, name: str, out: Path, written: list[Path],
+                ylim=None) -> None:
+    """``value`` on the test tracks against the mu factor, per condition, with the classic driver as reference."""
+    fig, ax = _setup(f"Robustesse à l'adhérence — {ylabel}", "facteur d'adhérence μ", ylabel,
+                     "results/eval.csv, circuits de test ; moyenne ± écart-type entre graines")
+    for condition in _ordered(test["condition"]):
+        df = test[test["condition"] == condition]
+        stats = df.groupby(["mu_factor", "seed"])[value].mean().groupby("mu_factor").agg(["mean", "std"]).fillna(0)
+        color, marker = STYLE[condition]
+        ax.errorbar(stats.index, stats["mean"], yerr=stats["std"], color=color, marker=marker, markersize=7,
+                    linewidth=2, capsize=3, label=condition)
+    c = test[test["condition"] == "classic"].groupby("mu_factor")[value].mean()
+    if not c.empty:
+        ax.plot(c.index, c.values, color=CLASSIC_COLOR, linestyle="--", marker="x", linewidth=1.5,
+                label="pilote classique (connaît μ)")
+    if ylim:
+        ax.set_ylim(*ylim)
+    ax.invert_xaxis()  # de l'adhérence normale vers la piste glissante
+    ax.legend(frameon=False, fontsize=8, labelcolor=INK)
+    _save(fig, out, name, written)
+
+
 def plot_eval(ev: pd.DataFrame, out: Path, written: list[Path]) -> None:
     agents = ev[ev["condition"] != "classic"]
     classic = ev[ev["condition"] == "classic"]
@@ -173,22 +196,11 @@ def plot_eval(ev: pd.DataFrame, out: Path, written: list[Path]) -> None:
 
     test = ev[ev["split"] == "test"]
     if test["mu_factor"].nunique() > 1:
-        fig, ax = _setup("Robustesse à l'adhérence — circuits de test", "facteur d'adhérence μ", "taux de tours",
-                         "results/eval.csv, circuits de test ; moyenne ± écart-type entre graines")
-        for condition in _ordered(test["condition"]):
-            df = test[test["condition"] == condition]
-            stats = df.groupby(["mu_factor", "seed"])["lap"].mean().groupby("mu_factor").agg(["mean", "std"]).fillna(0)
-            color, marker = STYLE[condition]
-            ax.errorbar(stats.index, stats["mean"], yerr=stats["std"], color=color, marker=marker, markersize=7,
-                        linewidth=2, capsize=3, label=condition)
-        c = test[test["condition"] == "classic"].groupby("mu_factor")["lap"].mean()
-        if not c.empty:
-            ax.plot(c.index, c.values, color=CLASSIC_COLOR, linestyle="--", marker="x", linewidth=1.5,
-                    label="pilote classique (connaît μ)")
-        ax.set_ylim(-0.02, 1.05)
-        ax.invert_xaxis()  # de l'adhérence normale vers la piste glissante
-        ax.legend(frameon=False, fontsize=8, labelcolor=INK)
-        _save(fig, out, "robustness_mu.png", written)
+        _robustness(test, "lap", "taux de tours", "robustness_mu.png", out, written, ylim=(-0.02, 1.05))
+        laps = test[test["outcome"] == "lap"]
+        if laps["mu_factor"].nunique() > 1:
+            _robustness(laps, "lap_time", "temps au tour moyen (s), tours valides", "robustness_lap_time.png",
+                        out, written)
 
     mu1 = agents[agents["mu_factor"] == 1.0]
     if set(mu1["split"]) >= {"train", "test"}:

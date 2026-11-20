@@ -7,13 +7,11 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Environments
+# Environnements virtuels (attention : pas « env/ », c'est le paquet F1Env du projet)
 .venv/
 venv/
-ENV/
-env/
 
-# Environment variables & secrets
+# Variables d'environnement et secrets
 .env
 .env.*
 *.env
@@ -21,7 +19,7 @@ env/
 *.pem
 credentials*
 
-# Training runs & evaluation outputs (reproducible)
+# Sorties d'entraînement et d'évaluation (régénérables)
 runs/
 results/
 
@@ -30,7 +28,7 @@ node_modules/
 dist/
 build/
 
-# Editors & OS
+# Éditeurs / système
 .vscode/
 .idea/
 .DS_Store

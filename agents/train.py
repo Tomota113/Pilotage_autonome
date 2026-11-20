@@ -75,9 +75,10 @@ def evaluate_episodes(env: F1Env, act: Callable[[np.ndarray], object], n_episode
 class ProgressLog:
     """Append rows to runs/<run_id>/progress.csv."""
 
-    def __init__(self, path: Path, cfg: dict, run_id: str):
+    def __init__(self, path: Path, meta: dict):
+        """``meta`` gives the constant columns: run_id, algo, seed, mu_mode."""
         self.path = path
-        self.meta = {"run_id": run_id, "algo": cfg["algo"], "seed": cfg["seed"], "mu_mode": cfg["mu"]["mode"]}
+        self.meta = {k: meta[k] for k in ("run_id", "algo", "seed", "mu_mode")}
         self.start = time.perf_counter()
         with open(path, "w", encoding="utf-8", newline="") as f:
             csv.DictWriter(f, fieldnames=PROGRESS_COLUMNS).writeheader()
@@ -87,6 +88,10 @@ class ProgressLog:
         with open(self.path, "a", encoding="utf-8", newline="") as f:
             csv.DictWriter(f, fieldnames=PROGRESS_COLUMNS).writerow(row)
         return row
+
+
+def run_meta(cfg: dict, run_id: str) -> dict:
+    return {"run_id": run_id, "algo": cfg["algo"], "seed": cfg["seed"], "mu_mode": cfg["mu"]["mode"]}
 
 
 def _print_row(row: dict) -> None:
@@ -113,7 +118,7 @@ def train_sb3(cfg: dict, run_dir: Path, run_id: str) -> None:
     )
     ckpt_dir = run_dir / "checkpoints"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    log = ProgressLog(run_dir / "progress.csv", cfg, run_id)
+    log = ProgressLog(run_dir / "progress.csv", run_meta(cfg, run_id))
 
     def evaluate_now(step: int) -> None:
         metrics = evaluate_episodes(eval_env, lambda obs: model.predict(obs, deterministic=True)[0],
@@ -155,9 +160,8 @@ def train_qlearning(cfg: dict, run_dir: Path, run_id: str) -> None:
     env = DiscreteStateWrapper(F1Env(cfg, train_tracks))
     eval_env = DiscreteStateWrapper(F1Env(cfg, train_tracks))
     agent = QLearningAgent(env.observation_space.n, env.action_space.n, seed=cfg["seed"], **cfg["hyperparams"])
-    meta = {"run_id": run_id, "algo": cfg["algo"], "seed": cfg["seed"], "mu_mode": cfg["mu"]["mode"]}
     agent = train(agent, env, eval_env, cfg["total_steps"], cfg["eval_every"], cfg["eval_episodes"],
-                  run_dir / "progress.csv", meta)
+                  run_dir / "progress.csv", run_meta(cfg, run_id))
     ckpt_dir = run_dir / "checkpoints"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     agent.save(ckpt_dir / f"step_{cfg['total_steps']}.npy")

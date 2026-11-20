@@ -48,3 +48,16 @@ points à bien comprendre pour pouvoir les défendre.
   minimal était de 70 à 170 m, les agents n'auraient jamais eu besoin de freiner.
 - `tools/validate.py` vérifie track.json, replay.json, config.yaml et eval.csv (code de sortie 1
   si invalide). Choix à confirmer avec le contrat de données : `mu.mode` vaut `fixed` ou `uniform`.
+
+## Mission 3 — capteurs et sortie de piste (`sim/sensors.py`, `tools/benchmark.py`)
+
+- 7 rayons (−90° à +90° par rapport au cap psi), portée 100 m. Intersection rayon/segment
+  résolue avec deux produits vectoriels (t : distance le long du rayon, u ∈ [0, 1] : position
+  sur le segment), pour tous les rayons et segments à la fois en NumPy.
+- On ne teste que les segments à ±40 indices de la voiture : un rayon qui reste dans la piste
+  sur 100 m avance d'au plus ≈ 167 m le long de la ligne centrale (au rayon minimal de 15 m).
+  Un test vérifie que le résultat est identique à la recherche sur tout le circuit.
+- Sortie de piste : |écart latéral| > demi-largeur locale ; un test vérifie le pas exact (61).
+- Débit mesuré par `python -m tools.benchmark` sur l'i3-1115G4 : ≈ 10 000 pas/s sur gen_00
+  (≈ 9 400 sur gen_06), objectif > 2 000 atteint sans optimisation. Les capteurs prennent
+  ≈ 55 % du temps, la projection ≈ 31 %, la voiture ≈ 13 %.

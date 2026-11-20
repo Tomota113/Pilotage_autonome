@@ -60,3 +60,65 @@ def test_sensors_are_capped_at_range():
     assert d[3] == SENSOR_RANGE
     assert np.all(d <= SENSOR_RANGE)
     assert len(d) == 7
+
+
+# --- Ligne droite de l'ovale de démonstration (bas : y = -60, largeur 12 m, sens +x) ---
+
+
+@pytest.fixture
+def oval():
+    from tools.generate_tracks import demo_oval
+
+    return Track(demo_oval(straight=300.0, radius=60.0))
+
+
+def test_side_sensors_on_a_straight_measure_half_width(oval):
+    pos = oval.project(0.0, -60.0)
+    d = read_sensors(oval, 0.0, -60.0, 0.0, index=pos.index)
+    assert d[0] == pytest.approx(6.0, abs=1e-6)  # -90° : bord droit, y = -66
+    assert d[-1] == pytest.approx(6.0, abs=1e-6)  # +90° : bord gauche, y = -54
+    # ±30° et ±60° touchent les bords à 6 / sin(angle)
+    assert d[1] == pytest.approx(6.0 / math.sin(math.radians(60)), abs=1e-6)
+    assert d[2] == pytest.approx(6.0 / math.sin(math.radians(30)), abs=1e-6)
+
+
+def test_front_sensor_hits_the_outer_wall_of_the_next_bend(oval):
+    # Depuis (100, -60) cap +x, le rayon avant touche le bord extérieur du virage
+    # (cercle de centre (150, 0) et de rayon 66) en x = 150 + sqrt(66² - 60²)
+    x, y = 100.0, -60.0
+    pos = oval.project(x, y)
+    d = read_sensors(oval, x, y, 0.0, index=pos.index)
+    assert d[3] == pytest.approx(50.0 + math.sqrt(66.0**2 - 60.0**2), abs=0.3)
+
+
+def test_windowed_sensors_equal_full_search_on_generated_tracks():
+    from tools.generate_tracks import generate_track
+
+    for seed in (0, 5, 11):
+        track = Track(generate_track(seed, "train"))
+        for i in range(0, len(track.points), 7):
+            x, y = track.points[i] + 0.3 * (track.left_border[i] - track.points[i])
+            psi = track.seg_heading[i] + 0.2
+            pos = track.project(x, y)
+            np.testing.assert_allclose(read_sensors(track, x, y, psi, index=pos.index), read_sensors(track, x, y, psi))
+
+
+def test_off_track_detected_at_the_right_step(oval):
+    from sim.car import CarState, DEFAULT_PARAMS, step
+
+    # Voiture au centre, cap -0,1 rad (vers le bord droit), 20 m/s maintenus.
+    # Elle s'écarte de 20 sin(0,1) * 0,05 m par pas : sortie après 6 / 0,0998 ≈ 60,1 pas.
+    v, psi = 20.0, -0.1
+    state = CarState(x=0.0, y=-60.0, psi=psi, v=v)
+    throttle = DEFAULT_PARAMS.c_d * v**2 / DEFAULT_PARAMS.a_max
+    index, first_off = None, None
+    for k in range(1, 100):
+        state, _ = step(state, (0.0, throttle, 0.0), mu=1.0)
+        pos = oval.project(state.x, state.y, hint_index=index)
+        index = pos.index
+        if oval.is_off_track(pos):
+            first_off = k
+            break
+    expected = math.floor(6.0 / (v * math.sin(-psi) * 0.05)) + 1
+    assert expected == 61
+    assert first_off == expected

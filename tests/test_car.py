@@ -20,7 +20,7 @@ def braking_distance(v_start: float, v_end: float, mu: float, params=P) -> float
     """Simulated distance (m) to brake in a straight line from v_start down to v_end."""
     state = CarState(v=v_start)
     while state.v > v_end:
-        state, _ = step(state, (0.0, 0.0, 1.0), mu, action_repeat=1, params=params)
+        state, _ = step(state, (0.0, 0.0, 1.0), mu, dt=PHYSICS_DT, substeps=1, params=params)
     return state.x
 
 
@@ -56,7 +56,7 @@ def test_yaw_rate_at_20_m_s_and_delta_0_05():
     v, delta = 20.0, 0.05
     throttle = P.c_d * v**2 / P.a_max  # compense exactement la traînée
     state = CarState(v=v, delta=delta)
-    new, slip = step(state, (delta / P.delta_max, throttle, 0.0), mu=1.0, action_repeat=1)
+    new, slip = step(state, (delta / P.delta_max, throttle, 0.0), mu=1.0, dt=PHYSICS_DT, substeps=1)
     assert not slip
     assert new.v == pytest.approx(v, abs=1e-9)
     yaw_rate = (new.psi - state.psi) / PHYSICS_DT
@@ -70,7 +70,7 @@ def test_understeer_at_radius_50(v, expected_slip):
     assert 1.0 / path_curvature(delta) == pytest.approx(50.0)
     state = CarState(v=v, delta=delta)
     throttle = P.c_d * v**2 / P.a_max
-    new, slip = step(state, (delta / P.delta_max, throttle, 0.0), mu=1.0, action_repeat=1)
+    new, slip = step(state, (delta / P.delta_max, throttle, 0.0), mu=1.0, dt=PHYSICS_DT, substeps=1)
     assert slip is expected_slip
     yaw_rate = (new.psi - state.psi) / PHYSICS_DT
     if expected_slip:
@@ -101,13 +101,14 @@ def test_braking_distance_without_drag_matches_v2_over_2_mu_g():
 
 
 # 6. Limites de braquage (angle et vitesse de variation)
-@pytest.mark.parametrize("action_repeat", [1, 5])
-def test_steering_angle_and_rate_limits(action_repeat):
+@pytest.mark.parametrize("substeps", [1, 5])
+def test_steering_angle_and_rate_limits(substeps):
     state = CarState(v=15.0)
-    max_change = P.delta_rate_max * PHYSICS_DT * action_repeat
+    dt = PHYSICS_DT * substeps
+    max_change = P.delta_rate_max * dt
     steers = [1.0] * 40 + [-1.0] * 40 + [5.0, -5.0] * 20 + [math.sin(0.3 * k) for k in range(100)]
     for s in steers:
-        new, _ = step(state, (s, 0.5, 0.0), mu=1.0, action_repeat=action_repeat)
+        new, _ = step(state, (s, 0.5, 0.0), mu=1.0, dt=dt, substeps=substeps)
         assert abs(new.delta) <= P.delta_max
         assert abs(new.delta - state.delta) <= max_change + 1e-12
         state = new

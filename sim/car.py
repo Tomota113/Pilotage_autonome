@@ -42,8 +42,9 @@ class CarState:
 
 
 DEFAULT_PARAMS = CarParams()
-PHYSICS_DT = 0.01  # pas physique (s)
-ACTION_REPEAT = 5  # sous-pas par décision de l'agent : 5 * 0,01 s = 0,05 s
+DECISION_DT = 0.05  # durée d'une décision de l'agent (s)
+SUBSTEPS = 5  # sous-pas physiques par décision (action repeat)
+PHYSICS_DT = DECISION_DT / SUBSTEPS  # pas physique : 0,05 / 5 = 0,01 s
 
 
 def _clip(value: float, low: float, high: float) -> float:
@@ -107,11 +108,13 @@ def step(
     state: CarState,
     command: tuple[float, float, float],
     mu: float,
-    dt: float = PHYSICS_DT,
-    action_repeat: int = ACTION_REPEAT,
+    dt: float = DECISION_DT,
+    substeps: int = SUBSTEPS,
     params: CarParams = DEFAULT_PARAMS,
 ) -> tuple[CarState, bool]:
-    """Apply command = (steer, throttle, brake) for ``action_repeat`` physics steps of ``dt``.
+    """Apply command = (steer, throttle, brake) during ``dt`` seconds, split in ``substeps`` physics steps.
+
+    Each physics step lasts ``dt / substeps`` (0.01 s by default).
 
     steer is clipped to [-1, 1]; throttle and brake to [0, 1]. ``mu`` is the
     tyre-road friction coefficient. Returns the new state and ``slip``: True
@@ -119,16 +122,17 @@ def step(
     """
     if mu < 0.0:
         raise ValueError(f"mu must be >= 0, got {mu}")
-    if dt <= 0.0 or action_repeat < 1:
-        raise ValueError("dt must be > 0 and action_repeat >= 1")
+    if dt <= 0.0 or substeps < 1:
+        raise ValueError("dt must be > 0 and substeps >= 1")
 
     steer_cmd, throttle_cmd, brake_cmd = command
     steer = _clip(float(steer_cmd), -1.0, 1.0)
     throttle = _clip(float(throttle_cmd), 0.0, 1.0)
     brake = _clip(float(brake_cmd), 0.0, 1.0)
 
+    h = dt / substeps  # durée d'un sous-pas physique
     slip = False
-    for _ in range(action_repeat):
-        state, sub_slip = _substep(state, steer, throttle, brake, mu, dt, params)
+    for _ in range(substeps):
+        state, sub_slip = _substep(state, steer, throttle, brake, mu, h, params)
         slip = slip or sub_slip
     return state, slip

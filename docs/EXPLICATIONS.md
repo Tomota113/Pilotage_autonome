@@ -136,8 +136,7 @@ points à bien comprendre pour pouvoir les défendre.
   20 000 pas : PPO ≈ 1 240 pas/s, DQN ≈ 1 210, SAC ≈ 190. Estimation pour 1 M de pas : PPO et DQN
   ≈ 15-20 min, SAC ≈ 1 h 30 ; les 18 runs ≈ 8 à 9 h au total, soit une à deux nuits.
 - `tools/run_night.sh` enchaîne les entraînements (journal par run dans `runs/_logs/`, reprise après
-  coupure grâce aux fichiers `.done`, un échec n'arrête pas la file). Les runs Q-Learning échoueront
-  tant que `act()` / `update()` ne sont pas écrits.
+  coupure grâce aux fichiers `.done`, un échec n'arrête pas la file).
 - `tools/evaluate_all.py` évalue le dernier checkpoint de chaque run, et le pilote classique, sur les
   circuits d'entraînement et de test × μ ∈ {1,0 ; 0,8 ; 0,6} ; replays de démo sur gen_10 avec activations.
 - `tools/plots.py` ne lit que des fichiers réels (`progress.csv`, `eval.csv`) ; chaque figure cite sa
@@ -179,3 +178,15 @@ points à bien comprendre pour pouvoir les défendre.
   sorties ; mention « représentation pédagogique, pas une explication causale ».
 - Vérifié dans Chrome (captures) : Race Simulator et Championship sur les vrais replays du pilote
   classique, lancement d'un essai PPO de 4 000 pas depuis le Training Center et visionnage en direct.
+
+## Q-Learning : `act()` et `update()` (écrits par Claude, à la demande de l'étudiant)
+
+- `act()` : en évaluation (`greedy=True`), toujours argmax Q(s, ·) pour un résultat reproductible.
+  En entraînement : avec probabilité ε(step) une action au hasard (exploration), sinon la meilleure
+  action ; les égalités sont départagées au hasard, car au début toute la table vaut 0 et argmax
+  choisirait toujours l'action 0 (« gauche + accélérer »).
+- `update()` : cible de Bellman r + γ max_a' Q(s', a'), ou r seul si `terminated` (sortie de piste ou
+  tour validé : il n'y a plus d'avenir). Une troncature (temps limite) n'est pas une vraie fin, l'état
+  suivant garde sa valeur. Puis Q(s, a) ← Q(s, a) + α (cible − Q(s, a)).
+- Vérification : sur le couloir 1D, la politique apprise va à droite depuis chaque case (test).
+  Débit mesuré sur le vrai environnement : ≈ 4 000 pas/s, soit ≈ 5 min pour 1 M de pas.

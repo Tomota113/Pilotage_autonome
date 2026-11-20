@@ -1,4 +1,4 @@
-"""Tabular Q-learning scaffold and training loop."""
+"""Tabular Q-learning agent and training loop."""
 
 from pathlib import Path
 
@@ -40,19 +40,27 @@ class QLearningAgent:
 
     def act(self, state: int, step: int, greedy: bool = False) -> int:
         """Choose an action with epsilon-greedy exploration, or exploit in greedy mode."""
-        # En mode greedy, prendre directement l'indice de la plus grande valeur de Q[state].
-        # Sinon, tirer avec self.rng : avec probabilité epsilon(step), explorer en choisissant
-        # une action uniforme. Dans les autres cas, prendre la meilleure action de Q[state].
-        raise NotImplementedError("À écrire par l'étudiant : choisir une action epsilon-greedy")
+        q_values = self.q[state]
+        if greedy:
+            # Évaluation : toujours la meilleure action (argmax), pour un résultat reproductible
+            return int(np.argmax(q_values))
+        if self.rng.random() < self.epsilon(step):
+            # Exploration : action tirée uniformément, avec probabilité epsilon
+            return int(self.rng.integers(self.n_actions))
+        # Exploitation : meilleure action ; les égalités (table encore à zéro au début) sont
+        # départagées au hasard, sinon l'agent choisirait toujours l'action 0
+        best = np.flatnonzero(q_values == q_values.max())
+        return int(self.rng.choice(best))
 
     def update(self, state: int, action: int, reward: float, next_state: int, terminated: bool) -> None:
         """Adjust the Q-value for a single transition toward its Bellman target."""
-        # Partir de la récompense pour la cible de Bellman. Si l'état suivant est non terminal,
-        # ajouter gamma fois la meilleure valeur de Q[next_state].
-        # Une troncature arrête la collecte, mais l'état suivant garde une valeur future :
-        # la boucle passe donc seulement terminated pour décider du bootstrap.
-        # Corriger Q[state, action] de alpha fois l'écart entre la cible et sa valeur actuelle.
-        raise NotImplementedError("À écrire par l'étudiant : mettre à jour la valeur Q")
+        # Cible de Bellman : r + gamma * max_a' Q(s', a'). Si l'épisode est terminé (sortie de
+        # piste ou tour validé), il n'y a pas d'avenir : la cible vaut r. Une troncature
+        # (temps limite) n'est pas une vraie fin : l'état suivant garde sa valeur future, d'où
+        # le seul paramètre terminated.
+        target = reward if terminated else reward + self.gamma * float(np.max(self.q[next_state]))
+        # Q(s, a) <- Q(s, a) + alpha * (cible - Q(s, a)) : on corrige d'une fraction alpha de l'erreur
+        self.q[state, action] += self.alpha * (target - self.q[state, action])
 
     def save(self, path: str | Path) -> None:
         """Save the Q-table to a .npy file."""

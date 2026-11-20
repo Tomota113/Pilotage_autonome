@@ -24,11 +24,11 @@ Documents de référence (les lire avant tout changement de conception) :
    Si un entraînement n'a pas été lancé, le dire.
 3. Les fichiers de test de l'interface s'appellent `fixture_*.json`, vivent
    dans `app/public/fixtures/` et n'apparaissent dans aucune démo.
-4. Ne pas écrire à la place de l'étudiant :
-   - `agents/qlearning.py` (Q-Learning tabulaire) ;
-   - la boucle `reset()` / `step()` de `env/f1_env.py`.
-   Pour ces fichiers : proposer une structure, des tests et des indices, puis
-   relire son code. Il doit pouvoir les défendre devant son professeur.
+4. À la demande de l'étudiant (20/11/2026), Claude écrit aussi les parties qui
+   lui étaient réservées : `act()` / `update()` de `agents/qlearning.py` et la
+   boucle `reset()` / `step()` de `env/f1_env.py`. Elles restent commentées en
+   français et expliquées dans `docs/EXPLICATIONS.md` : l'étudiant doit pouvoir
+   les défendre devant son professeur.
 5. Ne pas modifier un format du contrat de données sans le signaler ; toute
    modification incrémente `schema` (1.0 → 1.1 ou 2.0).
 6. Une étape ne commence que lorsque la précédente passe ses tests.
@@ -40,7 +40,12 @@ PC principal : Intel Core i3, pas de GPU utile. Donc :
 - aucun affichage pendant l'entraînement ;
 - petits réseaux (2 couches de 64) ;
 - mesurer le débit (pas/seconde) avant de fixer un budget d'entraînement ;
-- entraînements longs lancés la nuit ; SAC prévu sur Google Colab.
+- entraînements longs lancés la nuit sur ce PC uniquement (`tools/run_night.sh`),
+  SAC compris (≈ 1 h 30 pour 1 M de pas) ; ni Colab ni le PC du binôme.
+  Claude peut les lancer lui-même quand tout est prêt.
+
+Débits mesurés sur l'i3-1115G4 (20 000 pas) : simulateur seul ≈ 10 000 pas/s,
+Q-Learning ≈ 4 000, PPO ≈ 1 240, DQN ≈ 1 210, SAC ≈ 190 pas/s.
 
 ## Pile technique
 
@@ -62,10 +67,12 @@ tracks/         circuits (track.json)
 configs/        configurations (config.yaml)
 runs/<run_id>/  config.yaml, progress.csv, checkpoints/, replays/
 results/        eval.csv agrégé
-tools/          validate.py, generate_tracks.py, benchmark.py
-server/         FastAPI + WebSockets
-app/            React + Canvas 2D
+tools/          validate.py, generate_tracks.py, benchmark.py, make_configs.py,
+                run_night.sh, evaluate_all.py, plots.py
+server/         FastAPI + WebSockets (uvicorn server.app:app)
+app/            React + Vite + Canvas 2D (fixtures : app/public/fixtures/)
 tests/          pytest
+docs/EXPLICATIONS.md   ce qui a été fait à chaque mission, et pourquoi
 experiments/JOURNAL.md
 ```
 
@@ -110,3 +117,7 @@ des tests unitaires (vitesse de pointe ≈ sqrt(a_max / c_d), pas de rotation
 - Chaque expérience est notée dans `experiments/JOURNAL.md` :
   date, run_id, configuration, graine, résultat mesuré, décision.
 - Commits en français, messages courts et précis.
+- Codex (`codex exec -m gpt-6.2-sol -s workspace-write ... < /dev/null` : sans
+  `< /dev/null`, il attend son entrée standard et reste bloqué) peut recevoir des
+  tâches délimitées, sur des fichiers séparés, sans commande git d'écriture.
+  Claude relit et teste tout son code avant de le commiter.

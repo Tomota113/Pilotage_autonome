@@ -59,10 +59,7 @@ def test_train_logs_each_evaluation(tmp_path, total_steps, expected_steps):
 def test_act_greedy_chooses_argmax():
     agent = QLearningAgent(2, 3)
     agent.q[1] = [1.0, -2.0, 3.0]
-    try:
-        actions = [agent.act(1, step=0, greedy=True) for _ in range(10)]
-    except NotImplementedError:
-        pytest.skip("act()/update() pas encore écrits par l'étudiant")
+    actions = [agent.act(1, step=0, greedy=True) for _ in range(10)]
     assert actions == [2] * 10
 
 
@@ -71,10 +68,7 @@ def test_update_toward_bellman_target(terminated, expected):
     agent = QLearningAgent(2, 2, alpha=0.25, gamma=0.5)
     agent.q[:] = [[2.0, 0.0], [4.0, 6.0]]
     # Cible non terminale : 1 + 0,5 × 6 = 4. Cible terminale : 1.
-    try:
-        agent.update(state=0, action=0, reward=1.0, next_state=1, terminated=terminated)
-    except NotImplementedError:
-        pytest.skip("act()/update() pas encore écrits par l'étudiant")
+    agent.update(state=0, action=0, reward=1.0, next_state=1, terminated=terminated)
     np.testing.assert_allclose(agent.q, [[expected, 0.0], [4.0, 6.0]])
 
 
@@ -83,9 +77,6 @@ def test_corridor_learns_to_move_right(tmp_path):
     n_states = env.observation_space.n
     agent = QLearningAgent(n_states, env.action_space.n, alpha=0.3, gamma=0.95, epsilon_decay_steps=1000)
     total_steps = 1500
-    try:
-        train(agent, env, CorridorEnv(), total_steps, total_steps, 1, tmp_path / "progress.csv", RUN_META)
-        actions = [agent.act(state, total_steps, greedy=True) for state in range(n_states - 1)]
-    except NotImplementedError:
-        pytest.skip("act()/update() pas encore écrits par l'étudiant")
+    train(agent, env, CorridorEnv(), total_steps, total_steps, 1, tmp_path / "progress.csv", RUN_META)
+    actions = [agent.act(state, total_steps, greedy=True) for state in range(n_states - 1)]
     assert actions == [1] * (n_states - 1)

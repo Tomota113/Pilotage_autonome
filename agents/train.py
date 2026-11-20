@@ -172,6 +172,7 @@ def main(argv: list[str] | None = None) -> Path:
     parser.add_argument("config", type=Path, help="configs/<file>.yaml")
     parser.add_argument("--steps", type=int, help="override total_steps (short trial runs)")
     parser.add_argument("--runs-dir", type=Path, default=ROOT / "runs")
+    parser.add_argument("--run-id", help="use an existing run identifier")
     args = parser.parse_args(argv)
 
     with open(args.config, encoding="utf-8") as f:
@@ -182,7 +183,7 @@ def main(argv: list[str] | None = None) -> Path:
     if cfg["algo"] == "classic":
         raise SystemExit("le pilote classique ne s'entraîne pas : utiliser agents.evaluate")
 
-    run_id = make_run_id(cfg)
+    run_id = args.run_id if args.run_id is not None else make_run_id(cfg)
     run_dir = args.runs_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
     with open(run_dir / "config.yaml", "w", encoding="utf-8") as f:

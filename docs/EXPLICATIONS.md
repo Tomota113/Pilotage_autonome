@@ -145,3 +145,13 @@ points à bien comprendre pour pouvoir les défendre.
   est indicatif, il faut le dire à l'oral.
 - Non faits, car inutiles avec ce choix : le notebook Colab (Claude ne peut pas piloter Colab) et le
   script Windows `.ps1` (tout tourne sur le PC Linux).
+
+## Mission 9 — serveur
+
+- `uvicorn server.app:app` lance le Training Center. `F1RL_ROOT` désigne la racine des données.
+- `POST /runs` valide le YAML et transmet au processus d’entraînement l’identifiant calculé par `make_run_id`.
+- Le YAML temporaire passe par `runs/_queue/` et la sortie de l’entraînement est conservée dans `runs/_logs/`.
+- Le serveur suit les processus qu’il a lancés et leur envoie `SIGTERM`, puis `SIGKILL` après deux secondes si nécessaire.
+- `/files/tracks`, `/files/runs` et `/files/results` servent les fichiers en lecture seule.
+- Le WebSocket transmet les nouvelles lignes de progression et les checkpoints ainsi que les changements d’état.
+- `watch_live` rejoue un checkpoint dans un processus dédié et transmet les frames du contrat à 20 images/s.

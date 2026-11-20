@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# Environnements virtuels
+.venv/
+venv/
+
+# Sorties d'entraînement et d'évaluation (régénérables)
+runs/
+results/
+
+# Éditeurs / système
+.vscode/
+.idea/
+.DS_Store

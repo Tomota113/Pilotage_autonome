@@ -5,7 +5,9 @@ renforcement profond apprennent à piloter une monoplace sur des circuits 2D.
 Le projet compare plusieurs algorithmes (Q-Learning, DQN, PPO, SAC) à un
 pilote classique et mesure leur robustesse à une baisse d'adhérence.
 
-État actuel : seule la physique de la voiture (`sim/car.py`) est écrite.
+État actuel : le simulateur est écrit (physique de la voiture `sim/car.py`,
+piste `sim/track.py`, capteurs `sim/sensors.py`) ; l'environnement Gymnasium
+n'existe pas encore.
 
 ## Installation
 

@@ -85,3 +85,20 @@ points à bien comprendre pour pouvoir les défendre.
 - Tests : `check_env` de Gymnasium, marche arrière non récompensée, virage coupé sans
   checkpoint, arrêt tronqué après 100 pas, épisodes aléatoires qui finissent, tour complet de
   l'ovale. Débit de `env.step` complet (i3-1115G4, actions aléatoires) : ≈ 4 800 pas/s.
+
+## Mission 5 — pilote classique et évaluation (`agents/classic_driver.py`, `agents/evaluate.py`)
+
+- Pilote classique = référence non-RL ; il connaît μ et la géométrie, les agents non.
+  Direction par poursuite de cible : on vise le point de la ligne centrale à L_d = max(10, 0,8 v)
+  devant et on braque de δ = atan(2 L sin α / L_d) (arc de cercle passant par ce point).
+- Vitesse : 0,9 √(μ g R) en virage ; pour un virage à d mètres, on peut aller à √(v_virage² + 2 μ g d)
+  et freiner à temps. Cible = minimum sur 150 m. Mesuré : il boucle les 16 circuits à μ = 1,0 et 0,6.
+- `evaluate.py` fait rouler une politique figée (classique, table Q, ou checkpoint SB3 en
+  `deterministic=True`) sur circuits × μ × épisodes, écrit un replay.json validé par épisode et
+  ajoute les lignes à `results/eval.csv`. Pour un checkpoint, il relit `runs/<run_id>/config.yaml`
+  pour évaluer dans les conditions de l'entraînement.
+- `--with-activations` : des « hooks » PyTorch recopient la sortie de chaque couche cachée à chaque
+  décision (pour le Neural Network Explorer).
+- Point d'attention : le départ est fixe et les politiques évaluées sont déterministes, donc
+  plusieurs épisodes sur le même circuit et le même μ donnent exactement le même résultat.
+- Premier vrai replay : `runs/classic_demo/` (tour de demo_oval en 33,7 s, noté dans le journal).

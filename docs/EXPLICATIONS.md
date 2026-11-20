@@ -126,3 +126,22 @@ points à bien comprendre pour pouvoir les défendre.
 - `terminated` supprime ce terme futur. `truncated` interrompt l’épisode, mais la valeur de l’état suivant reste estimée.
 - La boucle journalise des évaluations greedy sur les mêmes graines et la table peut être sauvegardée au format `.npy`.
 - L’étudiant complète `act()` et `update()`, puis vérifie ses calculs et teste sa politique dans le couloir 1D.
+
+## Mission 8 — expériences et résultats (`tools/`, `configs/`)
+
+- Six conditions × graines 0, 1, 2 = 18 configs générées par `tools/make_configs.py` : PPO, DQN, SAC
+  et Q-Learning à μ = 1, PPO à μ aléatoire dans [0,5 ; 1,1], et l'ablation PPO sans pénalité de braquage
+  (λ = 0). Seule la variable étudiée change d'une condition à l'autre (même budget, circuits, récompense).
+- Budget (STOP 2) : 1 M de pas par run, tout sur le PC de l'étudiant (i3-1115G4). Débits mesurés sur
+  20 000 pas : PPO ≈ 1 240 pas/s, DQN ≈ 1 210, SAC ≈ 190. Estimation pour 1 M de pas : PPO et DQN
+  ≈ 15-20 min, SAC ≈ 1 h 30 ; les 18 runs ≈ 8 à 9 h au total, soit une à deux nuits.
+- `tools/run_night.sh` enchaîne les entraînements (journal par run dans `runs/_logs/`, reprise après
+  coupure grâce aux fichiers `.done`, un échec n'arrête pas la file). Les runs Q-Learning échoueront
+  tant que `act()` / `update()` ne sont pas écrits.
+- `tools/evaluate_all.py` évalue le dernier checkpoint de chaque run, et le pilote classique, sur les
+  circuits d'entraînement et de test × μ ∈ {1,0 ; 0,8 ; 0,6} ; replays de démo sur gen_10 avec activations.
+- `tools/plots.py` ne lit que des fichiers réels (`progress.csv`, `eval.csv`) ; chaque figure cite sa
+  source et le nombre de graines. Moyenne ± écart-type entre graines : avec 3 graines, l'écart-type
+  est indicatif, il faut le dire à l'oral.
+- Non faits, car inutiles avec ce choix : le notebook Colab (Claude ne peut pas piloter Colab) et le
+  script Windows `.ps1` (tout tourne sur le PC Linux).

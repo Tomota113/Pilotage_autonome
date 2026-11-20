@@ -1,0 +1,47 @@
+# Condition sac_mufixe, graine 1 — généré par tools/make_configs.py
+schema: f1rl.config/1.0
+algo: sac
+seed: 1
+total_steps: 1000000
+n_envs: 1
+tracks:
+  train:
+  - gen_00
+  - gen_01
+  - gen_02
+  - gen_03
+  - gen_04
+  - gen_05
+  - gen_06
+  - gen_07
+  - gen_08
+  - gen_09
+  test:
+  - gen_10
+  - gen_11
+  - gen_12
+  - gen_13
+  - gen_14
+mu:
+  mode: fixed
+  value: 1.0
+  range:
+  - 0.5
+  - 1.1
+env:
+  dt: 0.05
+  action_repeat: 5
+  action_space: continuous
+  max_steps: 3000
+  stall_steps: 100
+  observe_mu: false
+reward:
+  k_progress: 0.1
+  c_time: 0.01
+  p_offtrack: 10.0
+  b_lap: 50.0
+  lambda_steer: 0.05
+hyperparams: {}
+checkpoint_every: 50000
+eval_every: 50000
+eval_episodes: 5

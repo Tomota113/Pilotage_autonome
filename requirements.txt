@@ -1,2 +1,13 @@
 numpy
+gymnasium
+stable-baselines3
+# torch en version CPU : installer d'abord avec
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch
+pyyaml
+pandas
+matplotlib
 pytest
+fastapi
+uvicorn[standard]
+websockets

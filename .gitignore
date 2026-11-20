@@ -12,6 +12,9 @@ venv/
 runs/
 results/
 
+# Application (React)
+node_modules/
+
 # Éditeurs / système
 .vscode/
 .idea/

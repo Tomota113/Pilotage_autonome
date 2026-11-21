@@ -25,6 +25,7 @@ from agents.train import PROGRESS_COLUMNS, make_run_id
 from tools.validate import validate_config
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+APP_DIST = REPO_ROOT / "app" / "dist"
 POLL_INTERVAL = 0.1
 STOP_TIMEOUT = 2.0
 FRAME_INTERVAL = 1 / 20
@@ -392,6 +393,16 @@ def create_app(root: Path | None = None) -> FastAPI:
         finally:
             await cancel_task(monitor)
             await stop_watch(watch)
+
+    # L'application compilée (npm --prefix app run build) est servie à la racine : une seule
+    # adresse, http://localhost:8000. Montée en dernier, elle ne masque aucune route de l'API.
+    if (APP_DIST / "index.html").is_file():
+        application.mount("/", StaticFiles(directory=APP_DIST, html=True), name="app")
+    else:
+        @application.get("/")
+        async def root():
+            return {"message": "API du Training Center. Application : tools/start_app.sh puis "
+                               "http://localhost:5173, ou npm --prefix app run build puis http://localhost:8000"}
 
     return application
 

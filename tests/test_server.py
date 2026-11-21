@@ -160,3 +160,17 @@ def test_lists_tracks(client, tmp_path):
     (tmp_path / "tracks" / "broken.json").write_text("{", encoding="utf-8")  # illisible : ignoré
     tracks = client.get("/tracks").json()
     assert tracks == [{"id": "demo_oval", "name": "Ovale de démonstration", "split": "demo", "length": 976.9}]
+
+
+def test_root_serves_the_built_app_or_explains(client, monkeypatch, tmp_path):
+    response = client.get("/")
+    assert response.status_code == 200
+    import server.app as server_app
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<!doctype html><title>F1-RL Lab</title>", encoding="utf-8")
+    monkeypatch.setattr(server_app, "APP_DIST", dist)
+    with TestClient(create_app(), backend_options={"use_uvloop": True}) as app_client:
+        assert "F1-RL Lab" in app_client.get("/").text
+        assert app_client.get("/tracks").status_code == 200  # l'API reste prioritaire

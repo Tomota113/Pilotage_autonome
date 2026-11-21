@@ -32,7 +32,7 @@ import yaml
 
 from agents.classic_driver import ClassicDriver
 from env.f1_env import F1Env, load_tracks
-from tools.validate import EVAL_COLUMNS, REPLAY_SCHEMA, validate_config, validate_replay
+from tools.validate import DEEP_VALUE_ALGOS, EVAL_COLUMNS, REPLAY_SCHEMA, validate_config, validate_replay
 
 ROOT = Path(__file__).resolve().parent.parent
 EVAL_CSV = ROOT / "results" / "eval.csv"
@@ -84,24 +84,20 @@ class QTablePolicy:
 
 
 # Sous-réseau dont on lit les couches cachées, pour chaque algorithme SB3
-_HIDDEN_NET = {
-    "ppo": lambda policy: policy.mlp_extractor.policy_net,
-    "sac": lambda policy: policy.actor.latent_pi,
-    "dqn": lambda policy: policy.q_net.q_net,
-}
 
 
 class SB3Policy:
     """Stable-Baselines3 checkpoint, used with ``deterministic=True``."""
 
     def __init__(self, algo: str, path: Path, train_steps: int, with_activations: bool):
-        import stable_baselines3 as sb3
         import torch.nn as nn
 
+        from agents.algorithms import hidden_network, sb3_class
+
         self.algo, self.checkpoint, self.train_steps = algo, path.stem, train_steps
-        self.model = getattr(sb3, algo.upper()).load(path, device="cpu")
+        self.model = sb3_class(algo).load(path, device="cpu")
         policy = self.model.policy
-        hidden = _HIDDEN_NET[algo](policy)
+        hidden = hidden_network(algo, policy)
         modules = list(hidden)
         # Couches cachées = couches linéaires suivies d'une activation (pour DQN, q_net contient aussi la sortie)
         hidden_sizes = [m.out_features for m, nxt in zip(modules, modules[1:])
@@ -134,6 +130,45 @@ class SB3Policy:
         return self._acts if self.with_activations else None
 
 
+class DeepValuePolicy:
+    """Greedy policy of a Deep SARSA or Deep Monte-Carlo checkpoint."""
+
+    def __init__(self, algo: str, path: Path, train_steps: int, with_activations: bool):
+        import torch
+        from torch import nn
+
+        from agents.deep_value import QNetwork
+
+        checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+        if algo not in DEEP_VALUE_ALGOS or checkpoint["algo"] != algo:
+            raise ValueError(f"Checkpoint {path} does not match deep value algorithm {algo!r}")
+        self.algo, self.checkpoint, self.train_steps = algo, path.stem, train_steps
+        obs_dim, net_arch, n_actions = checkpoint["obs_dim"], checkpoint["net_arch"], checkpoint["n_actions"]
+        self.model = QNetwork(obs_dim, n_actions, net_arch)
+        self.model.load_state_dict(checkpoint["state_dict"])
+        self.model.eval()
+        self.network = {"layers": [obs_dim, *net_arch, n_actions], "activation": "relu"}
+        self.with_activations = with_activations
+        self._acts: list[list[float]] = []
+        if with_activations:
+            for module in self.model.layers:
+                if isinstance(module, nn.ReLU):
+                    module.register_forward_hook(self._record)
+
+    def _record(self, module, inputs, output):
+        self._acts.append([round(float(v), 4) for v in output.detach().reshape(-1)])
+
+    def act(self, env: F1Env, obs: np.ndarray) -> int:
+        import torch
+
+        self._acts = []
+        with torch.no_grad():
+            return int(self.model(torch.as_tensor(obs, dtype=torch.float32)).argmax().item())
+
+    def activations(self):
+        return self._acts if self.with_activations else None
+
+
 def _train_steps(path: Path) -> int:
     match = re.search(r"step_(\d+)", path.stem)
     return int(match.group(1)) if match else 0
@@ -154,6 +189,8 @@ def load_policy(agent: str, with_activations: bool = False):
     validate_config(config)  # on n'évalue que des runs dont la configuration respecte le contrat
     if path.suffix == ".npy":
         policy = QTablePolicy(config["algo"], path, _train_steps(path))
+    elif path.suffix == ".pt":
+        policy = DeepValuePolicy(config["algo"], path, _train_steps(path), with_activations)
     else:
         policy = SB3Policy(config["algo"], path, _train_steps(path), with_activations)
     return policy, config, run_dir.name

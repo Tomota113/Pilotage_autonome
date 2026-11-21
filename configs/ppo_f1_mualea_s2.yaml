@@ -1,5 +1,5 @@
 # Condition ppo_f1_mualea, graine 2 — généré par tools/make_configs.py
-schema: f1rl.config/1.2
+schema: f1rl.config/1.3
 algo: ppo
 seed: 2
 total_steps: 3000000
@@ -41,7 +41,7 @@ mu:
 env:
   dt: 0.05
   action_repeat: 5
-  action_space: continuous
+  action_space: pedal
   max_steps: 3000
   stall_steps: 100
   observe_mu: false
@@ -53,9 +53,15 @@ reward:
   p_offtrack: 10.0
   b_lap: 50.0
   lambda_steer: 0.05
+  k_offtrack_speed: 0.01
 hyperparams:
+  gamma: 0.995
   n_steps: 1024
   batch_size: 256
+  policy_kwargs:
+    net_arch:
+    - 256
+    - 256
 checkpoint_every: 100000
 eval_every: 100000
 eval_episodes: 5

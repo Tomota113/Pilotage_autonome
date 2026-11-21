@@ -40,8 +40,8 @@ REFERENCE_RUN_IDS = {"classic": CLASSIC_RUN_ID, "raceline": RACELINE_RUN_ID}  # 
 
 
 def last_checkpoint(run_dir: Path) -> Path | None:
-    """Checkpoint with the largest step number (step_<N>.zip or .npy)."""
-    ckpts = [p for p in (run_dir / "checkpoints").glob("step_*") if p.suffix in (".zip", ".npy")]
+    """Checkpoint with the largest step number (step_<N>.zip, .npy or .pt)."""
+    ckpts = [p for p in (run_dir / "checkpoints").glob("step_*") if p.suffix in (".zip", ".npy", ".pt")]
     if not ckpts:
         return None
     return max(ckpts, key=lambda p: int(re.search(r"step_(\d+)", p.stem).group(1)))
@@ -55,7 +55,7 @@ def best_checkpoint(run_dir: Path) -> Path | None:
     if progress.exists():
         df = pd.read_csv(progress)
         for _, row in df.sort_values(["lap_rate", "mean_reward", "step"], ascending=False).iterrows():
-            for suffix in (".zip", ".npy"):
+            for suffix in (".zip", ".npy", ".pt"):
                 path = run_dir / "checkpoints" / f"step_{int(row['step'])}{suffix}"
                 if path.exists():
                     return path

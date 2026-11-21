@@ -296,3 +296,31 @@ de 4 à 6 km (elles échouaient déjà avec le modèle simplifié).
 **Pilotes de référence.** Le pilote classique (ligne centrale, 85 % de la vitesse limite des virages)
 et le pilote trajectoire idéale (99 % du profil optimal, visée 0,35 v) bouclent les 24 tours
 (8 circuits × 3 adhérences) avec la voiture F1.
+
+## Deep SARSA et Deep Monte-Carlo
+
+La table Q est remplacée par un réseau qui lit les 12 observations (13 avec l'adhérence) et prédit 9 valeurs Q.
+Les deux agents partagent ce réseau, Adam, la perte de Huber et une exploration epsilon-greedy.
+Deep SARSA estime la suite avec la valeur de l'action réellement choisie, y compris à la troncature.
+Deep Monte-Carlo attend la fin de l'épisode et ajuste Q au cumul des récompenses, coupé à la troncature.
+DQN vise la meilleure valeur Q suivante. Avec les mêmes observations et circuits, on peut comparer les trois cibles à approximateur égal.
+Pour aligner les couches, donner la même liste à `hyperparams.net_arch` et à `hyperparams.policy_kwargs.net_arch` côté DQN.
+La mémoire récente de SARSA et les mises à jour en fin d'épisode de Monte-Carlo influencent aussi l'apprentissage.
+
+## Série v2 : pourquoi le premier essai a échoué, et ce qui a été corrigé (21/11/2026)
+
+- Premier essai PPO (2,4 M de pas) : la politique apprise était « plein gaz » (frein moyen 0,03) ; la voiture
+  entrait dans les virages à 230–290 km/h pour une limite de 50 à 160 km/h. Trois causes, trois corrections :
+  1. horizon trop court : avec γ = 0,99, l'agent ne « voit » qu'≈ 5 s devant lui ; γ = 0,995 (≈ 10 s) ;
+  2. sortie trop peu chère : −10, quelle que soit la vitesse ; désormais −(10 + 0,01 v²), ≈ −90 à 300 km/h
+     (idée reprise de Gran Turismo Sophy, Sony AI : la pénalité suit l'énergie cinétique) ;
+  3. exploration difficile : accélérateur et frein séparés et bruités ; action « pédale » unique
+     (−1 = plein frein … +1 = plein gaz), qui interdit d'appuyer sur les deux à la fois.
+- Nouveaux algorithmes : TD3 (deux critiques, acteur mis à jour plus rarement), TQC (SAC avec critiques
+  distributionnels tronqués, l'un des meilleurs en actions continues), QR-DQN (DQN distributionnel), et les
+  versions « profondes » de SARSA et de Monte-Carlo (même réseau que DQN : seule la cible change).
+- Méthodes tabulaires améliorées pour la F1 : 5 760 états au lieu de 768 (capteurs jusqu'à 200 m, vitesse
+  jusqu'à 345 km/h, et surtout la courbure du virage à 150 m, sans laquelle on ne peut pas freiner à temps).
+- Réseaux 2 × 256 au lieu de 2 × 64 ; la condition `ppo_f1_net64` mesure l'effet de la taille du réseau.
+- 13 conditions × 3 graines. Débits mesurés et files équilibrées : ≈ 5 h 30 par graine en 3 files
+  parallèles (`tools/run_v2.sh 0` pour une graine, `tools/run_v2.sh` pour les trois).

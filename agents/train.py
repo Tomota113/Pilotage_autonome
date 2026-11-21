@@ -28,7 +28,7 @@ import numpy as np
 import yaml
 
 from env.f1_env import TRACKS_DIR, F1Env, load_tracks
-from tools.validate import TABULAR_ALGOS, validate_config
+from tools.validate import DEEP_VALUE_ALGOS, TABULAR_ALGOS, validate_config
 
 ROOT = Path(__file__).resolve().parent.parent
 PROGRESS_COLUMNS = (
@@ -125,7 +125,15 @@ def train_sb3(cfg: dict, run_dir: Path, run_id: str, tracks_dir: Path = TRACKS_D
 
     hyper = copy.deepcopy(cfg["hyperparams"])
     policy_kwargs = {"net_arch": NET_ARCH, **hyper.pop("policy_kwargs", {})}
-    model = getattr(sb3, cfg["algo"].upper())(
+    from agents.algorithms import sb3_class
+
+    if cfg["algo"] == "td3" and "action_noise" not in hyper:
+        # TD3 n'explore pas tout seul : bruit gaussien d'écart-type 0,1 sur chaque commande
+        from stable_baselines3.common.noise import NormalActionNoise
+
+        n = vec_env.action_space.shape[0]
+        hyper["action_noise"] = NormalActionNoise(np.zeros(n), 0.1 * np.ones(n))
+    model = sb3_class(cfg["algo"])(
         "MlpPolicy", vec_env, seed=cfg["seed"], device="cpu", verbose=0, policy_kwargs=policy_kwargs, **hyper
     )
     ckpt_dir = run_dir / "checkpoints"
@@ -186,6 +194,22 @@ def train_tabular(cfg: dict, run_dir: Path, run_id: str, tracks_dir: Path = TRAC
     agent.save(ckpt_dir / f"step_{cfg['total_steps']}.npy")
 
 
+def train_deep_value(cfg: dict, run_dir: Path, run_id: str, tracks_dir: Path = TRACKS_DIR) -> None:
+    """Train Deep SARSA or Deep Monte-Carlo on raw observations and discrete9 actions."""
+    from agents.deep_value import DeepMonteCarloAgent, DeepSarsaAgent, train
+
+    agent_cls = {"deep_sarsa": DeepSarsaAgent, "deep_mc": DeepMonteCarloAgent}[cfg["algo"]]
+    train_tracks = load_tracks(cfg["tracks"]["train"], tracks_dir)
+    env = F1Env(cfg, train_tracks)
+    # Même départ fixe qu'avec SB3 pour rendre les évaluations comparables.
+    eval_cfg = {**cfg, "env": {**cfg["env"], "random_start": False}}
+    eval_env = F1Env(eval_cfg, train_tracks)
+    agent = agent_cls(env.observation_space.shape[0], env.action_space.n,
+                      seed=cfg["seed"], **cfg["hyperparams"])
+    train(agent, env, eval_env, cfg["total_steps"], cfg["eval_every"], cfg["eval_episodes"],
+          run_dir / "progress.csv", run_meta(cfg, run_id), run_dir / "checkpoints", cfg["checkpoint_every"])
+
+
 def main(argv: list[str] | None = None) -> Path:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("config", type=Path, help="configs/<file>.yaml")
@@ -213,6 +237,8 @@ def main(argv: list[str] | None = None) -> Path:
     start = time.perf_counter()
     if cfg["algo"] in TABULAR_ALGOS:
         train_tabular(cfg, run_dir, run_id, args.tracks_dir)
+    elif cfg["algo"] in DEEP_VALUE_ALGOS:
+        train_deep_value(cfg, run_dir, run_id, args.tracks_dir)
     else:
         train_sb3(cfg, run_dir, run_id, args.tracks_dir)
     elapsed = time.perf_counter() - start

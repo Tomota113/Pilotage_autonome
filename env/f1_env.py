@@ -149,10 +149,13 @@ class F1Env(gym.Env):
         if self.action_mode == "continuous":
             self.action_space = spaces.Box(np.array([-1.0, 0.0, 0.0], dtype=np.float32),
                                            np.array([1.0, 1.0, 1.0], dtype=np.float32), dtype=np.float32)
+        elif self.action_mode == "pedal":
+            # Volant et pédale unique : pédale > 0 = accélérateur, < 0 = frein (jamais les deux à la fois)
+            self.action_space = spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
         elif self.action_mode == "discrete9":
             self.action_space = spaces.Discrete(len(DISCRETE9))
         else:
-            raise ValueError(f"unknown action_space {self.action_mode!r} (continuous | discrete9)")
+            raise ValueError(f"unknown action_space {self.action_mode!r} (continuous | pedal | discrete9)")
 
         # État de l'épisode : rempli par reset()
         self.track: Track | None = None
@@ -211,7 +214,7 @@ class F1Env(gym.Env):
         lap = self.checkpoint == N_CHECKPOINTS
         off_track = self.track.is_off_track(pos)
         # 5. Récompense
-        reward = self._compute_reward(ds, off_track, lap, self.car.delta - old_delta)
+        reward = self._compute_reward(ds, off_track, lap, self.car.delta - old_delta, self.car.v)
         # 6. État de l'épisode ; le compteur « sans progrès » repart à 0 dès qu'on bat son record
         self.pos = pos
         self.steps += 1
@@ -271,6 +274,9 @@ class F1Env(gym.Env):
         """Action of the agent -> command (steer, throttle, brake), within bounds."""
         if self.action_mode == "discrete9":
             steer, throttle, brake = DISCRETE9[int(action)]
+        elif self.action_mode == "pedal":
+            steer, pedal = np.asarray(action, dtype=float).reshape(2)
+            throttle, brake = max(pedal, 0.0), max(-pedal, 0.0)
         else:
             steer, throttle, brake = np.asarray(action, dtype=float).reshape(3)
         return (float(np.clip(steer, -1.0, 1.0)), float(np.clip(throttle, 0.0, 1.0)), float(np.clip(brake, 0.0, 1.0)))
@@ -320,13 +326,18 @@ class F1Env(gym.Env):
             ahead = 0.0
         return checkpoint + 1 if ahead <= ds_raw + 1e-6 else checkpoint
 
-    def _compute_reward(self, ds: float, off_track: bool, lap: bool, d_delta: float) -> float:
-        """r = k Δs − c − P [off track] + B [lap] − λ |Δδ| (Δδ: change of the steering angle, rad)."""
+    def _compute_reward(self, ds: float, off_track: bool, lap: bool, d_delta: float, speed: float = 0.0) -> float:
+        """r = k Δs − c − (P + k_v v²) [off track] + B [lap] − λ |Δδ| (Δδ: change of the steering angle, rad).
+
+        k_v (``reward.k_offtrack_speed``, 0 par défaut) rend la sortie d'autant plus coûteuse qu'elle se fait
+        vite (∝ énergie cinétique) : à 300 km/h, avec k_v = 0,01, elle coûte ≈ 90 au lieu de 10.
+        """
         r = self.reward_cfg
+        crash = r["p_offtrack"] + r.get("k_offtrack_speed", 0.0) * speed * speed
         return float(
             r["k_progress"] * ds
             - r["c_time"]
-            - r["p_offtrack"] * float(off_track)
+            - crash * float(off_track)
             + r["b_lap"] * float(lap)
             - r["lambda_steer"] * abs(d_delta)
         )

@@ -9,7 +9,7 @@ describe("buildTrainingYaml", () => {
     ["sarsa", "discrete9"], ["montecarlo", "discrete9"],
   ])("déduit l’espace d’actions de %s", (algo, space) => {
     const yaml = buildTrainingYaml({ ...form, algo });
-    expect(yaml).toContain('schema: "f1rl.config/1.1"\n');
+    expect(yaml).toContain('schema: "f1rl.config/1.3"\n');
     expect(yaml).toContain(`algo: "${algo}"\n`);
     expect(yaml).toContain(`  action_space: "${space}"\n`);
     expect(yaml).toContain('  train: ["test-01", "01"]\n  test: ["yes"]\n');

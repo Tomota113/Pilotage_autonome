@@ -43,7 +43,7 @@ process.stdout.write(buildTrainingYaml({
     assert result.returncode == 0, result.stdout + result.stderr
 
     config = yaml.safe_load(output)
-    assert config["schema"] == "f1rl.config/1.1"
+    assert config["schema"] == "f1rl.config/1.3"
     assert config["algo"] == algo
     assert config["seed"] == 2
     assert config["total_steps"] == 75000

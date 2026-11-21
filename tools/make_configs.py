@@ -48,23 +48,52 @@ REAL_TRAIN_TRACKS = [track_id for track_id, _ in _REAL_TRAIN.values()]
 F1_TEST_TRACKS = [track_id for track_id, _ in _F1_TEST.values()]
 F1_ENV = {"car": "f1_2024", "random_start": True}
 F1_MU_RANGE = [0.6, 1.1]
+# Récompense v2 : la sortie de piste coûte 10 + 0,01 v² (≈ 90 à 300 km/h), sinon un agent à
+# 340 km/h préfère foncer et sortir plutôt que freiner (constaté sur le premier essai PPO).
+F1_REWARD_EXTRA = {"k_offtrack_speed": 0.01}
+F1_GAMMA = 0.995  # horizon ≈ 200 décisions = 10 s (0,99 : 5 s, trop court pour anticiper à 340 km/h)
+BIG_NET = [256, 256]  # réseaux plus grands pour la série v2 (ablation : PPO avec 2 × 64)
+_SB3_NET = {"policy_kwargs": {"net_arch": BIG_NET}}
 # condition -> réglages ; budgets fixés après mesure du débit (voir docs/EXPLICATIONS.md)
 F1_CONDITIONS = {
+    # Actions continues (volant + pédale unique)
     "ppo_f1": {"algo": "ppo", "mu_mode": "fixed", "total_steps": 3_000_000, "n_envs": 4,
-               "hyperparams": {"n_steps": 1024, "batch_size": 256}},
+               "hyperparams": {"n_steps": 1024, "batch_size": 256, **_SB3_NET}},
     "ppo_f1_mualea": {"algo": "ppo", "mu_mode": "uniform", "total_steps": 3_000_000, "n_envs": 4,
-                      "hyperparams": {"n_steps": 1024, "batch_size": 256}},
+                      "hyperparams": {"n_steps": 1024, "batch_size": 256, **_SB3_NET}},
+    "ppo_f1_net64": {"algo": "ppo", "mu_mode": "fixed", "total_steps": 3_000_000, "n_envs": 4,
+                     "hyperparams": {"n_steps": 1024, "batch_size": 256, "policy_kwargs": {"net_arch": [64, 64]}}},
     "sac_f1": {"algo": "sac", "mu_mode": "fixed", "total_steps": 1_000_000, "n_envs": 1,
-               "hyperparams": {"learning_starts": 10_000}},
+               "hyperparams": {"learning_starts": 10_000, **_SB3_NET}},
+    "td3_f1": {"algo": "td3", "mu_mode": "fixed", "total_steps": 1_000_000, "n_envs": 1,
+               "hyperparams": {"learning_starts": 10_000, **_SB3_NET}},
+    "tqc_f1": {"algo": "tqc", "mu_mode": "fixed", "total_steps": 1_000_000, "n_envs": 1,
+               "hyperparams": {"learning_starts": 10_000, **_SB3_NET}},
+    # Actions discrètes (discrete9) : Q-Learning profond (DQN, QR-DQN), SARSA et Monte-Carlo profonds
     "dqn_f1": {"algo": "dqn", "mu_mode": "fixed", "total_steps": 1_500_000, "n_envs": 1,
-               "hyperparams": {"learning_starts": 10_000, "exploration_fraction": 0.2}},
+               "hyperparams": {"learning_starts": 10_000, "exploration_fraction": 0.2, **_SB3_NET}},
+    "qrdqn_f1": {"algo": "qrdqn", "mu_mode": "fixed", "total_steps": 1_500_000, "n_envs": 1,
+                 "hyperparams": {"learning_starts": 10_000, "exploration_fraction": 0.2, **_SB3_NET}},
+    "deep_sarsa_f1": {"algo": "deep_sarsa", "mu_mode": "fixed", "total_steps": 1_500_000, "n_envs": 1,
+                      "hyperparams": {"net_arch": BIG_NET}},
+    "deep_mc_f1": {"algo": "deep_mc", "mu_mode": "fixed", "total_steps": 1_500_000, "n_envs": 1,
+                   "hyperparams": {"net_arch": BIG_NET}},
+    # Tabulaires, avec le découpage F1 de 5 760 états (agents/discretize.py)
+    "qlearning_f1": {"algo": "qlearning", "mu_mode": "fixed", "total_steps": 3_000_000, "n_envs": 1,
+                     "hyperparams": {"epsilon_decay_steps": 1_000_000}},
+    "sarsa_f1": {"algo": "sarsa", "mu_mode": "fixed", "total_steps": 3_000_000, "n_envs": 1,
+                 "hyperparams": {"epsilon_decay_steps": 1_000_000}},
+    "montecarlo_f1": {"algo": "montecarlo", "mu_mode": "fixed", "total_steps": 3_000_000, "n_envs": 1,
+                      "hyperparams": {"epsilon_decay_steps": 1_000_000}},
 }
 ALL_CONDITIONS = list(CONDITIONS) + list(F1_CONDITIONS)
 
 
 def make_f1_config(condition: str, seed: int, total_steps: int | None = None) -> dict:
     spec = F1_CONDITIONS[condition]
-    env = {**copy.deepcopy(DEFAULT_CONFIG["env"]), **F1_ENV, "action_space": ALGO_ACTION_SPACE[spec["algo"]]}
+    space = ALGO_ACTION_SPACE[spec["algo"]]
+    env = {**copy.deepcopy(DEFAULT_CONFIG["env"]), **F1_ENV,
+           "action_space": "pedal" if space == "continuous" else space}  # pédale unique : exploration plus simple
     cfg = {
         "schema": CONFIG_SCHEMA,
         "algo": spec["algo"],
@@ -74,8 +103,8 @@ def make_f1_config(condition: str, seed: int, total_steps: int | None = None) ->
         "tracks": {"train": REAL_TRAIN_TRACKS, "test": F1_TEST_TRACKS},
         "mu": {"mode": spec["mu_mode"], "value": 1.0, "range": F1_MU_RANGE},
         "env": env,
-        "reward": dict(DEFAULT_CONFIG["reward"]),
-        "hyperparams": copy.deepcopy(spec["hyperparams"]),
+        "reward": {**DEFAULT_CONFIG["reward"], **F1_REWARD_EXTRA},
+        "hyperparams": {"gamma": F1_GAMMA, **copy.deepcopy(spec["hyperparams"])},
         "checkpoint_every": 100_000,
         "eval_every": 100_000,
         "eval_episodes": 5,
@@ -117,7 +146,10 @@ def condition_of(cfg: dict) -> str | None:
     if env.get("car") == "f1_2024" and cfg["tracks"]["train"] == REAL_TRAIN_TRACKS:
         for name, spec in F1_CONDITIONS.items():
             if cfg["algo"] == spec["algo"] and cfg["mu"]["mode"] == spec["mu_mode"]:
-                return name
+                net = cfg["hyperparams"].get("policy_kwargs", {}).get("net_arch")
+                spec_net = spec["hyperparams"].get("policy_kwargs", {}).get("net_arch")
+                if net == spec_net:  # PPO 2 × 256 et PPO 2 × 64 (ablation) sont deux conditions
+                    return name
         return None
     if cfg["tracks"]["train"] != TRAIN_TRACKS or env.get("car", "v1") != "v1":
         return None

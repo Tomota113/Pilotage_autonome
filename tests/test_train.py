@@ -30,11 +30,16 @@ def test_run_id_format():
         ("ppo", "continuous", {"n_steps": 128, "batch_size": 64}),
         ("dqn", "discrete9", {"learning_starts": 50}),
         ("sac", "continuous", {"learning_starts": 50}),
+        ("sac", "pedal", {"learning_starts": 50}),
+        ("td3", "pedal", {"learning_starts": 50}),
+        ("tqc", "pedal", {"learning_starts": 50}),
+        ("qrdqn", "discrete9", {"learning_starts": 50}),
     ],
 )
 def test_short_training_writes_run_files(tmp_path, algo, action_space, hyperparams):
     cfg = valid_config()
-    cfg.update(algo=algo, hyperparams=hyperparams, checkpoint_every=150, eval_every=150, eval_episodes=1)
+    cfg.update(algo=algo, hyperparams=hyperparams, checkpoint_every=150, eval_every=150, eval_episodes=1,
+               schema="f1rl.config/1.3")
     cfg["tracks"]["train"] = ["demo_oval"]
     cfg["env"].update(action_space=action_space, max_steps=100)
     path = tmp_path / "cfg.yaml"
@@ -55,7 +60,7 @@ def test_short_training_writes_run_files(tmp_path, algo, action_space, hyperpara
     ckpts = sorted(p.name for p in (run_dir / "checkpoints").glob("step_*.zip"))
     assert ckpts and f"step_{steps[-1]}.zip" in ckpts
 
-    # Réseau 2 × 64 pour les trois algorithmes
+    # Réseau 2 × 64 pour tous les algorithmes
     from agents.evaluate import SB3Policy
 
     policy = SB3Policy(algo, run_dir / "checkpoints" / f"step_{steps[-1]}.zip", steps[-1], False)

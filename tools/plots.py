@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from tools.evaluate_all import REFERENCE_RUN_IDS, find_runs  # noqa: E402
-from tools.make_configs import CONDITIONS  # noqa: E402
+from tools.make_configs import ALL_CONDITIONS, CONDITIONS, F1_CONDITIONS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -77,9 +77,23 @@ def _save(fig, out: Path, name: str, written: list[Path]) -> None:
     written.append(out / name)
 
 
-def load_progress(runs_dir: Path) -> pd.DataFrame:
+# Série v2 : 13 conditions ; couleur ET marqueur les distinguent (8 couleurs validées seulement)
+STYLE.update({
+    "ppo_f1": ("#2a78d6", "o"), "ppo_f1_mualea": ("#eb6834", "s"), "ppo_f1_net64": ("#2a78d6", "P"),
+    "sac_f1": ("#eda100", "D"), "td3_f1": ("#6250d6", "X"), "tqc_f1": ("#e34948", "*"),
+    "dqn_f1": ("#1baf7a", "^"), "qrdqn_f1": ("#1baf7a", "v"), "deep_sarsa_f1": ("#008300", "<"),
+    "deep_mc_f1": ("#008300", ">"), "qlearning_f1": ("#e87ba4", "h"), "sarsa_f1": ("#6250d6", "p"),
+    "montecarlo_f1": ("#e34948", "d"),
+})
+SERIES = {  # série -> (conditions, pilotes de référence {nom: run_id}, fichier d'évaluation, dossier des figures)
+    "v1": (CONDITIONS, REFERENCE_RUN_IDS, "eval.csv", "figures"),
+    "v2": (F1_CONDITIONS, {"classic": "classic_f1_ref", "raceline": "raceline_f1_ref"}, "eval_f1_v2.csv", "figures_v2"),
+}
+
+
+def load_progress(runs_dir: Path, conditions=CONDITIONS) -> pd.DataFrame:
     frames = []
-    for condition, seed, run_dir in find_runs(runs_dir, CONDITIONS):
+    for condition, seed, run_dir in find_runs(runs_dir, conditions):
         path = run_dir / "progress.csv"
         if path.exists():
             df = pd.read_csv(path)
@@ -88,13 +102,13 @@ def load_progress(runs_dir: Path) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
-def load_eval(runs_dir: Path, eval_csv: Path) -> pd.DataFrame:
+def load_eval(runs_dir: Path, eval_csv: Path, conditions=CONDITIONS, refs=REFERENCE_RUN_IDS) -> pd.DataFrame:
     if not eval_csv.exists():
         return pd.DataFrame()
     df = pd.read_csv(eval_csv)
-    conditions = {run_dir.name: condition for condition, _, run_dir in find_runs(runs_dir, CONDITIONS)}
-    conditions.update({run_id: name for name, run_id in REFERENCE_RUN_IDS.items()})
-    df["condition"] = df["run_id"].map(conditions)
+    by_run = {run_dir.name: condition for condition, _, run_dir in find_runs(runs_dir, conditions)}
+    by_run.update({run_id: name for name, run_id in refs.items()})
+    df["condition"] = df["run_id"].map(by_run)
     df = df[df["condition"].notna()].copy()
     df["lap"] = (df["outcome"] == "lap").astype(float)
     return df
@@ -105,7 +119,7 @@ def _seeds(n: int) -> str:
 
 
 def _ordered(conditions) -> list[str]:
-    return [c for c in CONDITIONS if c in set(conditions)]
+    return [c for c in ALL_CONDITIONS if c in set(conditions)]
 
 
 def _style_axes(ax) -> None:
@@ -264,14 +278,15 @@ def plot_eval(ev: pd.DataFrame, out: Path, written: list[Path], src: str = "resu
         _save(fig, out, "train_vs_test.png", written)
 
 
-def make_figures(runs_dir: Path, eval_csv: Path, out: Path) -> list[Path]:
+def make_figures(runs_dir: Path, eval_csv: Path, out: Path, series: str = "v1") -> list[Path]:
+    conditions, refs, _, _ = SERIES[series]
     written: list[Path] = []
-    progress = load_progress(runs_dir)
+    progress = load_progress(runs_dir, conditions)
     if progress.empty:
         print("aucun progress.csv de run réel : pas de courbe d'apprentissage")
     else:
         plot_learning(progress, out, written)
-    ev = load_eval(runs_dir, eval_csv)
+    ev = load_eval(runs_dir, eval_csv, conditions, refs)
     if ev.empty:
         print(f"aucune ligne de {eval_csv} rattachée à un run réel : pas de figure d'évaluation")
     else:
@@ -282,11 +297,16 @@ def make_figures(runs_dir: Path, eval_csv: Path, out: Path) -> list[Path]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--series", choices=tuple(SERIES), default="v1",
+                        help="v1 : modèle simplifié ; v2 : voiture F1 sur circuits réels (évaluation F1)")
     parser.add_argument("--runs-dir", type=Path, default=ROOT / "runs")
-    parser.add_argument("--eval-csv", type=Path, default=ROOT / "results" / "eval.csv")
-    parser.add_argument("--out", type=Path, default=ROOT / "results" / "figures")
+    parser.add_argument("--eval-csv", type=Path)
+    parser.add_argument("--out", type=Path)
     args = parser.parse_args()
-    for path in make_figures(args.runs_dir, args.eval_csv, args.out):
+    _, _, eval_name, out_name = SERIES[args.series]
+    eval_csv = args.eval_csv or ROOT / "results" / eval_name
+    out = args.out or ROOT / "results" / out_name
+    for path in make_figures(args.runs_dir, eval_csv, out, args.series):
         print(path)
 
 

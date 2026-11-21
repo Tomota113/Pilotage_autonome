@@ -107,3 +107,10 @@ pistes plus étroites (7,5 à 18 m, contre 12 m partout à l'entraînement), vir
 10 à 18 m, contre 19 m au minimum) et chicanes après de longues lignes droites (ex. 16 % du tour à Monza
 pour presque tous les agents : la première chicane, abordée à pleine vitesse). Piste : entraîner sur des
 circuits générés plus variés (largeur, rayons, chicanes), ou sur une partie des circuits F1.
+
+## Série v2 — préparation (21/11/2026)
+
+| Date | run_id | Configuration | Graine | Résultat mesuré | Décision |
+|---|---|---|---|---|---|
+| 2026-11-21 | ppo_multi_mufixe_f1_s0_20261121-1404, sac_multi_mufixe_f1_s0_20261121-1404 (runs/_aborted/) | premiers essais v2 : voiture F1, 17 circuits réels, départs aléatoires, actions continues 3D, γ 0,99, sortie −10 | 0 | PPO 2,4 M pas : récompense d'évaluation bloquée ≈ 42, 0 tour ; diagnostic sur 6 départs : plein gaz (gaz moyen 0,96, frein 0,03), entrée en virage à 230–290 km/h pour une limite de 50–160 km/h ; SAC 200 000 pas : 0 tour | arrêtés ; corrections : action « pédale » (−1 frein … +1 gaz), sortie −(10 + 0,01 v²), γ 0,995 |
+| 2026-11-21 | runs/_pilot/ (essais courts, configs v2 corrigées) | mesure de débit, réseaux 2 × 256 (PPO 4 env.) | 0 | pas/s (évaluations comprises) : PPO 1 436 ; DQN 1 381 ; Q-Learning 2 616 ; SARSA 2 514 ; Monte-Carlo 2 656 ; Deep MC 2 355 (début) ; Deep SARSA 411 ; TD3 183 ; QR-DQN 175 ; SAC 131 ; TQC 66. PPO 400 000 pas : la voiture roule (récompense 34, 0 tour) | budgets et files de tools/run_v2.sh (≈ 5 h 30 par graine en 3 files) ; lancement sur signal de l'étudiant |

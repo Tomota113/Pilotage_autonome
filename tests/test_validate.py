@@ -168,3 +168,23 @@ def test_tabular_and_classic_replays_have_no_network():
     replay["frames"][0]["activations"] = [[0.0] * 64]
     with pytest.raises(ValueError, match="no activations"):
         validate_replay(replay)
+
+
+def test_schema_1_3_features():
+    cfg = valid_config()
+    cfg["env"]["action_space"] = "pedal"
+    cfg["schema"] = "f1rl.config/1.2"
+    with pytest.raises(ValueError, match="1.3"):
+        validate_config(cfg)
+    cfg["schema"] = "f1rl.config/1.3"
+    validate_config(cfg)
+    cfg.update(algo="tqc")
+    validate_config(cfg)
+    cfg.update(algo="deep_sarsa")
+    with pytest.raises(ValueError):
+        validate_config(cfg)  # Deep SARSA : actions discrete9 seulement
+    cfg["env"]["action_space"] = "discrete9"
+    validate_config(cfg)
+    cfg["reward"]["k_offtrack_speed"] = -1.0
+    with pytest.raises(ValueError):
+        validate_config(cfg)

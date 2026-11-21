@@ -1,5 +1,6 @@
 export const ACTION_SPACES = {
-  ppo: "continuous", dqn: "discrete9", sac: "continuous",
+  ppo: "continuous", dqn: "discrete9", sac: "continuous", td3: "continuous", tqc: "continuous",
+  qrdqn: "discrete9", deep_sarsa: "discrete9", deep_mc: "discrete9",
   qlearning: "discrete9", sarsa: "discrete9", montecarlo: "discrete9",
 };
 
@@ -52,7 +53,7 @@ export function buildTrainingYaml(form) {
   const reward = Object.fromEntries(Object.keys(TRAINING_DEFAULTS.reward).map((key) =>
     [key, readNumber(form.reward[key], key)]));
   return serializeConfig({
-    schema: "f1rl.config/1.1",
+    schema: "f1rl.config/1.3",
     algo: form.algo,
     seed: readNumber(form.seed, "Graine", { integer: true }),
     total_steps: readNumber(form.totalSteps, "Nombre de pas", positiveInteger),

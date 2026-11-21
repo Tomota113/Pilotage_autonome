@@ -2,6 +2,7 @@ numpy
 scipy
 gymnasium
 stable-baselines3
+sb3-contrib
 # torch en version CPU : installer d'abord avec
 #   pip install torch --index-url https://download.pytorch.org/whl/cpu
 torch

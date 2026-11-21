@@ -63,3 +63,18 @@ def test_wrapper_preserves_transition_during_random_episode(oval_env):
 
 def test_gymnasium_check(oval_env):
     check_env(DiscreteStateWrapper(oval_env), skip_render_check=True)
+
+
+def test_f1_scheme_has_more_states_and_sees_the_next_bend():
+    from agents.discretize import SCHEMES, decode, scheme_of
+    from env.f1_env import DEFAULT_CONFIG, F1Env, load_tracks
+
+    assert SCHEMES["v1"].n_states == 768  # série v1 inchangée
+    assert SCHEMES["f1_2024"].n_states == 5760
+    cfg = {"env": dict(DEFAULT_CONFIG["env"], car="f1_2024", action_space="discrete9")}
+    env = DiscreteStateWrapper(F1Env(cfg, load_tracks(["demo_oval"])))
+    assert env.observation_space.n == 5760 and scheme_of(env) is SCHEMES["f1_2024"]
+    state, _ = env.reset(seed=0)
+    bins = decode(state, SCHEMES["f1_2024"].shape)
+    assert bins[3] == 0 and bins[4] == 1  # à l'arrêt, aligné sur la piste
+    assert bins[5] == 2  # 150 m devant le départ de l'ovale : ligne droite (tranche du milieu)

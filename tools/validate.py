@@ -29,19 +29,29 @@ from sim.track import SPLITS, Track  # noqa: E402
 # Les fichiers en 1.0 restent valides, mais seulement avec les algorithmes de la 1.0.
 # Version 1.2 de config.yaml (21/11/2026) : options env.car (modèle de voiture) et
 # env.random_start (départs aléatoires), facultatives.
-REPLAY_SCHEMA = "f1rl.replay/1.1"
-CONFIG_SCHEMA = "f1rl.config/1.2"
+REPLAY_SCHEMA = "f1rl.replay/1.3"  # 1.3 : nouveaux algorithmes (numérotation alignée sur config.yaml)
+CONFIG_SCHEMA = "f1rl.config/1.3"
 CAR_MODELS = ("v1", "f1_2024")
 ENV_OPTIONAL_1_2 = ("car", "random_start")
+# Version 1.3 : action_space « pedal » (volant + pédale unique) et reward.k_offtrack_speed
 ALGOS_1_0 = ("qlearning", "dqn", "ppo", "sac", "classic")
-ALGOS = ALGOS_1_0 + ("sarsa", "montecarlo")
+ALGOS_1_1 = ALGOS_1_0 + ("sarsa", "montecarlo")
+# 1.3 : algorithmes TD3, TQC (sb3-contrib), QR-DQN (sb3-contrib), Deep SARSA, Deep Monte-Carlo
+ALGOS_1_3 = ("td3", "tqc", "qrdqn", "deep_sarsa", "deep_mc")
+ALGOS = ALGOS_1_1 + ALGOS_1_3
 OUTCOMES = ("lap", "off_track", "timeout", "stalled")
 MU_MODES = ("fixed", "uniform")
-ACTION_SPACES = ("continuous", "discrete9")
+ACTION_SPACES = ("continuous", "pedal", "discrete9")
 # Espace d'actions imposé par l'algorithme (le pilote classique n'en dépend pas)
 ALGO_ACTION_SPACE = {"qlearning": "discrete9", "sarsa": "discrete9", "montecarlo": "discrete9",
                      "dqn": "discrete9", "ppo": "continuous", "sac": "continuous"}
 TABULAR_ALGOS = ("qlearning", "sarsa", "montecarlo")  # table Q sauvegardée en .npy
+DEEP_VALUE_ALGOS = ("deep_sarsa", "deep_mc")  # réseau Q écrit à la main (PyTorch), checkpoint .pt
+ALGO_ACTION_SPACE.update({"td3": "continuous", "tqc": "continuous", "qrdqn": "discrete9",
+                          "deep_sarsa": "discrete9", "deep_mc": "discrete9"})  # espace par défaut
+# Espaces permis : les algorithmes à actions continues acceptent aussi la pédale unique (1.3)
+ALGO_ACTION_SPACES = {algo: ((space, "pedal") if space == "continuous" else (space,))
+                      for algo, space in ALGO_ACTION_SPACE.items()}
 
 FRAME_NUMBERS = ("t", "x", "y", "psi", "v", "delta", "progress", "reward")
 SUMMARY_FIELDS = ("outcome", "lap_time", "total_reward", "steps", "off_tracks")
@@ -72,7 +82,7 @@ def _check_fields(data: dict, fields, where: str) -> None:
     _require(not missing, f"{where}: missing fields {missing}")
 
 
-def _check_schema(schema, algo: str, current: str, needs_1_2: bool = False) -> None:
+def _check_schema(schema, algo: str, current: str, needs_1_2: bool = False, needs_1_3: bool = False) -> None:
     """Accept any version from 1.0 to ``current``, provided it contains the features the file uses.
 
     1.1 : algorithmes sarsa et montecarlo ; 1.2 (config) : options env.car et env.random_start.
@@ -82,7 +92,9 @@ def _check_schema(schema, algo: str, current: str, needs_1_2: bool = False) -> N
     _require(schema in versions, f"unknown schema {schema!r}, expected {current!r}")
     minor = int(str(schema).rsplit(".", 1)[1])
     _require(minor >= 1 or algo in ALGOS_1_0, f"algo {algo!r} needs schema {family}/1.1 or later")
+    _require(minor >= 3 or algo not in ALGOS_1_3, f"algo {algo!r} needs schema {family}/1.3 or later")
     _require(minor >= 2 or not needs_1_2, f"env.car / env.random_start need schema {family}/1.2")
+    _require(minor >= 3 or not needs_1_3, f"action_space pedal / reward.k_offtrack_speed need schema {family}/1.3")
 
 
 def _check_lap_time(outcome: str, lap_time, where: str) -> None:
@@ -163,8 +175,11 @@ def validate_config(cfg: dict) -> None:
               "hyperparams", "checkpoint_every", "eval_every", "eval_episodes")
     _check_fields(cfg, fields, "config")
     _require(cfg["algo"] in ALGOS, f"algo must be one of {ALGOS}")
+    env_d = cfg.get("env") if isinstance(cfg.get("env"), dict) else {}
+    reward_d = cfg.get("reward") if isinstance(cfg.get("reward"), dict) else {}
     _check_schema(cfg["schema"], cfg["algo"], CONFIG_SCHEMA,
-                  needs_1_2=isinstance(cfg.get("env"), dict) and any(k in cfg["env"] for k in ENV_OPTIONAL_1_2))
+                  needs_1_2=any(k in env_d for k in ENV_OPTIONAL_1_2),
+                  needs_1_3=env_d.get("action_space") == "pedal" or "k_offtrack_speed" in reward_d)
     _require(_is_int(cfg["seed"]) and cfg["seed"] >= 0, "seed must be an integer >= 0")
     for f in ("total_steps", "n_envs", "checkpoint_every", "eval_every", "eval_episodes"):
         _require(_is_int(cfg[f]) and cfg[f] > 0, f"{f} must be a positive integer")
@@ -193,13 +208,15 @@ def validate_config(cfg: dict) -> None:
     _require(isinstance(env["observe_mu"], bool), "env.observe_mu must be true or false")
     _require(env.get("car", "v1") in CAR_MODELS, f"env.car must be one of {CAR_MODELS}")
     _require(isinstance(env.get("random_start", False), bool), "env.random_start must be true or false")
-    expected = ALGO_ACTION_SPACE.get(cfg["algo"])
-    _require(expected is None or env["action_space"] == expected,
-             f"algo {cfg['algo']} needs env.action_space = {expected}")
+    allowed = ALGO_ACTION_SPACES.get(cfg["algo"])
+    _require(allowed is None or env["action_space"] in allowed,
+             f"algo {cfg['algo']} needs env.action_space in {allowed}")
 
     reward = cfg["reward"]
     _check_fields(reward, REWARD_FIELDS, "reward")
     _require(all(_is_number(reward[f]) and reward[f] >= 0 for f in REWARD_FIELDS), "reward values must be numbers >= 0")
+    _require(_is_number(reward.get("k_offtrack_speed", 0.0)) and reward.get("k_offtrack_speed", 0.0) >= 0,
+             "reward.k_offtrack_speed must be a number >= 0")
     _require(isinstance(cfg["hyperparams"], dict), "hyperparams must be a mapping")
 
 
@@ -249,7 +266,7 @@ def validate_file(path: str | Path) -> str:
         if schema == TRACK_SCHEMA:
             validate_track(data)
             return "track"
-        if schema in (REPLAY_SCHEMA, "f1rl.replay/1.0"):
+        if isinstance(schema, str) and schema.startswith("f1rl.replay/"):
             validate_replay(data)
             return "replay"
         raise ValueError(f"unknown schema {schema!r}")

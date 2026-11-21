@@ -339,3 +339,22 @@ def test_lap_from_a_random_start():
         if terminated or truncated:
             break
     assert info["lap_time"] is not None and info["checkpoint"] == N_CHECKPOINTS
+
+
+def test_pedal_action_space():
+    env = F1Env(config(action_space="pedal"), OVAL)
+    assert env.action_space.shape == (2,)
+    assert env._decode_action([0.3, 0.8]) == (pytest.approx(0.3), pytest.approx(0.8), 0.0)  # accélérer
+    assert env._decode_action([-0.2, -0.5]) == (pytest.approx(-0.2), 0.0, pytest.approx(0.5))  # freiner
+    env.reset(seed=0)
+    check_env(env, skip_render_check=True)
+
+
+def test_crash_penalty_grows_with_speed():
+    env = helper_env({"reward": {"k_offtrack_speed": 0.01}})
+    slow = env._compute_reward(0.0, True, False, 0.0, speed=10.0)
+    fast = env._compute_reward(0.0, True, False, 0.0, speed=90.0)
+    assert slow == pytest.approx(-0.01 - 10.0 - 1.0)
+    assert fast == pytest.approx(-0.01 - 10.0 - 81.0)
+    # sans le coefficient : pénalité fixe, comme dans la série v1
+    assert helper_env()._compute_reward(0.0, True, False, 0.0, speed=90.0) == pytest.approx(-10.01)

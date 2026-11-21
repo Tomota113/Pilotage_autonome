@@ -9,6 +9,11 @@ export const ALGO_LABELS = {
   qlearning: "Q-Learning",
   sarsa: "SARSA",
   montecarlo: "Monte-Carlo",
+  td3: "TD3",
+  tqc: "TQC",
+  qrdqn: "QR-DQN",
+  deep_sarsa: "Deep SARSA",
+  deep_mc: "Deep Monte-Carlo",
   classic: "Pilote classique",
 };
 
@@ -38,6 +43,25 @@ export const CONDITIONS = [
   { id: "ppo_f1_mualea", label: "PPO adhérence variable (F1, circuits réels)", short: "PPO μ var.", color: "#d95926" },
   { id: "sac_f1", label: "SAC (F1, circuits réels)", short: "SAC", color: "#c98500" },
   { id: "dqn_f1", label: "DQN (F1, circuits réels)", short: "DQN", color: "#199e70" },
+  // Série v2 complétée (21/11/2026) : couleur de la famille + nom ; jamais mélangée avec la série v1
+  { id: "ppo_f1_net64", label: "PPO réseau 2 × 64 (ablation, F1)", short: "PPO 2×64", color: "#3987e5",
+    help: "Même PPO que « PPO (F1) » mais avec un réseau 4 fois plus petit : l'effet de la taille du réseau." },
+  { id: "td3_f1", label: "TD3 (F1, circuits réels)", short: "TD3", color: "#9085e9",
+    help: "Acteur-critique hors politique, deux critiques et mise à jour retardée de l'acteur." },
+  { id: "tqc_f1", label: "TQC (F1, circuits réels)", short: "TQC", color: "#e66767",
+    help: "SAC avec critiques distributionnels tronqués : l'un des meilleurs algorithmes à actions continues." },
+  { id: "qrdqn_f1", label: "QR-DQN (F1, circuits réels)", short: "QR-DQN", color: "#199e70",
+    help: "DQN distributionnel : apprend toute la distribution des retours." },
+  { id: "deep_sarsa_f1", label: "Deep SARSA (F1, circuits réels)", short: "Deep SARSA", color: "#0ca30c",
+    help: "SARSA avec un réseau de neurones à la place de la table." },
+  { id: "deep_mc_f1", label: "Deep Monte-Carlo (F1, circuits réels)", short: "Deep MC", color: "#0ca30c",
+    help: "Monte-Carlo avec un réseau de neurones à la place de la table." },
+  { id: "qlearning_f1", label: "Q-Learning tabulaire (F1, 5 760 états)", short: "Q-Learning", color: "#d55181",
+    help: "Table Q avec un découpage adapté à la F1 (vitesse, capteurs à 200 m, virage à venir)." },
+  { id: "sarsa_f1", label: "SARSA tabulaire (F1, 5 760 états)", short: "SARSA", color: "#9085e9",
+    help: "SARSA avec le découpage F1 de 5 760 états." },
+  { id: "montecarlo_f1", label: "Monte-Carlo tabulaire (F1, 5 760 états)", short: "Monte-Carlo", color: "#e66767",
+    help: "Monte-Carlo avec le découpage F1 de 5 760 états." },
 ];
 
 export const CONDITION_BY_ID = Object.fromEntries(CONDITIONS.map((c) => [c.id, c]));

@@ -38,7 +38,8 @@ Documents de référence (les lire avant tout changement de conception) :
 PC principal : Intel Core i3, pas de GPU utile. Donc :
 - simulateur en NumPy vectorisé, aucune boucle Python par capteur ;
 - aucun affichage pendant l'entraînement ;
-- petits réseaux (2 couches de 64) ;
+- petits réseaux (2 couches de 64) pour la série v1 ; série v2 : 2 × 256 à la demande de
+  l'étudiant (ablation PPO 2 × 64 pour mesurer l'effet), 1 thread PyTorch par entraînement ;
 - mesurer le débit (pas/seconde) avant de fixer un budget d'entraînement ;
 - entraînements longs lancés la nuit sur ce PC uniquement (`tools/run_night.sh`),
   SAC compris (≈ 1 h 30 pour 1 M de pas) ; ni Colab ni le PC du binôme.
@@ -61,7 +62,8 @@ algorithmes de la 1.0.
 
 - Simulateur : Python 3.11+, NumPy.
 - Environnement : Gymnasium (valider avec `gymnasium.utils.env_checker.check_env`).
-- Agents : PyTorch + Stable-Baselines3 (DQN, PPO, SAC) ; méthodes tabulaires
+- Agents : PyTorch + Stable-Baselines3 (DQN, PPO, SAC, TD3) + sb3-contrib (TQC, QR-DQN) ;
+  Deep SARSA et Deep Monte-Carlo écrits à la main (agents/deep_value.py) ; méthodes tabulaires
   (Q-Learning, SARSA, Monte-Carlo, sur l'état discrétisé à 768 états) et pilote
   classique écrits à la main.
 - Serveur : FastAPI + WebSockets, uniquement pour le Training Center.

@@ -105,26 +105,50 @@ def _ordered(conditions) -> list[str]:
     return [c for c in CONDITIONS if c in set(conditions)]
 
 
+def _style_axes(ax) -> None:
+    ax.set_facecolor("#fcfcfb")
+    ax.grid(True, color=GRID, linewidth=0.8)
+    ax.set_axisbelow(True)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(GRID)
+    ax.tick_params(colors=MUTED, labelsize=7)
+
+
 def plot_learning(progress: pd.DataFrame, out: Path, written: list[Path]) -> None:
+    """Small multiples: one panel per condition, mean of the seeds (thick) and each seed (thin)."""
+    conditions = _ordered(progress["condition"])
+    ncols = min(4, len(conditions))
+    nrows = -(-len(conditions) // ncols)  # division arrondie vers le haut
     for column, name, ylabel in (("mean_reward", "learning_reward.png", "récompense moyenne par épisode"),
                                  ("lap_rate", "learning_laps.png", "taux de tours valides")):
-        n_seeds = progress.groupby("condition")["seed"].nunique()
-        fig, ax = _setup(f"Courbes d'apprentissage — {ylabel}", "pas d'entraînement", ylabel,
-                         "runs/*/progress.csv, évaluation déterministe ; moyenne ± écart-type entre graines")
-        for condition in _ordered(progress["condition"]):
+        fig, axes = plt.subplots(nrows, ncols, figsize=(3.2 * ncols, 2.6 * nrows + 0.6), dpi=130,
+                                 sharex=True, sharey=True, squeeze=False)
+        fig.patch.set_facecolor("#fcfcfb")
+        fig.suptitle(f"Courbes d'apprentissage — {ylabel}", x=0.01, ha="left", fontsize=12, color=INK)
+        for ax in axes.flat[len(conditions):]:
+            ax.set_visible(False)
+        for ax, condition in zip(axes.flat, conditions):
+            _style_axes(ax)
             df = progress[progress["condition"] == condition]
-            # Seuls les pas évalués par toutes les graines de la condition
+            color, _ = STYLE[condition]
+            for _, seed_df in df.groupby("seed"):
+                ax.plot(seed_df["step"], seed_df[column], color=color, linewidth=0.8, alpha=0.45)
+            # Moyenne aux pas évalués par toutes les graines de la condition
+            n = df["seed"].nunique()
             steps = df.groupby("step")["seed"].nunique()
-            df = df[df["step"].isin(steps[steps == n_seeds[condition]].index)]
-            stats = df.groupby("step")[column].agg(["mean", "std"]).fillna(0.0)
-            color, marker = STYLE[condition]
-            ax.plot(stats.index, stats["mean"], color=color, linewidth=2, marker=marker, markersize=5,
-                    markevery=max(1, len(stats) // 10), label=f"{condition} ({_seeds(n_seeds[condition])})")
-            ax.fill_between(stats.index, stats["mean"] - stats["std"], stats["mean"] + stats["std"],
-                            color=color, alpha=0.15, linewidth=0)
-        if column == "lap_rate":
-            ax.set_ylim(-0.02, 1.02)
-        ax.legend(frameon=False, fontsize=8, labelcolor=INK)
+            mean = df[df["step"].isin(steps[steps == n].index)].groupby("step")[column].mean()
+            ax.plot(mean.index, mean.values, color=color, linewidth=2.2)
+            ax.set_title(f"{condition} ({_seeds(n)})", fontsize=9, color=INK, loc="left")
+            if column == "lap_rate":
+                ax.set_ylim(-0.02, 1.02)
+        for ax in axes[-1]:
+            ax.set_xlabel("pas d'entraînement", color=MUTED, fontsize=8)
+        for ax in axes[:, 0]:
+            ax.set_ylabel(ylabel, color=MUTED, fontsize=8)
+        fig.text(0.01, 0.01, "Source : runs/*/progress.csv, évaluation déterministe ; trait épais = moyenne "
+                 "des graines, traits fins = chaque graine", fontsize=7, color=MUTED)
         _save(fig, out, name, written)
 
 
@@ -150,7 +174,8 @@ def _bars(stats: pd.DataFrame, classic: float | None, title: str, ylabel: str, s
         # Étiquette au bord droit du graphique (x en fraction des axes, y en données)
         ax.annotate(f"pilote classique : {classic:.2f}", xy=(1.0, classic), xycoords=("axes fraction", "data"),
                     textcoords="offset points", xytext=(0, 4), ha="right", fontsize=8, color=MUTED)
-    ax.set_xticks(range(len(order)), [f"{c}\n({int(stats.loc[c, 'count'])} gr.)" for c in order], fontsize=7)
+    ax.set_xticks(range(len(order)), [f"{c} ({int(stats.loc[c, 'count'])} gr.)" for c in order], fontsize=7,
+                  rotation=20, ha="right")
     if ylim:
         ax.set_ylim(*ylim)
     _save(fig, out, name, written)
@@ -161,12 +186,14 @@ def _robustness(test: pd.DataFrame, value: str, ylabel: str, name: str, out: Pat
     """``value`` on the test tracks against the mu factor, per condition, with the classic driver as reference."""
     fig, ax = _setup(f"Robustesse à l'adhérence — {ylabel}", "facteur d'adhérence μ", ylabel,
                      "results/eval.csv, circuits de test ; moyenne ± écart-type entre graines")
-    for condition in _ordered(test["condition"]):
+    conditions = _ordered(test["condition"])
+    for k, condition in enumerate(conditions):
         df = test[test["condition"] == condition]
         stats = df.groupby(["mu_factor", "seed"])[value].mean().groupby("mu_factor").agg(["mean", "std"]).fillna(0)
         color, marker = STYLE[condition]
-        ax.errorbar(stats.index, stats["mean"], yerr=stats["std"], color=color, marker=marker, markersize=7,
-                    linewidth=2, capsize=3, label=condition)
+        dodge = 0.0035 * (k - (len(conditions) - 1) / 2)  # léger décalage : barres d'erreur lisibles
+        ax.errorbar(stats.index + dodge, stats["mean"], yerr=stats["std"], color=color, marker=marker,
+                    markersize=7, linewidth=2, capsize=3, label=condition)
     c = test[test["condition"] == "classic"].groupby("mu_factor")[value].mean()
     if not c.empty:
         ax.plot(c.index, c.values, color=CLASSIC_COLOR, linestyle="--", marker="x", linewidth=1.5,
@@ -174,7 +201,8 @@ def _robustness(test: pd.DataFrame, value: str, ylabel: str, name: str, out: Pat
     if ylim:
         ax.set_ylim(*ylim)
     ax.invert_xaxis()  # de l'adhérence normale vers la piste glissante
-    ax.legend(frameon=False, fontsize=8, labelcolor=INK)
+    ax.legend(frameon=False, fontsize=8, labelcolor=INK, loc="upper left", bbox_to_anchor=(1.01, 1.0))
+    fig.set_size_inches(10, 4.8)
     _save(fig, out, name, written)
 
 
@@ -219,7 +247,7 @@ def plot_eval(ev: pd.DataFrame, out: Path, written: list[Path]) -> None:
                 ax.bar(k + offset, stats.mean(), width=0.32, color=color, hatch=hatch, edgecolor="#fcfcfb",
                        linewidth=2, yerr=stats.std() if len(stats) > 1 else 0, capsize=3,
                        error_kw={"ecolor": INK, "elinewidth": 1})
-        ax.set_xticks(range(len(order)), order, fontsize=7)
+        ax.set_xticks(range(len(order)), order, fontsize=7, rotation=20, ha="right")
         ax.set_ylim(0, 1.05)
         _save(fig, out, "train_vs_test.png", written)
 

@@ -1,17 +1,22 @@
 """Evaluate every finished run, and the classic driver, on train and test tracks × mu factors.
 
-Usage : ``python -m tools.evaluate_all [--mu 1.0 0.8 0.6] [--out results/eval.csv]``
+Usage : ``python -m tools.evaluate_all [--checkpoint last|best] [--mu 1.0 0.8 0.6] [--out ...]``
 
 - runs pris en compte : ceux de ``runs/`` dont la configuration correspond à une
   condition de ``tools/make_configs.py`` (les essais courts sont ignorés) ; pour
   une même condition et une même graine, seul le run le plus récent compte ;
-- checkpoint évalué : le dernier (plus grand nombre de pas) ;
+- checkpoint évalué : le dernier (``last``, par défaut, résultats dans ``results/eval.csv``) ou
+  le meilleur (``best``, résultats dans ``results/eval_best.csv``). Le meilleur est choisi
+  d'après les évaluations faites PENDANT l'entraînement (progress.csv, circuits
+  d'entraînement) : plus grand taux de tours, puis plus grande récompense, puis le plus
+  récent. Les circuits de test ne servent donc pas au choix. Les méthodes tabulaires ne
+  sauvegardent que leur table finale : pour elles, meilleur = dernier ;
 - circuits : ceux d'entraînement et de test de la config, pour comparer train / test ;
 - le pilote classique (run_id ``classic_ref``) roule sur les mêmes circuits et μ ;
 - replays de démonstration : premier circuit de test, à chaque μ, avec les
   activations pour les réseaux ; les autres épisodes ne remplissent que eval.csv.
 
-``results/eval.csv`` est entièrement régénéré (l'ancien est gardé en ``eval.csv.bak``).
+Le fichier de sortie est entièrement régénéré (l'ancien est gardé en ``.csv.bak``).
 """
 
 from __future__ import annotations
@@ -39,6 +44,21 @@ def last_checkpoint(run_dir: Path) -> Path | None:
     return max(ckpts, key=lambda p: int(re.search(r"step_(\d+)", p.stem).group(1)))
 
 
+def best_checkpoint(run_dir: Path) -> Path | None:
+    """Checkpoint of the best training-time evaluation (lap rate, then reward, then latest), if saved."""
+    import pandas as pd
+
+    progress = run_dir / "progress.csv"
+    if progress.exists():
+        df = pd.read_csv(progress)
+        for _, row in df.sort_values(["lap_rate", "mean_reward", "step"], ascending=False).iterrows():
+            for suffix in (".zip", ".npy"):
+                path = run_dir / "checkpoints" / f"step_{int(row['step'])}{suffix}"
+                if path.exists():
+                    return path
+    return last_checkpoint(run_dir)
+
+
 def find_runs(runs_dir: Path) -> list[tuple[str, int, Path]]:
     """(condition, seed, run directory) of the latest run of each condition and seed that has a checkpoint."""
     latest: dict[tuple[str, int], Path] = {}
@@ -54,7 +74,7 @@ def find_runs(runs_dir: Path) -> list[tuple[str, int, Path]]:
 
 
 def evaluate_all(runs_dir: Path, out: Path, mu_factors=MU_FACTORS,
-                 train_tracks=TRAIN_TRACKS, test_tracks=TEST_TRACKS) -> int:
+                 train_tracks=TRAIN_TRACKS, test_tracks=TEST_TRACKS, checkpoint: str = "last") -> int:
     """Evaluate the classic driver and every run found; return the number of eval.csv rows written."""
     if out.exists():
         shutil.copy(out, out.with_suffix(".csv.bak"))
@@ -62,7 +82,8 @@ def evaluate_all(runs_dir: Path, out: Path, mu_factors=MU_FACTORS,
     demo_track = test_tracks[0]
     others = [t for t in list(train_tracks) + list(test_tracks) if t != demo_track]
 
-    agents = [("classic", "classic")] + [(str(last_checkpoint(run_dir)), f"{cond} s{seed}")
+    choose = {"last": last_checkpoint, "best": best_checkpoint}[checkpoint]
+    agents = [("classic", "classic")] + [(str(choose(run_dir)), f"{cond} s{seed}")
                                          for cond, seed, run_dir in find_runs(runs_dir)]
     n_rows = 0
     for agent, label in agents:
@@ -83,10 +104,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--mu", nargs="+", type=float, default=list(MU_FACTORS))
     parser.add_argument("--runs-dir", type=Path, default=ROOT / "runs")
-    parser.add_argument("--out", type=Path, default=ROOT / "results" / "eval.csv")
+    parser.add_argument("--checkpoint", choices=("last", "best"), default="last")
+    parser.add_argument("--out", type=Path, help="default: results/eval.csv (last) or results/eval_best.csv (best)")
     args = parser.parse_args()
-    n = evaluate_all(args.runs_dir, args.out, args.mu)
-    print(f"{n} lignes écrites dans {args.out}")
+    out = args.out or ROOT / "results" / ("eval.csv" if args.checkpoint == "last" else "eval_best.csv")
+    n = evaluate_all(args.runs_dir, out, args.mu, checkpoint=args.checkpoint)
+    print(f"{n} lignes écrites dans {out}")
 
 
 if __name__ == "__main__":

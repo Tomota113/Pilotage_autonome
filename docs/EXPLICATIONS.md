@@ -206,3 +206,13 @@ points à bien comprendre pour pouvoir les défendre.
   `montecarlo` ; les fichiers 1.0 restent valides avec les anciens algorithmes (règle 5 de CLAUDE.md).
 - Conditions `sarsa_mufixe` et `montecarlo_mufixe` × graines 0, 1, 2 : 24 configurations au total.
   Débit mesuré (20 000 pas, pendant qu'un PPO tournait) : ≈ 2 750 pas/s, soit ≈ 6 min pour 1 M de pas.
+
+## Meilleur checkpoint (`tools/evaluate_all.py --checkpoint best`)
+
+- Les courbes d'apprentissage oscillent : le dernier checkpoint n'est pas forcément le meilleur.
+  On choisit donc, pour chaque run, le checkpoint de la meilleure évaluation faite pendant
+  l'entraînement (taux de tours, puis récompense), sur les circuits d'entraînement seulement.
+- Pourquoi pas sur les circuits de test : choisir sur le test puis y mesurer le résultat serait tricher
+  (le score serait optimiste). Ici, le test reste une mesure indépendante.
+- Résultats dans `results/eval_best.csv`, figures dans `results/figures_best/` ; les résultats du
+  dernier checkpoint restent dans `results/eval.csv` et `results/figures/`.

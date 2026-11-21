@@ -99,3 +99,24 @@ def test_evaluate_all_and_figures(tmp_path):
 def test_no_figure_without_real_data(tmp_path):
     assert make_figures(tmp_path / "runs", tmp_path / "eval.csv", tmp_path / "figures") == []
     assert not (tmp_path / "figures").exists()
+
+
+def test_best_checkpoint_uses_training_evaluations(tmp_path):
+    from tools.evaluate_all import best_checkpoint
+
+    run_dir = tmp_path / "run"
+    (run_dir / "checkpoints").mkdir(parents=True)
+    for step in (10, 20, 30):
+        (run_dir / "checkpoints" / f"step_{step}.zip").write_bytes(b"x")
+    rows = [  # pas 20 : meilleur taux de tours ; pas 10 et 30 : à égalité, départagés par la récompense
+        {"step": 10, "lap_rate": 0.2, "mean_reward": 50.0},
+        {"step": 20, "lap_rate": 0.6, "mean_reward": 10.0},
+        {"step": 30, "lap_rate": 0.2, "mean_reward": 80.0},
+    ]
+    with open(run_dir / "progress.csv", "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=PROGRESS_COLUMNS, extrasaction="ignore", restval="")
+        writer.writeheader()
+        writer.writerows(rows)
+    assert best_checkpoint(run_dir).name == "step_20.zip"
+    (run_dir / "checkpoints" / "step_20.zip").unlink()  # meilleur non sauvegardé : le suivant
+    assert best_checkpoint(run_dir).name == "step_30.zip"

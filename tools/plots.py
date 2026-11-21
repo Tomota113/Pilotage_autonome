@@ -182,10 +182,10 @@ def _bars(stats: pd.DataFrame, classic: float | None, title: str, ylabel: str, s
 
 
 def _robustness(test: pd.DataFrame, value: str, ylabel: str, name: str, out: Path, written: list[Path],
-                ylim=None) -> None:
+                src: str, ylim=None) -> None:
     """``value`` on the test tracks against the mu factor, per condition, with the classic driver as reference."""
     fig, ax = _setup(f"Robustesse à l'adhérence — {ylabel}", "facteur d'adhérence μ", ylabel,
-                     "results/eval.csv, circuits de test ; moyenne ± écart-type entre graines")
+                     f"{src}, circuits de test ; moyenne ± écart-type entre graines")
     conditions = _ordered(test["condition"])
     for k, condition in enumerate(conditions):
         df = test[test["condition"] == condition]
@@ -206,12 +206,14 @@ def _robustness(test: pd.DataFrame, value: str, ylabel: str, name: str, out: Pat
     _save(fig, out, name, written)
 
 
-def plot_eval(ev: pd.DataFrame, out: Path, written: list[Path]) -> None:
+def plot_eval(ev: pd.DataFrame, out: Path, written: list[Path], src: str = "results/eval.csv") -> None:
+    """Evaluation figures; ``src`` names the eval file in the captions (eval.csv or eval_best.csv)."""
     agents = ev[ev["condition"] != "classic"]
     classic = ev[ev["condition"] == "classic"]
     test1 = agents[(agents["split"] == "test") & (agents["mu_factor"] == 1.0)]
     classic_test1 = classic[(classic["split"] == "test") & (classic["mu_factor"] == 1.0)]
-    source = "results/eval.csv (politique figée, dernier checkpoint), circuits de test, μ = 1,0"
+    which = "meilleur checkpoint" if "best" in src else "dernier checkpoint"
+    source = f"{src} (politique figée, {which}), circuits de test, μ = 1,0"
 
     if not test1.empty:
         _bars(_per_seed(test1, "lap"), classic_test1["lap"].mean() if not classic_test1.empty else None,
@@ -226,16 +228,16 @@ def plot_eval(ev: pd.DataFrame, out: Path, written: list[Path]) -> None:
 
     test = ev[ev["split"] == "test"]
     if test["mu_factor"].nunique() > 1:
-        _robustness(test, "lap", "taux de tours", "robustness_mu.png", out, written, ylim=(-0.02, 1.05))
+        _robustness(test, "lap", "taux de tours", "robustness_mu.png", out, written, src, ylim=(-0.02, 1.05))
         laps = test[test["outcome"] == "lap"]
         if laps["mu_factor"].nunique() > 1:
             _robustness(laps, "lap_time", "temps au tour moyen (s), tours valides", "robustness_lap_time.png",
-                        out, written)
+                        out, written, src)
 
     mu1 = agents[agents["mu_factor"] == 1.0]
     if set(mu1["split"]) >= {"train", "test"}:
         fig, ax = _setup("Généralisation — taux de tours à μ = 1,0", "condition", "taux de tours",
-                         "results/eval.csv ; plein = circuits d'entraînement, hachuré = circuits de test")
+                         f"{src} ; plein = circuits d'entraînement, hachuré = circuits de test")
         order = _ordered(mu1["condition"])
         for k, condition in enumerate(order):
             color, _ = STYLE[condition]
@@ -261,9 +263,10 @@ def make_figures(runs_dir: Path, eval_csv: Path, out: Path) -> list[Path]:
         plot_learning(progress, out, written)
     ev = load_eval(runs_dir, eval_csv)
     if ev.empty:
-        print("aucune ligne de results/eval.csv rattachée à un run réel : pas de figure d'évaluation")
+        print(f"aucune ligne de {eval_csv} rattachée à un run réel : pas de figure d'évaluation")
     else:
-        plot_eval(ev, out, written)
+        src = eval_csv.relative_to(ROOT) if eval_csv.is_relative_to(ROOT) else eval_csv
+        plot_eval(ev, out, written, str(src))
     return written
 
 

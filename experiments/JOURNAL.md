@@ -33,3 +33,29 @@ vrai run.
 - Méthodes tabulaires (Q-Learning, SARSA, Monte-Carlo, 768 états) : presque aucun tour (2, 6 et 0 sur 135). Monte-Carlo finit surtout par arrêt sans progrès (101 épisodes « stalled » sur 135) ; les 768 états grossiers ne suffisent pas pour piloter sur des circuits de 2 à 3 km.
 - Train contre test (μ 1,0) : écarts faibles pour les réseaux (SAC 0,70 / 0,67 ; PPO 0,40 / 0,47) : pas de sur-apprentissage visible des circuits d'entraînement.
 - Variance entre graines très forte (ex. ppo_mualea : 17, 15 et 0 tours sur 45) ; les courbes d'apprentissage oscillent d'une évaluation à l'autre : 3 graines et 5 épisodes d'évaluation donnent des tendances, pas des écarts significatifs.
+
+## Évaluation des meilleurs checkpoints (21/11/2026, `python -m tools.evaluate_all --checkpoint best`)
+
+Mêmes 24 runs, même protocole (15 circuits × μ ∈ {1,0 ; 0,8 ; 0,6}, 1 épisode déterministe),
+mais avec le checkpoint de la meilleure évaluation d'entraînement (progress.csv, circuits
+d'entraînement : plus grand taux de tours, puis plus grande récompense). Les circuits de test ne
+servent pas au choix. Les méthodes tabulaires n'ont que leur table finale (meilleur = dernier).
+Résultats dans `results/eval_best.csv`, figures dans `results/figures_best/`.
+
+| Condition | Checkpoints choisis (s0, s1, s2) | Tours test μ 1,0 / 0,8 / 0,6 (meilleur) | idem (dernier) | Tours totaux /135 (meilleur / dernier) |
+|---|---|---|---|---|
+| ppo_mufixe | step_850000, step_200000, step_1001472 | 0,60 / 0,13 / 0,00 | 0,47 / 0,20 / 0,00 | 26 / 25 |
+| ppo_mualea | step_300000, step_700000, step_1000000 | 0,20 / 0,67 / 0,33 | 0,13 / 0,40 / 0,20 | 58 / 32 |
+| dqn_mufixe | step_800000, step_900000, step_1000000 | 0,27 / 0,20 / 0,20 | 0,13 / 0,07 / 0,00 | 28 / 12 |
+| sac_mufixe | step_150000, step_450000, step_500000 | 0,80 / 0,60 / 0,00 | 0,67 / 0,67 / 0,00 | 62 / 61 |
+| ppo_mufixe_nolambda | step_1001472, step_700000, step_1001472 | 0,60 / 0,27 / 0,00 | 0,40 / 0,20 / 0,00 | 36 / 27 |
+| qlearning / sarsa / montecarlo | step_1000000 (table finale) | 0 / 0 / 0 | 0 / 0 / 0 | 2 / 6 / 0 (inchangé) |
+
+Décision / lecture :
+- Le dernier checkpoint sous-estime les méthodes dont l'apprentissage oscille : PPO μ aléatoire
+  passe de 32 à 58 tours, DQN de 12 à 28. Les conclusions du bilan restent valables, en plus nettes :
+  PPO μ aléatoire est l'agent le plus robuste (0,67 de tours à μ 0,8, 0,33 à μ 0,6) ; SAC reste le
+  meilleur à μ 1,0 (0,80) et le seul à n'avoir aucune variance entre graines à μ 1,0 et 0,8.
+- Le meilleur checkpoint de SAC arrive tôt (150 000 à 500 000 pas) : 1 M de pas n'apporte rien de plus.
+- Biais à garder en tête : le choix se fait sur les circuits d'entraînement, donc les chiffres « train »
+  de eval_best.csv sont légèrement optimistes ; les chiffres « test » ne le sont pas.

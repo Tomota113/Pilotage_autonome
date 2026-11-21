@@ -23,9 +23,9 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from sim.car import CarState
+from sim.car import DEFAULT_PARAMS, F1_2024, CarState
 from sim.car import step as car_step
-from sim.sensors import SENSOR_RANGE, read_sensors
+from sim.sensors import read_sensors
 from sim.track import N_CHECKPOINTS, Track, TrackPosition
 
 TRACKS_DIR = Path(__file__).resolve().parent.parent / "tracks"
@@ -33,15 +33,23 @@ TRACKS_DIR = Path(__file__).resolve().parent.parent / "tracks"
 # Valeurs par défaut des sections env, reward et mu de config.yaml
 DEFAULT_CONFIG = {
     "env": {"dt": 0.05, "action_repeat": 5, "action_space": "continuous", "max_steps": 3000,
-            "stall_steps": 100, "observe_mu": False},
+            "stall_steps": 100, "observe_mu": False, "car": "v1", "random_start": False},
     "reward": {"k_progress": 0.1, "c_time": 0.01, "p_offtrack": 10.0, "b_lap": 50.0, "lambda_steer": 0.05},
     "mu": {"mode": "fixed", "value": 1.0, "range": [0.5, 1.1]},
 }
 
+# Modèles de voiture (option env.car de config.yaml) et perception adaptée à leur vitesse :
+# - v1 : modèle de CLAUDE.md (≈ 228 km/h), capteurs à 100 m, courbure lue à 30 et 80 m ;
+# - f1_2024 : monoplace réaliste (≈ 343 km/h, appui aérodynamique, voir sim/car.py). Pour
+#   anticiper un freinage depuis 340 km/h (≈ 100 m), capteurs à 200 m, courbure à 50 et 150 m.
+CAR_MODELS = {
+    "v1": {"params": DEFAULT_PARAMS, "sensor_range": 100.0, "lookahead": (30.0, 80.0), "v_scale": 63.0},
+    "f1_2024": {"params": F1_2024, "sensor_range": 200.0, "lookahead": (50.0, 150.0), "v_scale": 96.0},
+}
 # Normalisation des observations
-V_SCALE = 63.0  # ≈ vitesse de pointe sqrt(a_max / c_d) (m/s)
+V_SCALE = CAR_MODELS["v1"]["v_scale"]  # vitesse normalisée (modèle v1 ; voir CAR_MODELS)
 CURVATURE_SCALE = 10.0  # courbure × 10 : rayon 15 m -> 0,67
-LOOKAHEAD = (30.0, 80.0)  # distances de lecture de la courbure devant la voiture (m)
+LOOKAHEAD = CAR_MODELS["v1"]["lookahead"]  # distances de lecture de la courbure (modèle v1)
 MU_SCALE = 1.5  # mu observé (ablation observe_mu) divisé par 1,5
 PROGRESS_MARGIN = 1.0  # Δs plafonné à v dt + 1 m
 # Tolérance supplémentaire pour valider un checkpoint : à l'intérieur d'un virage serré, la
@@ -117,6 +125,17 @@ class F1Env(gym.Env):
         self.stall_steps = int(env_cfg["stall_steps"])
         self.observe_mu = bool(env_cfg["observe_mu"])
         self.action_mode = env_cfg["action_space"]
+        if env_cfg["car"] not in CAR_MODELS:
+            raise ValueError(f"unknown car {env_cfg['car']!r} ({' | '.join(CAR_MODELS)})")
+        model = CAR_MODELS[env_cfg["car"]]
+        self.car_model = env_cfg["car"]
+        self.car_params = model["params"]
+        self.sensor_range = model["sensor_range"]
+        self.lookahead = model["lookahead"]
+        self.v_scale = model["v_scale"]
+        # Départ à une position aléatoire du circuit (entraînement) : chaque virage est travaillé,
+        # pas seulement le début du tour
+        self.random_start = bool(env_cfg["random_start"])
         self.reward_cfg = cfg["reward"]
         self.mu_cfg = cfg["mu"]
         if self.mu_cfg["mode"] not in ("fixed", "uniform"):
@@ -140,6 +159,7 @@ class F1Env(gym.Env):
         self.mu_factor = 1.0
         self.car: CarState | None = None
         self.pos: TrackPosition | None = None
+        self.targets: np.ndarray | None = None  # abscisses des checkpoints de l'épisode
         self.checkpoint = 0
         self.progress_m = 0.0
         self.best_progress = 0.0
@@ -154,15 +174,19 @@ class F1Env(gym.Env):
         """Start a new episode; return ``(observation, info)``.
 
         ``options`` may contain ``track_id`` and ``mu_factor`` to impose the
-        circuit and the grip (used by the evaluation).
+        circuit and the grip (used by the evaluation). With ``random_start`` the
+        car starts at rest at a random point of the centreline, and the 20
+        checkpoints are spread evenly from that point.
         """
         super().reset(seed=seed)  # initialise self.np_random avec la graine
         # 1. Circuit et facteur d'adhérence de l'épisode
         self.track = self._select_track(options)
         self.mu_factor = self._sample_mu_factor(options)
-        # 2. Voiture à l'arrêt sur la ligne de départ, et sa projection sur la ligne centrale
-        self.car = self._start_state(self.track)
-        self.pos = self.track.project(self.car.x, self.car.y, hint_index=self.track.start_index)
+        # 2. Voiture à l'arrêt sur la ligne de départ (ou en un point au hasard), et sa projection
+        start = int(self.np_random.integers(len(self.track.points))) if self.random_start else self.track.start_index
+        self.car = self._start_state(self.track, start)
+        self.pos = self.track.project(self.car.x, self.car.y, hint_index=start)
+        self.targets = self._checkpoint_targets(self.track, start)
         # 3. Compteurs de l'épisode remis à zéro
         self.checkpoint = 0
         self.progress_m = self.best_progress = 0.0
@@ -177,7 +201,8 @@ class F1Env(gym.Env):
         command = self._decode_action(action)
         # 2. Physique pendant dt (substeps sous-pas), avec l'adhérence sous la voiture
         old_delta = self.car.delta
-        self.car, slip = car_step(self.car, command, self._effective_mu(self.pos), self.dt, self.substeps)
+        self.car, slip = car_step(self.car, command, self._effective_mu(self.pos), self.dt, self.substeps,
+                                  self.car_params)
         # 3. Nouvelle projection, cherchée autour de l'ancien segment
         pos = self.track.project(self.car.x, self.car.y, hint_index=self.pos.index)
         # 4. Progression, checkpoints, sortie de piste, tour
@@ -222,10 +247,21 @@ class F1Env(gym.Env):
         return float(self.np_random.uniform(low, high))
 
     @staticmethod
-    def _start_state(track: Track) -> CarState:
-        """Car at the start line of the track, heading along it, at rest."""
-        x, y, psi = track.start_pose()
-        return CarState(x=x, y=y, psi=psi, v=0.0, delta=0.0)
+    def _start_state(track: Track, index: int | None = None) -> CarState:
+        """Car at rest on the start line (or on centreline point ``index``), heading along the track."""
+        if index is None or index == track.start_index:
+            x, y, psi = track.start_pose()
+        else:
+            (x, y), psi = track.points[index], float(track.seg_heading[index])
+        return CarState(x=float(x), y=float(y), psi=psi, v=0.0, delta=0.0)
+
+    @staticmethod
+    def _checkpoint_targets(track: Track, start: int) -> np.ndarray:
+        """Arc lengths of the checkpoints 0..N-1: those of the track file, or evenly spread from a random start."""
+        if start == track.start_index:
+            return track.checkpoint_s
+        s0 = track.s_points[start]
+        return (s0 + np.arange(N_CHECKPOINTS) * track.length / N_CHECKPOINTS) % track.length
 
     def _effective_mu(self, pos: TrackPosition) -> float:
         """Grip used by the physics: episode factor × local mu of the track."""
@@ -241,11 +277,12 @@ class F1Env(gym.Env):
 
     def _compute_obs(self, car: CarState, pos: TrackPosition, mu: float) -> np.ndarray:
         """Normalised observation (float32, every value in [-1, 1])."""
-        sensors = read_sensors(self.track, car.x, car.y, car.psi, index=pos.index) / SENSOR_RANGE  # [0, 1]
+        sensors = read_sensors(self.track, car.x, car.y, car.psi, index=pos.index,
+                               max_range=self.sensor_range) / self.sensor_range  # [0, 1]
         heading_error = wrap_angle(car.psi - pos.heading) / math.pi  # angle cap/piste
         lateral = pos.lateral / pos.half_width  # 1 = sur le bord gauche
-        curv = [self.track.curvature_ahead(pos.s, d) * CURVATURE_SCALE for d in LOOKAHEAD]
-        values = [*sensors, car.v / V_SCALE, heading_error, lateral, *curv]
+        curv = [self.track.curvature_ahead(pos.s, d) * CURVATURE_SCALE for d in self.lookahead]
+        values = [*sensors, car.v / self.v_scale, heading_error, lateral, *curv]
         if self.observe_mu:
             values.append(mu / MU_SCALE)
         return np.clip(np.asarray(values, dtype=np.float32), -1.0, 1.0)
@@ -272,7 +309,8 @@ class F1Env(gym.Env):
         """
         if ds_raw <= 0.0 or ds_raw > ds + CHECKPOINT_EXTRA or checkpoint >= N_CHECKPOINTS:
             return checkpoint
-        target = self.track.checkpoint_s[(checkpoint + 1) % N_CHECKPOINTS]
+        targets = self.track.checkpoint_s if self.targets is None else self.targets
+        target = targets[(checkpoint + 1) % N_CHECKPOINTS]
         ahead = (target - s_prev) % self.track.length  # distance jusqu'au prochain checkpoint
         # Les checkpoints sont sur des sommets de la ligne centrale : à l'extérieur d'une courbe, la
         # projection reste collée au sommet et s tombe exactement sur le checkpoint. On tolère donc

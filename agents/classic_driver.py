@@ -22,43 +22,54 @@ import math
 import numpy as np
 
 from env.f1_env import F1Env, wrap_angle
-from sim.car import DEFAULT_PARAMS, CarParams
 
-SPEED_MARGIN = 0.9  # fraction de la vitesse limite sqrt(mu g R) visée en virage
+# Fraction de la vitesse limite du virage visée : 0,9 pour le modèle v1 ; 0,85 pour la F1, dont
+# le cercle de friction (freiner en tournant réduit l'adhérence latérale) demande plus de marge
+SPEED_MARGIN = {"v1": 0.9, "f1_2024": 0.85}
 HORIZON = 150.0  # distance d'anticipation du profil de vitesse (m)
 HORIZON_STEP = 5.0  # pas d'échantillonnage de l'horizon (m)
 SPEED_GAIN = 0.5  # gain de la régulation de vitesse (par m/s d'écart)
+# Distance de visée L_d = max(10, k v) : k = 0,8 pour le modèle v1 (≤ 228 km/h) ; pour la F1
+# (≤ 343 km/h) une visée aussi longue couperait les chicanes, d'où k plus petit.
+LOOK_GAIN = {"v1": 0.8, "f1_2024": 0.6}
 
 
 class ClassicDriver:
-    """Deterministic controller acting on a F1Env with a continuous action space."""
+    """Deterministic controller acting on a F1Env with a continuous action space.
 
-    def __init__(self, params: CarParams = DEFAULT_PARAMS):
-        self.p = params
-        self.v_top = math.sqrt(params.a_max / params.c_d)  # vitesse de pointe sqrt(a_max / c_d)
+    Il lit les paramètres de la voiture dans l'environnement (``env.car_params``) : modèle v1
+    ou monoplace F1 avec appui aérodynamique (sa vitesse en virage en tient compte ; pour
+    anticiper le freinage, il ne compte prudemment que l'adhérence à basse vitesse).
+    """
+
+    def __init__(self):
         self.ahead = np.arange(0.0, HORIZON + HORIZON_STEP, HORIZON_STEP)  # distances d devant (m)
 
     def target_speed(self, env: F1Env, mu: float) -> float:
         """Highest speed from which every bend of the next 150 m can still be taken."""
-        track, s = env.track, env.pos.s
-        kappa = np.abs(np.interp((s + self.ahead) % track.length, track.s_points, track.curvature_points,
-                                 period=track.length))
-        # v_cible(d) = 0,9 sqrt(mu g R) avec R = 1 / |kappa| (vitesse de pointe en ligne droite)
-        with np.errstate(divide="ignore"):
-            v_bend = np.minimum(SPEED_MARGIN * np.sqrt(mu * self.p.g / kappa), self.v_top)
-        # Anticipation du freinage : v = sqrt(v_cible² + 2 mu g d)
-        return float(np.min(np.sqrt(v_bend**2 + 2.0 * mu * self.p.g * self.ahead)))
+        from sim.raceline import _corner_speed
+
+        p, track, s = env.car_params, env.track, env.pos.s
+        kappa = np.interp((s + self.ahead) % track.length, track.s_points, track.curvature_points,
+                          period=track.length)
+        # v_cible(d) = 0,9 × vitesse limite du virage (v1 : sqrt(mu g R) ; F1 : avec l'appui aéro)
+        # marge appliquée avant le plafond : en ligne droite, la cible reste la vitesse de pointe
+        v_bend = np.minimum(SPEED_MARGIN.get(env.car_model, 0.9) * _corner_speed(kappa, mu, p, cap=False),
+                            p.top_speed)
+        # Anticipation du freinage : v = sqrt(v_cible² + 2 a d), a = adhérence à basse vitesse
+        brake = p.grip(mu, 0.0)
+        return float(np.min(np.sqrt(v_bend**2 + 2.0 * brake * self.ahead)))
 
     def steering(self, env: F1Env) -> float:
         """Pure pursuit steering command in [-1, 1]."""
-        car, track = env.car, env.track
-        look = max(10.0, 0.8 * car.v)  # distance de visée L_d
+        p, car, track = env.car_params, env.car, env.track
+        look = max(10.0, LOOK_GAIN.get(env.car_model, 0.8) * car.v)  # distance de visée L_d
         s_target = (env.pos.s + look) % track.length
         tx = np.interp(s_target, track.s_points, track.points[:, 0], period=track.length)
         ty = np.interp(s_target, track.s_points, track.points[:, 1], period=track.length)
         alpha = wrap_angle(math.atan2(ty - car.y, tx - car.x) - car.psi)  # angle cap / point visé
-        delta = math.atan(2.0 * self.p.L * math.sin(alpha) / look)  # delta = atan(2 L sin(alpha) / L_d)
-        return float(np.clip(delta / self.p.delta_max, -1.0, 1.0))
+        delta = math.atan(2.0 * p.L * math.sin(alpha) / look)  # delta = atan(2 L sin(alpha) / L_d)
+        return float(np.clip(delta / p.delta_max, -1.0, 1.0))
 
     def act(self, env: F1Env) -> np.ndarray:
         """Action [steer, throttle, brake] for the current state of ``env`` (unwrapped F1Env)."""

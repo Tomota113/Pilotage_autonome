@@ -30,7 +30,7 @@ from pathlib import Path
 import yaml
 
 from agents.evaluate import evaluate
-from tools.make_configs import TEST_TRACKS, TRAIN_TRACKS, condition_of
+from tools.make_configs import CONDITIONS, TEST_TRACKS, TRAIN_TRACKS, condition_of
 
 ROOT = Path(__file__).resolve().parent.parent
 MU_FACTORS = (1.0, 0.8, 0.6)
@@ -62,7 +62,7 @@ def best_checkpoint(run_dir: Path) -> Path | None:
     return last_checkpoint(run_dir)
 
 
-def find_runs(runs_dir: Path) -> list[tuple[str, int, Path]]:
+def find_runs(runs_dir: Path, conditions=None) -> list[tuple[str, int, Path]]:
     """(condition, seed, run directory) of the latest run of each condition and seed that has a checkpoint."""
     latest: dict[tuple[str, int], Path] = {}
     for config_path in sorted(runs_dir.glob("*/config.yaml")):  # run_id finit par la date : tri = ordre chronologique
@@ -71,6 +71,8 @@ def find_runs(runs_dir: Path) -> list[tuple[str, int, Path]]:
             continue
         cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         condition = condition_of(cfg)
+        if conditions is not None and condition not in conditions:
+            continue
         if condition is not None and last_checkpoint(run_dir) is not None:
             latest[(condition, int(cfg["seed"]))] = run_dir
     return [(cond, seed, run_dir) for (cond, seed), run_dir in sorted(latest.items())]
@@ -87,7 +89,7 @@ def evaluate_all(runs_dir: Path, out: Path, mu_factors=MU_FACTORS,
 
     choose = {"last": last_checkpoint, "best": best_checkpoint}[checkpoint]
     agents = [("classic", "classic"), ("raceline", "raceline")]
-    agents += [(str(choose(run_dir)), f"{cond} s{seed}") for cond, seed, run_dir in find_runs(runs_dir)]
+    agents += [(str(choose(run_dir)), f"{cond} s{seed}") for cond, seed, run_dir in find_runs(runs_dir, CONDITIONS)]
     n_rows = 0
     for agent, label in agents:
         run_id = REFERENCE_RUN_IDS.get(agent)  # sinon : run_id lu dans le chemin du checkpoint

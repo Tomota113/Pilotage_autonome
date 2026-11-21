@@ -39,12 +39,61 @@ CONDITIONS = {
 }
 
 
-def make_config(condition: str, seed: int, total_steps: int = BUDGET) -> dict:
-    algo, mu_mode, reward_changes = CONDITIONS[condition]
-    env = copy.deepcopy(DEFAULT_CONFIG["env"])
-    env["action_space"] = ALGO_ACTION_SPACE[algo]
+# --- Série v2 (21/11/2026) : voiture F1 réaliste sur de vrais circuits ---
+# Entraînement sur les 17 circuits réels de la base TUM (real_*), test sur les 8 circuits F1
+# (f1_*), jamais vus ; départs aléatoires pour travailler tous les virages.
+from tools.import_f1_tracks import CIRCUITS as _F1_TEST, TRAIN_CIRCUITS as _REAL_TRAIN  # noqa: E402
+
+REAL_TRAIN_TRACKS = [track_id for track_id, _ in _REAL_TRAIN.values()]
+F1_TEST_TRACKS = [track_id for track_id, _ in _F1_TEST.values()]
+F1_ENV = {"car": "f1_2024", "random_start": True}
+F1_MU_RANGE = [0.6, 1.1]
+# condition -> réglages ; budgets fixés après mesure du débit (voir docs/EXPLICATIONS.md)
+F1_CONDITIONS = {
+    "ppo_f1": {"algo": "ppo", "mu_mode": "fixed", "total_steps": 3_000_000, "n_envs": 4,
+               "hyperparams": {"n_steps": 1024, "batch_size": 256}},
+    "ppo_f1_mualea": {"algo": "ppo", "mu_mode": "uniform", "total_steps": 3_000_000, "n_envs": 4,
+                      "hyperparams": {"n_steps": 1024, "batch_size": 256}},
+    "sac_f1": {"algo": "sac", "mu_mode": "fixed", "total_steps": 1_000_000, "n_envs": 1,
+               "hyperparams": {"learning_starts": 10_000}},
+    "dqn_f1": {"algo": "dqn", "mu_mode": "fixed", "total_steps": 1_500_000, "n_envs": 1,
+               "hyperparams": {"learning_starts": 10_000, "exploration_fraction": 0.2}},
+}
+ALL_CONDITIONS = list(CONDITIONS) + list(F1_CONDITIONS)
+
+
+def make_f1_config(condition: str, seed: int, total_steps: int | None = None) -> dict:
+    spec = F1_CONDITIONS[condition]
+    env = {**copy.deepcopy(DEFAULT_CONFIG["env"]), **F1_ENV, "action_space": ALGO_ACTION_SPACE[spec["algo"]]}
     cfg = {
         "schema": CONFIG_SCHEMA,
+        "algo": spec["algo"],
+        "seed": seed,
+        "total_steps": total_steps or spec["total_steps"],
+        "n_envs": spec["n_envs"],
+        "tracks": {"train": REAL_TRAIN_TRACKS, "test": F1_TEST_TRACKS},
+        "mu": {"mode": spec["mu_mode"], "value": 1.0, "range": F1_MU_RANGE},
+        "env": env,
+        "reward": dict(DEFAULT_CONFIG["reward"]),
+        "hyperparams": copy.deepcopy(spec["hyperparams"]),
+        "checkpoint_every": 100_000,
+        "eval_every": 100_000,
+        "eval_episodes": 5,
+    }
+    validate_config(cfg)
+    return cfg
+
+
+def make_config(condition: str, seed: int, total_steps: int = BUDGET) -> dict:
+    if condition in F1_CONDITIONS:
+        return make_f1_config(condition, seed, None if total_steps == BUDGET else total_steps)
+    algo, mu_mode, reward_changes = CONDITIONS[condition]
+    env = copy.deepcopy(DEFAULT_CONFIG["env"])
+    for key in ("car", "random_start"):  # série v1 : configuration inchangée (modèle v1, départ sur la ligne)
+        env.pop(key)
+    env["action_space"] = ALGO_ACTION_SPACE[algo]
+    cfg = {
+        "schema": "f1rl.config/1.1",  # série v1 : n'utilise pas les options de la version 1.2
         "algo": algo,
         "seed": seed,
         "total_steps": total_steps,
@@ -64,7 +113,13 @@ def make_config(condition: str, seed: int, total_steps: int = BUDGET) -> dict:
 
 def condition_of(cfg: dict) -> str | None:
     """Name of the condition a run config belongs to (None if it matches none, e.g. a trial run)."""
-    if cfg["tracks"]["train"] != TRAIN_TRACKS:
+    env = cfg.get("env", {})
+    if env.get("car") == "f1_2024" and cfg["tracks"]["train"] == REAL_TRAIN_TRACKS:
+        for name, spec in F1_CONDITIONS.items():
+            if cfg["algo"] == spec["algo"] and cfg["mu"]["mode"] == spec["mu_mode"]:
+                return name
+        return None
+    if cfg["tracks"]["train"] != TRAIN_TRACKS or env.get("car", "v1") != "v1":
         return None
     for name, (algo, mu_mode, reward_changes) in CONDITIONS.items():
         reward = {**DEFAULT_CONFIG["reward"], **reward_changes}
@@ -79,7 +134,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=Path("configs"))
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
-    for condition in CONDITIONS:
+    for condition in ALL_CONDITIONS:
         for seed in SEEDS:
             path = args.out / f"{condition}_s{seed}.yaml"
             header = f"# Condition {condition}, graine {seed} — généré par tools/make_configs.py\n"

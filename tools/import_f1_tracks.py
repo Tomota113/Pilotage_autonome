@@ -1,4 +1,4 @@
-"""Convert the real F1 circuits of data/f1_tracks_tum/ into track.json files (tracks/f1_*.json).
+"""Convert TUM circuits into test (f1_*.json) and training (real_*.json) tracks.
 
 Usage : ``python -m tools.import_f1_tracks``
 
@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 from sim.track import N_CHECKPOINTS, SCHEMA, Track
-from tools.generate_tracks import SPACING, resample_closed
+from tools.generate_tracks import SPACING, max_curvature, min_gap, resample_closed
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "f1_tracks_tum"
@@ -36,6 +36,26 @@ CIRCUITS = {
     "Zandvoort": ("f1_zandvoort", "Zandvoort (Pays-Bas)"),
 }
 
+TRAIN_CIRCUITS = {
+    "Austin": ("real_austin", "Circuit des Amériques, Austin (États-Unis)"),
+    "BrandsHatch": ("real_brands_hatch", "Brands Hatch (Royaume-Uni)"),
+    "Hockenheim": ("real_hockenheim", "Hockenheimring (Allemagne)"),
+    "IMS": ("real_indianapolis", "Indianapolis Motor Speedway (États-Unis)"),
+    "Melbourne": ("real_melbourne", "Albert Park, Melbourne (Australie)"),
+    "MexicoCity": ("real_mexico", "Autodrome Hermanos Rodríguez, Mexico (Mexique)"),
+    "Montreal": ("real_montreal", "Circuit Gilles-Villeneuve, Montréal (Canada)"),
+    "MoscowRaceway": ("real_moscow", "Moscow Raceway (Russie)"),
+    "Norisring": ("real_norisring", "Norisring, Nuremberg (Allemagne)"),
+    "Nuerburgring": ("real_nurburgring", "Nürburgring (Allemagne)"),
+    "Oschersleben": ("real_oschersleben", "Circuit d’Oschersleben (Allemagne)"),
+    "Sakhir": ("real_sakhir", "Circuit international de Bahreïn, Sakhir (Bahreïn)"),
+    "SaoPaulo": ("real_interlagos", "Interlagos, São Paulo (Brésil)"),
+    "Sepang": ("real_sepang", "Circuit international de Sepang (Malaisie)"),
+    "Shanghai": ("real_shanghai", "Circuit international de Shanghai (Chine)"),
+    "Sochi": ("real_sochi", "Autodrome de Sotchi (Russie)"),
+    "YasMarina": ("real_yas_marina", "Circuit Yas Marina, Abou Dabi (Émirats arabes unis)"),
+}
+
 
 def left_normals(points: np.ndarray) -> np.ndarray:
     """Unit normal to the left of the centred tangent at each point of a closed polyline."""
@@ -44,7 +64,7 @@ def left_normals(points: np.ndarray) -> np.ndarray:
     return np.stack((-tangent[:, 1], tangent[:, 0]), axis=1)
 
 
-def convert(csv_path: Path, track_id: str, name: str) -> dict:
+def convert(csv_path: Path, track_id: str, name: str, split: str) -> dict:
     raw = np.loadtxt(csv_path, delimiter=",", comments="#")
     xy, w_right, w_left = raw[:, :2], raw[:, 2], raw[:, 3]
     if np.hypot(*(xy[0] - xy[-1])) < 1e-6:  # boucle explicitement fermée : on retire le doublon
@@ -66,7 +86,7 @@ def convert(csv_path: Path, track_id: str, name: str) -> dict:
         "schema": SCHEMA,
         "id": track_id,
         "name": name,
-        "split": "test",  # jamais vus pendant l'entraînement
+        "split": split,
         "seed": None,
         "centerline": points.tolist(),
         "width": np.round(width_new, 2).tolist(),
@@ -79,14 +99,47 @@ def convert(csv_path: Path, track_id: str, name: str) -> dict:
     return data
 
 
+def has_self_intersection(points: np.ndarray) -> bool:
+    """Check for intersections between non-adjacent centreline segments."""
+    ends = np.roll(points, -1, axis=0)
+    lower = np.minimum(points, ends)
+    upper = np.maximum(points, ends)
+    first, second = np.triu_indices(len(points), k=2)
+    # Écarter les voisins à la fermeture de la boucle et les boîtes disjointes.
+    candidates = (second - first < len(points) - 1) & np.all(
+        (lower[first] <= upper[second]) & (lower[second] <= upper[first]), axis=1
+    )
+    first, second = first[candidates], second[candidates]
+
+    segments = ends - points
+    normals = np.stack((-segments[:, 1], segments[:, 0]), axis=1)
+
+    def straddles(line: np.ndarray, other: np.ndarray) -> np.ndarray:
+        start_side = np.sum(normals[line] * (points[other] - points[line]), axis=1)
+        end_side = np.sum(normals[line] * (ends[other] - points[line]), axis=1)
+        return start_side * end_side <= 0
+
+    return bool(np.any(straddles(first, second) & straddles(second, first)))
+
+
 def main() -> None:
     OUT.mkdir(exist_ok=True)
-    for stem, (track_id, name) in CIRCUITS.items():
-        data = convert(RAW / f"{stem}.csv", track_id, name)
-        path = OUT / f"{track_id}.json"
-        path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        w = np.array(data["width"])
-        print(f"{path.name:22s} {data['length']:7.1f} m  {len(data['centerline'])} points  largeur {w.min():.1f}–{w.max():.1f} m")
+    for split, circuits in (("test", CIRCUITS), ("train", TRAIN_CIRCUITS)):
+        for stem, (track_id, name) in circuits.items():
+            data = convert(RAW / f"{stem}.csv", track_id, name, split)
+            path = OUT / f"{track_id}.json"
+            path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+            points = np.asarray(data["centerline"])
+            width = np.asarray(data["width"])
+            radius = 1.0 / max_curvature(points)
+            gap = min_gap(points)
+            crossing = "  ATTENTION : croisement de la ligne centrale" if has_self_intersection(points) else ""
+            print(
+                f"{path.name:23s} {split:5s}  {data['length']:7.1f} m  {len(points):4d} points  "
+                f"largeur {width.min():.2f}–{width.max():.2f} m  rayon min {radius:.2f} m  "
+                f"écart min {gap:.2f} m{crossing}"
+            )
 
 
 if __name__ == "__main__":

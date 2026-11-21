@@ -30,7 +30,7 @@ from scipy.sparse.linalg import spsolve
 from sim.car import DEFAULT_PARAMS, CarParams
 from sim.track import Track
 
-MARGIN = 1.6  # distance minimale entre le centre de la voiture et le bord (m) : demi-largeur + sécurité
+MARGIN = 1.1  # distance minimale entre le centre de la voiture et le bord (m) : demi-largeur (1 m) + 10 cm
 REGULARIZATION = 1e-6  # petite préférence pour la ligne centrale : rend H inversible (translation libre)
 
 
@@ -157,26 +157,63 @@ def racing_line(track: Track, margin: float = MARGIN, iterations: int = 3) -> Ra
     return RacingLine(points=ref, s=s, curvature=kappa, length=length)
 
 
+def _corner_speed(kappa: np.ndarray, mu: float, p: CarParams, cap: bool = True) -> np.ndarray:
+    """Highest steady speed in a bend: v² |kappa| <= mu mu_tyre (g + k_L v²), capped at the top speed if ``cap``."""
+    a = mu * p.mu_tyre
+    k = np.maximum(np.abs(kappa), 1e-9)
+    # v² (|kappa| − a k_L) <= a g : si |kappa| <= a k_L, l'appui suffit à passer à fond
+    denom = k - a * p.k_lift
+    with np.errstate(divide="ignore", invalid="ignore"):
+        v = np.where(denom > 0.0, np.sqrt(a * p.g / denom), np.inf)
+    return np.minimum(v, p.top_speed) if cap else v
+
+
+def _long_budget(v: float, kappa: float, mu: float, p: CarParams) -> float:
+    """Longitudinal acceleration still available at speed v in a bend of curvature kappa (friction circle)."""
+    grip = p.grip(mu, v)
+    if not p.friction_circle:
+        return grip
+    a_lat = min(v * v * abs(kappa), grip)
+    return float(np.sqrt(max(grip * grip - a_lat * a_lat, 0.0)))
+
+
 def speed_profile(line: RacingLine, mu: float, params: CarParams = DEFAULT_PARAMS) -> SpeedProfile:
-    """Fastest speed at each point of a closed line, for the grip mu and the car model."""
+    """Fastest speed at each point of a closed line, for the grip mu and the car model.
+
+    Simulation de tour « quasi statique », comme les simulateurs des équipes : vitesse limite en
+    virage, puis passe avant (accélération : moteur et puissance, moins traînée et roulement,
+    dans la limite du cercle de friction) et passe arrière (freinage dans la limite du cercle
+    de friction, aidé par la traînée).
+    """
+    p = params
     n = len(line.points)
     ds = np.diff(np.append(line.s, line.length))  # longueur du segment i -> i+1
-    v_top = np.sqrt(params.a_max / params.c_d)
-    v_lim = np.minimum(np.sqrt(mu * params.g / np.maximum(np.abs(line.curvature), 1e-9)), v_top)
+    kappa = line.curvature
+    v_lim = _corner_speed(kappa, mu, p)
     # On part du point le plus contraignant (vitesse limite minimale) pour boucler proprement
     start = int(np.argmin(v_lim))
     order = (start + np.arange(n)) % n
     v = v_lim[order].copy()
     d = ds[order]
-    for k in range(n - 1):  # passe avant : accélération a_max − c_d v²
-        v[k + 1] = min(v[k + 1], np.sqrt(v[k] ** 2 + 2.0 * (params.a_max - params.c_d * v[k] ** 2) * d[k]))
-    v_end = np.sqrt(v[-1] ** 2 + 2.0 * (params.a_max - params.c_d * v[-1] ** 2) * d[-1])
-    v[0] = min(v[0], v_end)
-    for k in range(n - 1, 0, -1):  # passe arrière : freinage mu g + c_d v² (on remonte le temps)
+    kap = kappa[order]
+
+    def accel(vk: float, kk: float) -> float:
+        engine = p.a_max if vk < 1e-3 else min(p.a_max, p.power_over_mass / vk)
+        if p.friction_circle:
+            engine = min(engine, _long_budget(vk, kk, mu, p))
+        return engine - p.c_d * vk * vk - p.c_rr * p.g
+
+    def decel(vk: float, kk: float) -> float:
+        return min(p.b_max, _long_budget(vk, kk, mu, p)) + p.c_d * vk * vk + p.c_rr * p.g
+
+    for k in range(n - 1):  # passe avant : accélération
+        v[k + 1] = min(v[k + 1], np.sqrt(max(v[k] ** 2 + 2.0 * accel(v[k], kap[k]) * d[k], 0.0)))
+    v[0] = min(v[0], np.sqrt(max(v[-1] ** 2 + 2.0 * accel(v[-1], kap[-1]) * d[-1], 0.0)))
+    for k in range(n - 1, 0, -1):  # passe arrière : freinage (on remonte le temps)
         nxt = v[(k + 1) % n]
-        v[k] = min(v[k], np.sqrt(nxt ** 2 + 2.0 * (mu * params.g + params.c_d * nxt ** 2) * d[k]))
+        v[k] = min(v[k], np.sqrt(nxt ** 2 + 2.0 * decel(nxt, kap[(k + 1) % n]) * d[k]))
     speed = np.empty(n)
     speed[order] = v
     v_next = np.roll(speed, -1)
-    lap_time = float(np.sum(2.0 * ds / (speed + v_next)))
+    lap_time = float(np.sum(2.0 * ds / np.maximum(speed + v_next, 1e-6)))
     return SpeedProfile(speed=speed, lap_time=lap_time)

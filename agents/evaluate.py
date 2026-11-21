@@ -226,11 +226,13 @@ def append_eval_rows(rows: list[dict], path: Path = EVAL_CSV) -> None:
 
 def evaluate(agent: str, track_ids: list[str], mu_factors: list[float], episodes: int = 1,
              run_id: str | None = None, with_activations: bool = False, save_replays: bool = True,
-             eval_csv: Path = EVAL_CSV, runs_dir: Path = ROOT / "runs", max_steps: int | None = None) -> list[dict]:
+             eval_csv: Path = EVAL_CSV, runs_dir: Path = ROOT / "runs", max_steps: int | None = None,
+             car: str | None = None) -> list[dict]:
     """Evaluate ``agent`` on every track × mu factor × episode; return the eval.csv rows written.
 
     ``max_steps`` allonge la durée maximale d'un épisode (circuits F1 plus longs que les circuits
     générés) ; les agents ne perçoivent pas le temps, leur comportement n'en dépend pas.
+    ``car`` choisit la voiture des pilotes de référence (un run garde celle de sa configuration).
     """
     policy, config, ckpt_run_id = load_policy(agent, with_activations)
     run_id = run_id or ckpt_run_id
@@ -239,6 +241,10 @@ def evaluate(agent: str, track_ids: list[str], mu_factors: list[float], episodes
     env_config = copy.deepcopy(config) if config else {}
     if max_steps is not None:
         env_config.setdefault("env", {})["max_steps"] = max_steps
+    if car is not None:
+        if config and config["env"].get("car", "v1") != car:
+            raise ValueError(f"run {run_id} was trained with car {config['env'].get('car', 'v1')!r}, not {car!r}")
+        env_config.setdefault("env", {})["car"] = car
     env = F1Env(env_config or None, load_tracks(track_ids))
     seed = int(config["seed"]) if config else 0
     mu_mode = config["mu"]["mode"] if config else "fixed"

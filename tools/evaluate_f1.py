@@ -19,6 +19,7 @@ from pathlib import Path
 from agents.evaluate import evaluate
 from tools.evaluate_all import MU_FACTORS, REFERENCE_RUN_IDS, best_checkpoint, find_runs
 from tools.import_f1_tracks import CIRCUITS
+from tools.make_configs import CONDITIONS, F1_CONDITIONS
 from tools.make_showcase import showcase_runs
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,22 +27,51 @@ F1_TRACKS = [track_id for track_id, _ in CIRCUITS.values()]
 MAX_STEPS = 6000
 
 
+F1_REFERENCES = {"classic": "classic_f1_ref", "raceline": "raceline_f1_ref"}  # pilotes de référence, voiture F1
+
+
+def best_seed_by_training(runs) -> set[Path]:
+    """Run of each condition whose training-time evaluations reached the best lap rate (then reward).
+
+    Le choix ne regarde que progress.csv (circuits d'entraînement), jamais les circuits de test.
+    """
+    import pandas as pd
+
+    best: dict[str, tuple[tuple[float, float], Path]] = {}
+    for condition, _, run_dir in runs:
+        df = pd.read_csv(run_dir / "progress.csv")
+        score = (float(df["lap_rate"].max()), float(df["mean_reward"].max()))
+        if condition not in best or score > best[condition][0]:
+            best[condition] = (score, run_dir)
+    return {run_dir for _, run_dir in best.values()}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--series", choices=("v1", "v2"), default="v1",
+                        help="v1 : modèle simplifié, entraînement sur circuits générés ; v2 : voiture F1, circuits réels")
     parser.add_argument("--runs-dir", type=Path, default=ROOT / "runs")
     parser.add_argument("--best-eval", type=Path, default=ROOT / "results" / "eval_best.csv")
-    parser.add_argument("--out", type=Path, default=ROOT / "results" / "eval_f1.csv")
+    parser.add_argument("--out", type=Path, help="default: results/eval_f1.csv (v1) or results/eval_f1_v2.csv (v2)")
     parser.add_argument("--mu", nargs="+", type=float, default=list(MU_FACTORS))
     args = parser.parse_args()
-    if args.out.exists():
-        args.out.unlink()  # régénéré entièrement
+    out = args.out or ROOT / "results" / ("eval_f1.csv" if args.series == "v1" else "eval_f1_v2.csv")
+    if out.exists():
+        out.unlink()  # régénéré entièrement
 
-    shown = {run_dir for _, run_dir in showcase_runs(args.runs_dir, args.best_eval)}
-    agents = [(name, run_id, True) for name, run_id in REFERENCE_RUN_IDS.items()]
-    agents += [(str(best_checkpoint(run_dir)), None, run_dir in shown) for _, _, run_dir in find_runs(args.runs_dir)]
+    if args.series == "v1":
+        runs = find_runs(args.runs_dir, CONDITIONS)
+        shown = {run_dir for _, run_dir in showcase_runs(args.runs_dir, args.best_eval)}
+        refs, car = REFERENCE_RUN_IDS, None
+    else:
+        runs = find_runs(args.runs_dir, F1_CONDITIONS)
+        shown = best_seed_by_training(runs)
+        refs, car = F1_REFERENCES, "f1_2024"
+    agents = [(name, run_id, True) for name, run_id in refs.items()]
+    agents += [(str(best_checkpoint(run_dir)), None, run_dir in shown) for _, _, run_dir in runs]
     for agent, run_id, save in agents:
-        rows = evaluate(agent, F1_TRACKS, args.mu, run_id=run_id, save_replays=save, eval_csv=args.out,
-                        runs_dir=args.runs_dir, max_steps=MAX_STEPS)
+        rows = evaluate(agent, F1_TRACKS, args.mu, run_id=run_id, save_replays=save, eval_csv=out,
+                        runs_dir=args.runs_dir, max_steps=MAX_STEPS, car=car if run_id else None)
         laps = sum(r["outcome"] == "lap" for r in rows)
         label = run_id or Path(agent).parent.parent.name
         print(f"{label:42s} {laps:2d}/{len(rows)} tours{'  (replays)' if save else ''}", flush=True)

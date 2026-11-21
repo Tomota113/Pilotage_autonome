@@ -20,7 +20,7 @@ import pandas as pd
 
 from agents.evaluate import evaluate
 from tools.evaluate_all import MU_FACTORS, REFERENCE_RUN_IDS, best_checkpoint, find_runs
-from tools.make_configs import TEST_TRACKS
+from tools.make_configs import CONDITIONS, TEST_TRACKS
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -29,7 +29,7 @@ def showcase_runs(runs_dir: Path, eval_csv: Path) -> list[tuple[str, Path]]:
     """(condition, run directory) of the seed with the most laps, for each condition."""
     laps = pd.read_csv(eval_csv).assign(lap=lambda d: d["outcome"] == "lap").groupby("run_id")["lap"].sum()
     best: dict[str, tuple[int, Path]] = {}
-    for condition, _, run_dir in find_runs(runs_dir):
+    for condition, _, run_dir in find_runs(runs_dir, CONDITIONS):
         n = int(laps.get(run_dir.name, 0))
         if condition not in best or n > best[condition][0]:
             best[condition] = (n, run_dir)

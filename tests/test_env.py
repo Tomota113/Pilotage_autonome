@@ -282,3 +282,60 @@ def test_full_lap_on_demo_oval(make_env):
     assert r > 50.0 - 1.0  # bonus de tour sur le dernier pas
     assert info["progress"] == pytest.approx(1.0, abs=0.01)
     assert total > 50.0
+
+
+# ======================================================================
+# Voiture F1 réaliste et départs aléatoires
+# ======================================================================
+
+
+def test_f1_car_model_settings():
+    env = F1Env(config(car="f1_2024"), OVAL)
+    assert env.car_params.k_lift > 0 and env.sensor_range == 200.0 and env.lookahead == (50.0, 150.0)
+    obs, _ = env.reset(seed=0)
+    assert env.observation_space.contains(obs) and obs[0] == pytest.approx(6.0 / 200.0, abs=1e-3)
+    with pytest.raises(ValueError):
+        F1Env(config(car="kart"), OVAL)
+
+
+def test_f1_car_is_faster_than_v1_on_the_straight():
+    speeds = {}
+    for car in ("v1", "f1_2024"):
+        env = F1Env(config(car=car), OVAL)
+        env.reset(seed=0)
+        for _ in range(100):  # 5 s plein gaz, volant droit, sur la ligne droite de 300 m
+            env.step(np.array([0.0, 1.0, 0.0]))
+        speeds[car] = env.car.v
+    assert speeds["f1_2024"] > speeds["v1"] * 1.3
+
+
+def test_random_start_spreads_start_points_and_checkpoints():
+    tracks = load_tracks(["f1_monza"])
+    env = F1Env(config(random_start=True), tracks)
+    starts = set()
+    for seed in range(10):
+        env.reset(seed=seed)
+        starts.add(env.pos.index)
+        gap = (env.targets[0] - env.pos.s) % env.track.length  # premier checkpoint = point de départ
+        assert min(gap, env.track.length - gap) < 1.0
+        gaps = np.diff(np.sort(env.targets))
+        np.testing.assert_allclose(gaps, env.track.length / 20, rtol=1e-6)
+    assert len(starts) >= 8
+    # Sans départ aléatoire : ligne de départ et checkpoints du fichier
+    env = F1Env(config(), tracks)
+    env.reset(seed=0)
+    assert env.pos.index == env.track.start_index
+    np.testing.assert_array_equal(env.targets, env.track.checkpoint_s)
+
+
+def test_lap_from_a_random_start():
+    from agents.raceline_driver import RacelineDriver
+
+    env = F1Env(config(random_start=True, car="f1_2024", max_steps=4000), OVAL)
+    env.reset(seed=3)
+    driver = RacelineDriver()
+    for _ in range(4000):
+        _, _, terminated, truncated, info = env.step(driver.act(env))
+        if terminated or truncated:
+            break
+    assert info["lap_time"] is not None and info["checkpoint"] == N_CHECKPOINTS

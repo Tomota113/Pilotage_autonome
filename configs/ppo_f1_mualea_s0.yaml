@@ -1,0 +1,61 @@
+# Condition ppo_f1_mualea, graine 0 — généré par tools/make_configs.py
+schema: f1rl.config/1.2
+algo: ppo
+seed: 0
+total_steps: 3000000
+n_envs: 4
+tracks:
+  train:
+  - real_austin
+  - real_brands_hatch
+  - real_hockenheim
+  - real_indianapolis
+  - real_melbourne
+  - real_mexico
+  - real_montreal
+  - real_moscow
+  - real_norisring
+  - real_nurburgring
+  - real_oschersleben
+  - real_sakhir
+  - real_interlagos
+  - real_sepang
+  - real_shanghai
+  - real_sochi
+  - real_yas_marina
+  test:
+  - f1_monza
+  - f1_spa
+  - f1_silverstone
+  - f1_suzuka
+  - f1_budapest
+  - f1_catalunya
+  - f1_spielberg
+  - f1_zandvoort
+mu:
+  mode: uniform
+  value: 1.0
+  range:
+  - 0.6
+  - 1.1
+env:
+  dt: 0.05
+  action_repeat: 5
+  action_space: continuous
+  max_steps: 3000
+  stall_steps: 100
+  observe_mu: false
+  car: f1_2024
+  random_start: true
+reward:
+  k_progress: 0.1
+  c_time: 0.01
+  p_offtrack: 10.0
+  b_lap: 50.0
+  lambda_steer: 0.05
+hyperparams:
+  n_steps: 1024
+  batch_size: 256
+checkpoint_every: 100000
+eval_every: 100000
+eval_episodes: 5

@@ -79,7 +79,7 @@ def _save(fig, out: Path, name: str, written: list[Path]) -> None:
 
 def load_progress(runs_dir: Path) -> pd.DataFrame:
     frames = []
-    for condition, seed, run_dir in find_runs(runs_dir):
+    for condition, seed, run_dir in find_runs(runs_dir, CONDITIONS):
         path = run_dir / "progress.csv"
         if path.exists():
             df = pd.read_csv(path)
@@ -92,7 +92,7 @@ def load_eval(runs_dir: Path, eval_csv: Path) -> pd.DataFrame:
     if not eval_csv.exists():
         return pd.DataFrame()
     df = pd.read_csv(eval_csv)
-    conditions = {run_dir.name: condition for condition, _, run_dir in find_runs(runs_dir)}
+    conditions = {run_dir.name: condition for condition, _, run_dir in find_runs(runs_dir, CONDITIONS)}
     conditions.update({run_id: name for name, run_id in REFERENCE_RUN_IDS.items()})
     df["condition"] = df["run_id"].map(conditions)
     df = df[df["condition"].notna()].copy()

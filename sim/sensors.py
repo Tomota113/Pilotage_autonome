@@ -36,8 +36,9 @@ def read_sensors(
     when given, only the border segments within ``SENSOR_WINDOW`` of it are tested.
     """
     n = len(track.points)
-    if index is not None and n > 2 * SENSOR_WINDOW + 1:
-        near = track.window(index, SENSOR_WINDOW)
+    window = int(np.ceil(SENSOR_WINDOW * max_range / SENSOR_RANGE))  # fenêtre proportionnelle à la portée
+    if index is not None and n > 2 * window + 1:
+        near = track.window(index, window)
         segs = np.concatenate((near, near + n))  # bord gauche puis bord droit
         a, e = track.border_start[segs], track.border_vec[segs]
     else:

@@ -38,7 +38,7 @@ def test_classic_target_speed_follows_grip():
         assert driver.target_speed(env, mu) == pytest.approx(0.9 * (mu * 9.81 * 60.0) ** 0.5, rel=0.03)
     # 50 m après la sortie du virage : 150 m de ligne droite devant, vitesse de pointe
     env.pos = env.track.project(-100.0, -60.0)
-    assert driver.target_speed(env, 1.0) == pytest.approx(driver.v_top)
+    assert driver.target_speed(env, 1.0) == pytest.approx(env.car_params.top_speed)
     # 50 m avant le virage : vitesse d'où l'on peut encore freiner jusqu'à la vitesse du virage,
     # sqrt(v_virage² + 2 mu g d). La courbure lissée monte progressivement de s = 285 à 320 m
     # (pleine valeur 20 m après l'entrée du virage) : d est donc compris entre 40 et 70 m.

@@ -27,8 +27,12 @@ from sim.track import SPLITS, Track  # noqa: E402
 
 # Version 1.1 du contrat (21/11/2026) : ajout des algorithmes tabulaires sarsa et montecarlo.
 # Les fichiers en 1.0 restent valides, mais seulement avec les algorithmes de la 1.0.
+# Version 1.2 de config.yaml (21/11/2026) : options env.car (modèle de voiture) et
+# env.random_start (départs aléatoires), facultatives.
 REPLAY_SCHEMA = "f1rl.replay/1.1"
-CONFIG_SCHEMA = "f1rl.config/1.1"
+CONFIG_SCHEMA = "f1rl.config/1.2"
+CAR_MODELS = ("v1", "f1_2024")
+ENV_OPTIONAL_1_2 = ("car", "random_start")
 ALGOS_1_0 = ("qlearning", "dqn", "ppo", "sac", "classic")
 ALGOS = ALGOS_1_0 + ("sarsa", "montecarlo")
 OUTCOMES = ("lap", "off_track", "timeout", "stalled")
@@ -68,11 +72,17 @@ def _check_fields(data: dict, fields, where: str) -> None:
     _require(not missing, f"{where}: missing fields {missing}")
 
 
-def _check_schema(schema, algo: str, current: str) -> None:
-    """Accept the current version, or version 1.0 with an algorithm that existed in 1.0."""
-    old = current.rsplit("/", 1)[0] + "/1.0"
-    _require(schema in (current, old), f"unknown schema {schema!r}, expected {current!r}")
-    _require(schema == current or algo in ALGOS_1_0, f"algo {algo!r} needs schema {current!r}")
+def _check_schema(schema, algo: str, current: str, needs_1_2: bool = False) -> None:
+    """Accept any version from 1.0 to ``current``, provided it contains the features the file uses.
+
+    1.1 : algorithmes sarsa et montecarlo ; 1.2 (config) : options env.car et env.random_start.
+    """
+    family, latest = current.rsplit("/", 1)
+    versions = [f"{family}/1.{k}" for k in range(int(latest.split(".")[1]) + 1)]
+    _require(schema in versions, f"unknown schema {schema!r}, expected {current!r}")
+    minor = int(str(schema).rsplit(".", 1)[1])
+    _require(minor >= 1 or algo in ALGOS_1_0, f"algo {algo!r} needs schema {family}/1.1 or later")
+    _require(minor >= 2 or not needs_1_2, f"env.car / env.random_start need schema {family}/1.2")
 
 
 def _check_lap_time(outcome: str, lap_time, where: str) -> None:
@@ -153,7 +163,8 @@ def validate_config(cfg: dict) -> None:
               "hyperparams", "checkpoint_every", "eval_every", "eval_episodes")
     _check_fields(cfg, fields, "config")
     _require(cfg["algo"] in ALGOS, f"algo must be one of {ALGOS}")
-    _check_schema(cfg["schema"], cfg["algo"], CONFIG_SCHEMA)
+    _check_schema(cfg["schema"], cfg["algo"], CONFIG_SCHEMA,
+                  needs_1_2=isinstance(cfg.get("env"), dict) and any(k in cfg["env"] for k in ENV_OPTIONAL_1_2))
     _require(_is_int(cfg["seed"]) and cfg["seed"] >= 0, "seed must be an integer >= 0")
     for f in ("total_steps", "n_envs", "checkpoint_every", "eval_every", "eval_episodes"):
         _require(_is_int(cfg[f]) and cfg[f] > 0, f"{f} must be a positive integer")
@@ -180,6 +191,8 @@ def validate_config(cfg: dict) -> None:
         _require(_is_int(env[f]) and env[f] > 0, f"env.{f} must be a positive integer")
     _require(env["action_space"] in ACTION_SPACES, f"env.action_space must be one of {ACTION_SPACES}")
     _require(isinstance(env["observe_mu"], bool), "env.observe_mu must be true or false")
+    _require(env.get("car", "v1") in CAR_MODELS, f"env.car must be one of {CAR_MODELS}")
+    _require(isinstance(env.get("random_start", False), bool), "env.random_start must be true or false")
     expected = ALGO_ACTION_SPACE.get(cfg["algo"])
     _require(expected is None or env["action_space"] == expected,
              f"algo {cfg['algo']} needs env.action_space = {expected}")

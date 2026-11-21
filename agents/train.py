@@ -11,7 +11,7 @@ Usage : ``python -m agents.train configs/<fichier>.yaml [--steps N]``
 - évaluation déterministe tous les ``eval_every`` pas (et à la fin) sur
   ``eval_episodes`` épisodes -> une ligne de ``progress.csv``.
 
-run_id = <algo>_<circuit ou "multi">_<mufixe|mualea>_s<graine>_<AAAAMMJJ-HHMM>
+run_id = <algo>_<circuit ou "multi">_<mufixe|mualea>[_f1]_s<graine>_<AAAAMMJJ-HHMM> (« _f1 » : voiture F1 réaliste)
 """
 
 from __future__ import annotations
@@ -42,8 +42,9 @@ def make_run_id(cfg: dict, now: datetime | None = None) -> str:
     train = cfg["tracks"]["train"]
     where = train[0] if len(train) == 1 else "multi"
     mu = "mufixe" if cfg["mu"]["mode"] == "fixed" else "mualea"
+    car = "_f1" if cfg["env"].get("car", "v1") == "f1_2024" else ""  # série v2 : voiture F1 réaliste
     stamp = (now or datetime.now()).strftime("%Y%m%d-%H%M")
-    return f"{cfg['algo']}_{where}_{mu}_s{cfg['seed']}_{stamp}"
+    return f"{cfg['algo']}_{where}_{mu}{car}_s{cfg['seed']}_{stamp}"
 
 
 def evaluate_episodes(env: F1Env, act: Callable[[np.ndarray], object], n_episodes: int) -> dict:
@@ -104,13 +105,23 @@ def _print_row(row: dict) -> None:
 
 def train_sb3(cfg: dict, run_dir: Path, run_id: str, tracks_dir: Path = TRACKS_DIR) -> None:
     import stable_baselines3 as sb3
+    import torch
+
+    # Réseaux 2 × 64 : un seul thread suffit, et plusieurs entraînements peuvent tourner en
+    # parallèle sans se disputer les cœurs (PyTorch prend tous les cœurs par défaut)
+    torch.set_num_threads(1)
     from stable_baselines3.common.callbacks import BaseCallback
     from stable_baselines3.common.monitor import Monitor
-    from stable_baselines3.common.vec_env import DummyVecEnv
+    from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
     train_tracks = load_tracks(cfg["tracks"]["train"], tracks_dir)
-    vec_env = DummyVecEnv([lambda: Monitor(F1Env(cfg, train_tracks)) for _ in range(cfg["n_envs"])])
-    eval_env = F1Env(cfg, train_tracks)
+    make = [lambda: Monitor(F1Env(cfg, train_tracks)) for _ in range(cfg["n_envs"])]
+    # Plusieurs environnements : un processus chacun (les 4 cœurs du PC travaillent en parallèle)
+    vec_env = SubprocVecEnv(make) if cfg["n_envs"] > 1 else DummyVecEnv(make)
+    # L'évaluation part toujours de la ligne de départ, même si l'entraînement part au hasard
+    eval_cfg = copy.deepcopy(cfg)
+    eval_cfg["env"] = {**eval_cfg["env"], "random_start": False}
+    eval_env = F1Env(eval_cfg, train_tracks)
 
     hyper = copy.deepcopy(cfg["hyperparams"])
     policy_kwargs = {"net_arch": NET_ARCH, **hyper.pop("policy_kwargs", {})}
@@ -143,6 +154,7 @@ def train_sb3(cfg: dict, run_dir: Path, run_id: str, tracks_dir: Path = TRACKS_D
             return True
 
     model.learn(total_timesteps=cfg["total_steps"], callback=Periodic())
+    vec_env.close()
     # Checkpoint et évaluation finale (s'ils ne viennent pas d'être faits)
     step = model.num_timesteps
     if not (ckpt_dir / f"step_{step}.zip").exists():

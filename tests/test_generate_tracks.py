@@ -10,6 +10,7 @@ from sim.track import Track
 from tools.generate_tracks import (
     LENGTH_RANGE, MIN_GAP, MIN_RADIUS, demo_oval, generate_track, max_curvature, min_gap,
 )
+from tools.import_f1_tracks import CIRCUITS, RAW, TRAIN_CIRCUITS, convert
 
 TRACKS_DIR = Path(__file__).resolve().parent.parent / "tracks"
 
@@ -36,10 +37,10 @@ def test_demo_oval_is_a_stadium():
 
 
 def test_committed_tracks_match_the_generator():
-    """Les fichiers de tracks/ sont exactement ceux que produit le générateur."""
-    from tools.import_f1_tracks import CIRCUITS
-
-    expected = {f"gen_{k:02d}" for k in range(15)} | {"demo_oval"} | {tid for tid, _ in CIRCUITS.values()}
+    """Inventaire complet et vérification des circuits générés."""
+    expected = {f"gen_{k:02d}" for k in range(15)} | {"demo_oval"}
+    expected.update(tid for tid, _ in CIRCUITS.values())
+    expected.update(tid for tid, _ in TRAIN_CIRCUITS.values())
     files = {p.stem: p for p in TRACKS_DIR.glob("*.json")}
     assert set(files) == expected
     for track_id, path in files.items():
@@ -52,10 +53,11 @@ def test_committed_tracks_match_the_generator():
 
 
 def test_committed_f1_tracks_match_the_importer():
-    """tracks/f1_*.json = conversion exacte des CSV de data/f1_tracks_tum/ (TUM, LGPL-3.0)."""
-    from tools.import_f1_tracks import CIRCUITS, RAW, convert
-
-    for stem, (track_id, name) in CIRCUITS.items():
-        data = json.loads((TRACKS_DIR / f"{track_id}.json").read_text(encoding="utf-8"))
-        assert data == convert(RAW / f"{stem}.csv", track_id, name)
-        assert data["split"] == "test" and data["name"] == name
+    """Les 25 fichiers importés correspondent aux CSV TUM et à leurs rôles."""
+    assert len(CIRCUITS) == 8 and len(TRAIN_CIRCUITS) == 17
+    assert CIRCUITS.keys() | TRAIN_CIRCUITS.keys() == {path.stem for path in RAW.glob("*.csv")}
+    for split, circuits in (("test", CIRCUITS), ("train", TRAIN_CIRCUITS)):
+        for stem, (track_id, name) in circuits.items():
+            data = json.loads((TRACKS_DIR / f"{track_id}.json").read_text(encoding="utf-8"))
+            assert data["split"] == split and data["name"] == name, track_id
+            assert data == convert(RAW / f"{stem}.csv", track_id, name, split), track_id

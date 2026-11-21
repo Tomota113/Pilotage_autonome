@@ -253,7 +253,10 @@ points à bien comprendre pour pouvoir les défendre.
 - Défaut corrigé dans l'environnement en le testant : à l'intérieur d'un virage serré, la projection sur
   la ligne centrale avance par sauts de 2 à 4 m à chaque sommet ; un checkpoint franchi pendant un de ces
   sauts était ignoré (tour jamais validé). La validation tolère désormais 4 m de saut (la récompense ne
-  change pas) ; un vrai virage coupé fait sauter la projection de plusieurs dizaines de mètres. Les
-  évaluations ont été refaites après cette correction.
+  change pas) ; un vrai virage coupé fait sauter la projection de plusieurs dizaines de mètres.
+- Second défaut du même genre : les checkpoints sont sur des sommets de la ligne centrale ; à l'extérieur
+  d'une courbe, la projection reste collée au sommet et la position tombe pile sur le checkpoint. Le test
+  « distance restante > 0 » strict, avec l'arrondi des flottants, ne le comptait alors jamais. Corrigé
+  avec une tolérance d'arrondi. Toutes les évaluations ont été refaites après ces deux corrections.
 - Sur F1, épisodes de 6 000 pas maximum (un tour de Spa dure plus de 150 s) : les agents ne perçoivent
   pas le temps, leur comportement n'en dépend pas.

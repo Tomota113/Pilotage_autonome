@@ -274,7 +274,13 @@ class F1Env(gym.Env):
             return checkpoint
         target = self.track.checkpoint_s[(checkpoint + 1) % N_CHECKPOINTS]
         ahead = (target - s_prev) % self.track.length  # distance jusqu'au prochain checkpoint
-        return checkpoint + 1 if 0.0 < ahead <= ds_raw else checkpoint
+        # Les checkpoints sont sur des sommets de la ligne centrale : à l'extérieur d'une courbe, la
+        # projection reste collée au sommet et s tombe exactement sur le checkpoint. On tolère donc
+        # l'arrondi des flottants dans les deux sens (corrigé le 21/11/2026 : avec « 0 < ahead »
+        # strict, ce cas n'était compté ni au pas qui arrive sur le sommet, ni au suivant).
+        if ahead > self.track.length - 1e-6:
+            ahead = 0.0
+        return checkpoint + 1 if ahead <= ds_raw + 1e-6 else checkpoint
 
     def _compute_reward(self, ds: float, off_track: bool, lap: bool, d_delta: float) -> float:
         """r = k Δs − c − P [off track] + B [lap] − λ |Δδ| (Δδ: change of the steering angle, rad)."""

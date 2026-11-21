@@ -45,18 +45,26 @@ export async function loadTrack(id) {
   return fetchJSON(`/files/tracks/${encodeURIComponent(id)}.json`);
 }
 
-export async function loadRaceline(trackId, mu) {
+export async function loadRaceline(trackId, mu, car = "v1") {
   if ((await getMode()) === "fixtures") return null;
-  return fetchJSON(`/tracks/${encodeURIComponent(trackId)}/raceline?${new URLSearchParams({ mu })}`);
+  return fetchJSON(`/tracks/${encodeURIComponent(trackId)}/raceline?${new URLSearchParams({ mu, car })}`);
+}
+
+async function loadF1EvalFile(filename) {
+  if ((await getMode()) === "fixtures") return null;
+  const url = `/files/results/${filename}`;
+  const response = await fetch(url);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`${url} : ${response.status}`);
+  return parseCSV(await response.text());
 }
 
 export async function loadF1Eval() {
-  if ((await getMode()) === "fixtures") return [];
-  const url = "/files/results/eval_f1.csv";
-  const response = await fetch(url);
-  if (response.status === 404) return [];
-  if (!response.ok) throw new Error(`${url} : ${response.status}`);
-  return parseCSV(await response.text());
+  return (await loadF1EvalFile("eval_f1.csv")) ?? [];
+}
+
+export function loadF1EvalV2() {
+  return loadF1EvalFile("eval_f1_v2.csv");
 }
 
 export async function loadEval() {
@@ -68,7 +76,7 @@ export async function loadEval() {
   }
 }
 
-// Replays disponibles (GET /replays) : chemin, run_id, condition, algo, circuit, μ, issue, temps au tour,
+// Replays disponibles (GET /replays) : chemin, run_id, condition, voiture, algo, circuit, μ, issue, temps au tour,
 // présence des activations.
 export async function listReplays() {
   if ((await getMode()) === "fixtures") return (await manifest()).replays;

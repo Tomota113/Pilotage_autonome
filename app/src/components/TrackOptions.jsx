@@ -8,7 +8,7 @@ export default function TrackOptions({ ids }) {
 
   const names = new Map(catalog.map(({ id, name }) => [id, name]));
   const groups = [
-    ["Circuits de F1", ids.filter(isF1Track)],
+    ["Circuits réels", ids.filter(isF1Track)],
     ["Circuits générés (test)", ids.filter((id) => !isF1Track(id))],
   ];
   return groups.map(([label, tracks]) => tracks.length > 0 && (

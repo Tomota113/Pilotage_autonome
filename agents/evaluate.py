@@ -32,7 +32,6 @@ import yaml
 
 from agents.classic_driver import ClassicDriver
 from env.f1_env import F1Env, load_tracks
-from sim.sensors import SENSOR_RANGE
 from tools.validate import EVAL_COLUMNS, REPLAY_SCHEMA, validate_config, validate_replay
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -190,7 +189,7 @@ def run_episode(env: F1Env, policy, track_id: str, mu_factor: float, seed: int) 
             "v": round(car.v, 4), "delta": round(car.delta, 5),
             "action": {"steer": round(steer, 4), "throttle": round(throttle, 4), "brake": round(brake, 4)},
             "obs": [round(float(v), 4) for v in obs],
-            "sensors_m": [round(float(v) * SENSOR_RANGE, 3) for v in next_obs[:7]],
+            "sensors_m": [round(float(v) * env.sensor_range, 3) for v in next_obs[:7]],  # 100 m (v1) ou 200 m (F1)
             "progress": round(info["progress"], 5),
             "checkpoint": info["checkpoint"],
             "reward": round(reward, 5),

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { loadRaceline } from "../data/api.js";
 import { isF1Track } from "../data/f1.js";
 
-export function useRacelineOverlay(trackId, mu, loadWhenHidden = false) {
+export function useRacelineOverlay(trackId, mu, car, loadWhenHidden = false) {
   const [preference, setPreference] = useState(null);
   const [result, setResult] = useState(null);
   const checked = preference && preference.trackId === trackId ? preference.checked : isF1Track(trackId);
@@ -11,15 +11,15 @@ export function useRacelineOverlay(trackId, mu, loadWhenHidden = false) {
   useEffect(() => {
     if (!enabled) return;
     let active = true;
-    loadRaceline(trackId, mu).then((line) => {
-      if (active) setResult({ trackId, mu, line });
+    loadRaceline(trackId, mu, car).then((line) => {
+      if (active) setResult({ trackId, mu, car, line });
     }).catch(() => {
-      if (active) setResult({ trackId, mu, line: null });
+      if (active) setResult({ trackId, mu, car, line: null });
     });
     return () => { active = false; };
-  }, [enabled, trackId, mu]);
+  }, [enabled, trackId, mu, car]);
 
-  const current = result?.trackId === trackId && result?.mu === mu ? result : null;
+  const current = result?.trackId === trackId && result?.mu === mu && result?.car === car ? result : null;
   const line = current?.line;
   const points = line?.points;
   const draw = checked && points?.length > 1 ? (ctx, view) => {

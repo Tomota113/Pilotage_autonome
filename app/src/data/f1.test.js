@@ -14,16 +14,16 @@ describe("écart au temps idéal", () => {
   });
 });
 
-it("associe les résultats F1 aux deux pilotes de référence et aux conditions de /runs", () => {
-  const rows = ["classic_ref", "raceline_ref", "agent_1", "agent_2", "inconnu"].map((run_id) => ({
+it("associe les résultats F1 aux pilotes de référence des deux séries et aux conditions de /runs", () => {
+  const rows = ["classic_ref", "raceline_ref", "classic_f1_ref", "raceline_f1_ref", "agent_1", "agent_2", "inconnu"].map((run_id) => ({
     run_id, track_id: "f1_monza", algo: "ppo",
   }));
   const runs = [
     { run_id: "agent_1", condition: "ppo_mufixe" },
-    { run_id: "agent_2", condition: "ppo_mualea" },
+    { run_id: "agent_2", condition: "ppo_f1_mualea" },
   ];
 
   expect(identifyF1Rows(rows, runs)).toEqual(rows.map((row, index) => ({
-    ...row, condition: ["classic", "raceline", "ppo_mufixe", "ppo_mualea", undefined][index],
+    ...row, condition: ["classic", "raceline", "classic", "raceline", "ppo_mufixe", "ppo_f1_mualea", undefined][index],
   })));
 });

@@ -134,7 +134,8 @@ def _substep(
     grip = p.grip(mu, v0)  # adhérence disponible : mu mu_tyre (g + k_L v²)
     if p.friction_circle:
         # Cercle de friction : ce qui sert à tourner (a_lat = v² kappa) n'est plus disponible
-        # pour accélérer ou freiner : a_long <= sqrt(grip² − a_lat²)
+        # pour accélérer ou freiner : a_long <= sqrt(grip² − a_lat²). Le budget est calculé avec
+        # la vitesse du début du sous-pas : sur 10 ms, la limite peut être dépassée de ~0,2 %.
         a_lat = min(v0 * v0 * abs(kappa), grip)
         long_budget = math.sqrt(max(grip * grip - a_lat * a_lat, 0.0))
     else:
@@ -145,7 +146,8 @@ def _substep(
     # Freinage plafonné par l'adhérence : a_frein = min(brake * b_max, budget)
     a_brake = min(brake * p.b_max, long_budget)
     # dv/dt = a_moteur − a_frein − c_d v² − c_rr g
-    resist = p.c_d * v0 * v0 + (p.c_rr * p.g if v0 > 0.0 else 0.0)
+    # v0 ** 2 (et non v0 * v0) : même arrondi que le modèle v1 d'origine, résultats reproductibles au bit près
+    resist = p.c_d * v0**2 + (p.c_rr * p.g if v0 > 0.0 else 0.0)
     v = max(0.0, v0 + (a_drive - a_brake - resist) * dt)  # v ne devient jamais négatif
 
     # --- Courbure limitée par l'adhérence (sous-virage) ---

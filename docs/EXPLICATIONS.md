@@ -260,3 +260,39 @@ points à bien comprendre pour pouvoir les défendre.
   avec une tolérance d'arrondi. Toutes les évaluations ont été refaites après ces deux corrections.
 - Sur F1, épisodes de 6 000 pas maximum (un tour de Spa dure plus de 150 s) : les agents ne perçoivent
   pas le temps, leur comportement n'en dépend pas.
+
+## Série v2 : voiture F1 réaliste et entraînement sur de vrais circuits (21/11/2026)
+
+**Pourquoi.** Sur les vrais circuits, les agents de la série v1 ne bouclaient presque aucun tour,
+alors que les pilotes programmés y roulaient sans problème : ce n'était pas l'environnement, mais
+un échec de généralisation (circuits d'entraînement trop réguliers : 12 m de large partout, virages
+de plus de 19 m de rayon, pas de chicane) et une voiture trop simplifiée (228 km/h, sans appui).
+
+**La voiture (`sim/car.py`, paramètres `F1_2024`).** Même bicyclette cinématique, plus :
+- masse 800 kg, ≈ 700 kW aux roues : accélération limitée par la motricité (12 m/s²) puis par la
+  puissance P/(m v) ; traînée ½ ρ C_D A v² (C_D A ≈ 1,3 m²) et résistance au roulement ;
+- appui aérodynamique : force normale m (g + k_L v²) avec k_L = ½ ρ C_L A / m (C_L A ≈ 4,5 m²) ;
+  l'adhérence maximale mu (g + k_L v²) passe de ≈ 1,8 g à l'arrêt à ≈ 6 g à 300 km/h ;
+- cercle de friction : sqrt(a_long² + a_lat²) ≤ mu (g + k_L v²) : freiner fort en tournant réduit
+  l'adhérence latérale, comme sur une vraie voiture ;
+- mesures du modèle : 343 km/h en pointe, 0-100 km/h en 2,4 s, 300 → 100 km/h en 88 m.
+- Calibrage : sur la trajectoire idéale, les temps simulés sont en moyenne 3 % au-dessus des poles
+  officielles 2024 lues dans les classements de la FIA (Monza 1:19.327, Silverstone 1:25.819,
+  Suzuka 1:28.197, Hungaroring 1:15.227, Red Bull Ring 1:04.314). μ = 1,8 et C_L A = 4,5 m² ont été
+  choisis dans les valeurs plausibles, sans ajuster au mieux sur ces 5 circuits.
+
+**L'environnement.** Option `env.car: f1_2024` : capteurs portant à 200 m et courbure lue à 50 et
+150 m (il faut ≈ 100 m pour freiner depuis 340 km/h). Option `env.random_start` : chaque épisode
+d'entraînement part d'un point au hasard, donc tous les virages sont travaillés (sinon un agent qui
+sort au premier virage ne voit jamais le reste du circuit) ; les checkpoints sont alors répartis
+depuis ce point. Le modèle v1 reste disponible : les résultats de la série v1 restent reproductibles.
+
+**L'entraînement.** 17 vrais circuits de la base TUM (Austin, Melbourne, Montréal, Interlagos,
+Bahreïn, Hockenheim, Shanghai…) pour apprendre, et les 8 circuits F1 pour tester, jamais vus.
+PPO (3 M de pas), PPO à adhérence variable, SAC (1 M), DQN (1,5 M), 3 graines chacun. Les méthodes
+tabulaires ne sont pas reconduites : 768 états ne suffisent pas à piloter une F1 sur des circuits
+de 4 à 6 km (elles échouaient déjà avec le modèle simplifié).
+
+**Pilotes de référence.** Le pilote classique (ligne centrale, 85 % de la vitesse limite des virages)
+et le pilote trajectoire idéale (99 % du profil optimal, visée 0,35 v) bouclent les 24 tours
+(8 circuits × 3 adhérences) avec la voiture F1.

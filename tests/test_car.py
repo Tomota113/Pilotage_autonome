@@ -5,7 +5,7 @@ from dataclasses import replace
 
 import pytest
 
-from sim.car import DEFAULT_PARAMS, PHYSICS_DT, CarState, path_curvature, step
+from sim.car import DECISION_DT, DEFAULT_PARAMS, F1_2024, PHYSICS_DT, CarState, path_curvature, step
 
 P = DEFAULT_PARAMS
 
@@ -130,3 +130,77 @@ def test_determinism():
 def test_negative_mu_is_rejected():
     with pytest.raises(ValueError):
         step(CarState(), (0.0, 0.0, 0.0), mu=-0.1)
+
+
+def test_f1_top_speed_and_0_to_100():
+    state = CarState()
+    time_to_100 = None
+    for i in range(round(40 / DECISION_DT)):
+        state, _ = step(state, (0.0, 1.0, 0.0), mu=1.0, params=F1_2024)
+        if time_to_100 is None and state.v * 3.6 >= 100:
+            time_to_100 = (i + 1) * DECISION_DT
+    assert 330 <= F1_2024.top_speed * 3.6 <= 355
+    assert 330 <= state.v * 3.6 <= 355
+    assert state.v == pytest.approx(F1_2024.top_speed, rel=0.01)
+    assert time_to_100 is not None and 2.0 <= time_to_100 <= 3.5
+
+
+def test_f1_grip_increases_with_speed():
+    start, mid, fast = (F1_2024.grip(1.0, kmh / 3.6) / F1_2024.g for kmh in (0, 150, 300))
+    assert start == pytest.approx(1.8, abs=0.05)
+    assert start < mid < fast
+    assert fast > 5.0
+
+
+def test_f1_braking_distance():
+    start, end = 300 / 3.6, 100 / 3.6
+    dry = braking_distance(start, end, mu=1.0, params=F1_2024)
+    assert 60 <= dry <= 130
+    assert braking_distance(start, end, mu=0.6, params=F1_2024) > dry
+
+
+def test_f1_friction_circle_reduces_braking_in_a_tight_turn():
+    start = CarState(v=300 / 3.6)
+    straight, _ = step(start, (0.0, 0.0, 1.0), mu=1.0, params=F1_2024)
+    # Volant déjà braqué à l'entrée du virage pour que la comparaison porte sur l'adhérence.
+    corner, _ = step(replace(start, delta=F1_2024.delta_max), (1.0, 0.0, 1.0), mu=1.0, params=F1_2024)
+    assert 0 < start.v - corner.v < start.v - straight.v
+
+
+def test_f1_determinism():
+    def run():
+        state = CarState(v=65.0)
+        trajectory = []
+        for k in range(200):
+            command = (math.sin(0.05 * k), 0.8, 0.3 if k % 11 == 0 else 0.0)
+            state, slip = step(state, command, mu=0.8, params=F1_2024)
+            trajectory.append((state, slip))
+        return trajectory
+
+    assert run() == run()
+
+
+def test_default_params_match_v1_equations_exactly():
+    actual = expected = CarState(x=1.0, y=-2.0, psi=0.3, v=30.0)
+    mu, h = 0.8, 0.01
+    for steer, throttle, brake in [(0.0, 0.6, 0.0), (1.0, 0.0, 1.0), (-1.0, 0.4, 0.3)]:
+        expected_slip = False
+        for _ in range(5):
+            # Constantes et équations v1 indépendantes des paramètres et fonctions du simulateur.
+            delta = expected.delta + max(-2.0 * h, min(2.0 * h, 0.4 * steer - expected.delta))
+            a = 10.0 * throttle - min(15.0 * brake, mu * 9.81) - 0.0025 * expected.v**2
+            v = max(0.0, expected.v + a * h)
+            kappa = math.sin(math.atan(0.5 * math.tan(delta))) / 1.8
+            if v * v * abs(kappa) > mu * 9.81:
+                expected_slip = True
+                kappa = math.copysign(mu * 9.81 / (v * v), kappa)
+            beta = math.asin(1.8 * kappa)
+            expected = CarState(
+                x=expected.x + v * math.cos(expected.psi + beta) * h,
+                y=expected.y + v * math.sin(expected.psi + beta) * h,
+                psi=expected.psi + (v / 1.8) * math.sin(beta) * h,
+                v=v,
+                delta=delta,
+            )
+        actual, slip = step(actual, (steer, throttle, brake), mu=mu, params=DEFAULT_PARAMS)
+        assert (actual, slip) == (expected, expected_slip)

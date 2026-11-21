@@ -23,6 +23,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.staticfiles import StaticFiles
 
 from agents.train import PROGRESS_COLUMNS, make_run_id
+from env.f1_env import CAR_MODELS
 from tools.validate import validate_config
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -268,25 +269,27 @@ def create_app(root: Path | None = None) -> FastAPI:
                 continue  # fichier illisible : ignoré, validate.py dira pourquoi
         return result
 
-    raceline_cache: dict[tuple[str, float], tuple[float, dict]] = {}
+    raceline_cache: dict[tuple[str, float, str], tuple[float, dict]] = {}
 
     @application.get("/tracks/{track_id}/raceline")
-    async def get_raceline(track_id: str, mu: float = 1.0):
+    async def get_raceline(track_id: str, mu: float = 1.0, car: str = "v1"):
         """Minimum-curvature racing line and fastest speed profile of a track (sim/raceline.py)."""
         from sim.raceline import racing_line, speed_profile
         from sim.track import Track
 
         if not COMPONENT.fullmatch(track_id) or not math.isfinite(mu) or not 0.1 <= mu <= 2.0:
             raise HTTPException(400, "Invalid track ID or mu")
+        if car not in CAR_MODELS:
+            raise HTTPException(400, "Unknown car")
         path = tracks / f"{track_id}.json"
         if not path.is_file() or path.is_symlink():
             raise HTTPException(404, "Unknown track")
-        key, mtime = (track_id, round(mu, 3)), path.stat().st_mtime
+        key, mtime = (track_id, round(mu, 3), car), path.stat().st_mtime
         if key not in raceline_cache or raceline_cache[key][0] != mtime:
             # Calcul en quelques dixièmes de seconde, hors de la boucle d'événements
             def compute():
                 line = racing_line(Track.from_json(path))
-                profile = speed_profile(line, mu)
+                profile = speed_profile(line, mu, params=CAR_MODELS[car]["params"])
                 return {"track_id": track_id, "mu": mu, "points": np.round(line.points, 2).tolist(),
                         "speed": np.round(profile.speed, 2).tolist(), "lap_time_s": round(profile.lap_time, 2),
                         "length_m": round(line.length, 1)}
@@ -297,10 +300,10 @@ def create_app(root: Path | None = None) -> FastAPI:
 
     @application.get("/replays")
     async def get_replays():
-        """Every replay under <root>/runs, with readable metadata (condition, track, mu, outcome)."""
+        """Every replay under <root>/runs, with condition, car, track, mu and outcome."""
         from tools.make_configs import condition_of
 
-        result, conditions = [], {}
+        result, run_metadata = [], {}
         for path in sorted(runs.glob("*/replays/*.json")):
             run_id = path.parent.parent.name
             if not COMPONENT.fullmatch(run_id) or path.is_symlink():
@@ -322,18 +325,24 @@ def create_app(root: Path | None = None) -> FastAPI:
                                   "total_reward": info.get("total_reward"),
                                   "has_activations": b'"activations"' in head})
                 replay_cache[path] = cached
-            if run_id not in conditions:
-                if run_id.startswith("classic"):
-                    conditions[run_id] = "classic"
-                elif run_id.startswith("raceline"):
-                    conditions[run_id] = "raceline"
+            if run_id not in run_metadata:
+                car, condition = "v1", None
+                if run_id.startswith(("classic", "raceline")):
+                    condition = "classic" if run_id.startswith("classic") else "raceline"
+                    if "_f1_" in run_id:
+                        car = "f1_2024"
                 else:
                     try:
-                        conditions[run_id] = condition_of(yaml.safe_load(config_file(run_id).read_text(encoding="utf-8")))
+                        config = yaml.safe_load(config_file(run_id).read_text(encoding="utf-8"))
+                        if isinstance(config, dict) and isinstance(config.get("env", {}), dict):
+                            car = config.get("env", {}).get("car", "v1")
+                            condition = condition_of(config)
                     except (HTTPException, OSError, ValueError, KeyError, TypeError, yaml.YAMLError):
-                        conditions[run_id] = None
+                        pass
+                run_metadata[run_id] = (car, condition)
+            car, condition = run_metadata[run_id]
             result.append({"path": f"runs/{run_id}/replays/{path.name}", "run_id": run_id,
-                           "condition": conditions[run_id], "algo": match["algo"],
+                           "condition": condition, "car": car, "algo": match["algo"],
                            "checkpoint": match["checkpoint"], "track_id": match["track"],
                            "mu_factor": float(match["mu"]), **cached[1]})
         return result

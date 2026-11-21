@@ -34,6 +34,10 @@ export const CONDITIONS = [
     help: "Tabulaire, sur politique : apprend la valeur de la politique qui explore." },
   { id: "montecarlo_mufixe", label: "Monte-Carlo", short: "Monte-Carlo", color: "#e66767",
     help: "Tabulaire : apprend à partir du retour complet de chaque épisode." },
+  { id: "ppo_f1", label: "PPO (F1, circuits réels)", short: "PPO", color: "#3987e5" },
+  { id: "ppo_f1_mualea", label: "PPO adhérence variable (F1, circuits réels)", short: "PPO μ var.", color: "#d95926" },
+  { id: "sac_f1", label: "SAC (F1, circuits réels)", short: "SAC", color: "#c98500" },
+  { id: "dqn_f1", label: "DQN (F1, circuits réels)", short: "DQN", color: "#199e70" },
 ];
 
 export const CONDITION_BY_ID = Object.fromEntries(CONDITIONS.map((c) => [c.id, c]));

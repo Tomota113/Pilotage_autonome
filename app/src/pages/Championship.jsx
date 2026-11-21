@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import CarSelector, { useCarReplays } from "../components/CarSelector.jsx";
 import TrackCanvas from "../components/TrackCanvas.jsx";
 import TrackOptions from "../components/TrackOptions.jsx";
 import { RacelineToggle, useRacelineOverlay } from "../components/RacelineOverlay.jsx";
 import { CONDITIONS, OUTCOME_LABELS, conditionColor, conditionLabel } from "../data/algorithms.js";
-import { listReplays, loadReplay, loadTrack } from "../data/api.js";
+import { loadReplay, loadTrack } from "../data/api.js";
 import { isF1Track } from "../data/f1.js";
 import { SPEEDS } from "../playback.jsx";
 
@@ -24,8 +25,8 @@ function frameAt(replay, t) {
 }
 
 export default function Championship() {
-  const [all, setAll] = useState(null);
-  const [trackId, setTrackId] = useState(null);
+  const { car, setCar, replays } = useCarReplays();
+  const [wantedTrack, setWantedTrack] = useState(null);
   const [mu, setMu] = useState(1);
   const [race, setRace] = useState(null);
   const [hidden, setHidden] = useState(new Set());
@@ -33,29 +34,23 @@ export default function Championship() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(2);
   const [showTrails, setShowTrails] = useState(false);
-  const ideal = useRacelineOverlay(trackId, mu);
-
-  useEffect(() => { listReplays().then(setAll).catch(() => setAll([])); }, []);
   const tracks = useMemo(() => {
     const count = {};
-    for (const r of all ?? []) if (r.condition) count[r.track_id] = (count[r.track_id] ?? new Set()).add(r.condition);
+    for (const r of replays ?? []) if (r.condition) count[r.track_id] = (count[r.track_id] ?? new Set()).add(r.condition);
     return Object.entries(count).filter(([, s]) => s.size >= 2).map(([t]) => t).sort();
-  }, [all]);
-  useEffect(() => {
-    if (!trackId && tracks.length) {
-      const f1 = tracks.includes("f1_monza") ? "f1_monza" : tracks.find(isF1Track);
-      setTrackId(f1 ?? (tracks.includes("gen_10") ? "gen_10" : tracks[0]));
-    }
-  }, [tracks, trackId]);
+  }, [replays]);
+  const trackId = [wantedTrack, "f1_monza", tracks.find(isF1Track), "gen_10", tracks[0]]
+    .find((id) => tracks.includes(id));
+  const ideal = useRacelineOverlay(trackId, mu, car);
 
   // Chargement du circuit et de la meilleure course de chaque agent
   useEffect(() => {
-    if (!trackId || !all) return;
-    let cancelled = false;
     setPlaying(false);
     setTime(0);
+    if (!trackId) return;
+    let cancelled = false;
     const byCondition = {};
-    for (const r of all) {
+    for (const r of replays) {
       if (r.track_id === trackId && Number(r.mu_factor) === mu && r.condition) (byCondition[r.condition] ??= []).push(r);
     }
     const entries = Object.entries(byCondition).map(([condition, list]) => ({ condition, entry: bestOf(list) }))
@@ -64,14 +59,14 @@ export default function Championship() {
       loadTrack(trackId),
       Promise.all(entries.map(async (e) => ({ ...e, replay: await loadReplay(e.entry.path) }))),
     ]).then(([track, racers]) => {
-      if (!cancelled) setRace({ trackId, mu, track, racers });
+      if (!cancelled) setRace({ trackId, mu, car, track, racers });
     }).catch(() => {
-      if (!cancelled) setRace({ trackId, mu, error: true });
+      if (!cancelled) setRace({ trackId, mu, car, error: true });
     });
     return () => { cancelled = true; };
-  }, [trackId, mu, all]);
+  }, [trackId, mu, car, replays]);
 
-  const current = race?.trackId === trackId && race?.mu === mu ? race : null;
+  const current = race?.trackId === trackId && race?.mu === mu && race?.car === car ? race : null;
   const racers = current?.racers ?? [];
   const visible = racers.filter((r) => !hidden.has(r.condition));
   const duration = useMemo(() => Math.max(0, ...visible.map((r) => r.replay.frames.at(-1).t)), [visible]);
@@ -106,7 +101,6 @@ export default function Championship() {
     points: r.replay.frames.filter((f) => f.t <= time).map((f) => [f.x, f.y]), color: conditionColor(r.condition), alpha: 0.55,
   })) : [];
 
-  if (all === null) return <p className="note">Chargement…</p>;
   return (
     <>
       <div className="page-header">
@@ -114,13 +108,11 @@ export default function Championship() {
         <p>Tous les agents sur le même circuit de test, en même temps : chaque voiture rejoue la meilleure course de son
           algorithme. Le classement se met à jour en direct pendant la lecture.</p>
       </div>
-      {tracks.length === 0 ? (
-        <p className="empty">Aucun circuit avec plusieurs agents : lancer <code>python -m tools.make_showcase</code>.</p>
-      ) : (
-        <>
-          <div className="controls">
+      <div className="controls">
+        <CarSelector car={car} setCar={setCar} loading={replays === null} />
+        {tracks.length > 0 && <>
             <label className="field">Circuit
-              <select value={trackId ?? ""} onChange={(e) => setTrackId(e.target.value)}>
+              <select value={trackId} onChange={(e) => setWantedTrack(e.target.value)}>
                 <TrackOptions ids={tracks} />
               </select>
             </label>
@@ -133,7 +125,11 @@ export default function Championship() {
                 ))}
               </div>
             </div>
-          </div>
+        </>}
+      </div>
+      {replays === null ? <p className="note" role="status">Chargement des replays…</p>
+        : tracks.length === 0 ? <p className="empty">Aucun circuit avec plusieurs agents pour cette voiture.</p>
+        : (
           <div className="row">
             <div className="grow card" style={{ padding: 10 }}>
               {current?.track ? <TrackCanvas track={current.track} cars={cars} trails={trails} draw={ideal.draw} height={580} />
@@ -186,7 +182,6 @@ export default function Championship() {
                 adhérence (évaluation réelle, politique figée, sans exploration).</p>
             </div>
           </div>
-        </>
       )}
     </>
   );

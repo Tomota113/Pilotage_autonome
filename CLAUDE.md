@@ -105,6 +105,10 @@ v (m/s), delta (rad).
 Valeurs de départ : L = 3,6 m ; l_r = 1,8 m ; a_max = 10 m/s² ;
 c_d = 0,0025 1/m ; mu = 1,0 ; g = 9,81 m/s².
 
+Modèle F1 réaliste (série v2, `sim/car.py` : `F1_2024`, option `env.car: f1_2024`) : 800 kg,
+≈ 700 kW, traînée C_D A ≈ 1,3 m², appui C_L A ≈ 4,5 m² (adhérence mu (g + k_L v²)), slicks
+mu ≈ 1,8, cercle de friction combiné ; 343 km/h ; calibré à ~3 % des poles 2024 (FIA).
+
 Le simulateur doit être déterministe pour une graine donnée et couvert par
 des tests unitaires (vitesse de pointe ≈ sqrt(a_max / c_d), pas de rotation
 à l'arrêt, sous-virage quand v²/R > mu*g, sortie de piste détectée).

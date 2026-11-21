@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import TrackCanvas, { speedColor } from "../components/TrackCanvas.jsx";
-import ReplayPicker from "../components/ReplayPicker.jsx";
+import CarSelector, { useCarReplays } from "../components/CarSelector.jsx";
+import { ReplayFields } from "../components/ReplayPicker.jsx";
 import { RacelineToggle, useRacelineOverlay } from "../components/RacelineOverlay.jsx";
 import { CONDITION_BY_ID, OUTCOME_LABELS, conditionColor, conditionLabel, muLabel } from "../data/algorithms.js";
-import { formatLapTimeGap, lapTimeGap } from "../data/f1.js";
+import { CAR_MODELS, formatLapTimeGap, lapTimeGap } from "../data/f1.js";
 import { PlaybackControls, usePlayback } from "../playback.jsx";
 
 const SENSOR_NAMES = ["−90°", "−60°", "−30°", "0°", "+30°", "+60°", "+90°"];
@@ -24,10 +25,10 @@ function Gauge({ label, value, min = 0, color, left: leftLabel, right: rightLabe
 }
 
 // Profil de vitesse au cours de l'épisode, avec le curseur de lecture
-function SpeedProfile({ frames, index, onSeek }) {
+function SpeedProfile({ frames, index, onSeek, car }) {
   const w = 900, h = 120, pad = 28;
-  const tMax = frames.at(-1).t;
-  const vMax = Math.max(20, ...frames.map((f) => f.v)) * 3.6;
+  const tMax = frames.at(-1).t || 1;
+  const vMax = Math.max(car === "f1_2024" ? 350 : 72, ...frames.map((f) => f.v * 3.6));
   const x = (t) => pad + ((w - pad - 8) * t) / tMax;
   const y = (v) => h - 18 - ((h - 30) * v * 3.6) / vMax;
   const d = frames.map((f, i) => `${i ? "L" : "M"}${x(f.t).toFixed(1)},${y(f.v).toFixed(1)}`).join("");
@@ -57,8 +58,11 @@ function SpeedProfile({ frames, index, onSeek }) {
 }
 
 export default function RaceSimulator() {
-  const { entry, replay, track, index, setIndex, setPlaying } = usePlayback();
-  const ideal = useRacelineOverlay(replay?.track_id, replay?.mu_factor, true);
+  const { car, setCar, replays } = useCarReplays();
+  const { entry, replay: loadedReplay, track, index, setIndex, setPlaying } = usePlayback();
+  const replay = replays?.some((r) => r.path === entry?.path) ? loadedReplay : null;
+  const { sensorRange, speedColorMax } = CAR_MODELS[car];
+  const ideal = useRacelineOverlay(replay?.track_id, replay?.mu_factor, car, true);
   const idealTime = ideal.line?.lap_time_s;
   const gap = replay?.summary.outcome === "lap" ? lapTimeGap(replay.summary.lap_time, idealTime) : null;
   const frame = replay?.frames[index];
@@ -77,12 +81,14 @@ export default function RaceSimulator() {
         <p>Rejoue un vrai épisode d'évaluation : choisis un agent, un circuit de test et une adhérence, puis lance la
           lecture. La trajectoire est colorée selon la vitesse (bleu lent → rouge rapide).</p>
       </div>
-      <ReplayPicker />
+      <ReplayFields replays={replays}>
+        <CarSelector car={car} loading={replays === null} setCar={(next) => { setPlaying(false); setCar(next); }} />
+      </ReplayFields>
       {replay && track && frame && (
         <div className="row">
           <div className="grow stack">
             <div className="card" style={{ padding: 10 }}>
-              <TrackCanvas track={track} trails={[{ ...trail, width: 3 }]} draw={ideal.draw}
+              <TrackCanvas track={track} trails={[{ ...trail, speedColorMax, width: 3 }]} draw={ideal.draw}
                            cars={[{ x: frame.x, y: frame.y, psi: frame.psi, color, label: CONDITION_BY_ID[condition]?.short }]}
                            rays={{ x: frame.x, y: frame.y, psi: frame.psi, distances: frame.sensors_m }} height={560} />
               <PlaybackControls />
@@ -90,7 +96,7 @@ export default function RaceSimulator() {
             </div>
             <div className="card">
               <div className="card-title">Vitesse au cours de l'épisode <span className="hint">clic = aller à cet instant</span></div>
-              <SpeedProfile frames={replay.frames} index={index} onSeek={(i) => { setPlaying(false); setIndex(i); }} />
+              <SpeedProfile frames={replay.frames} index={index} car={car} onSeek={(i) => { setPlaying(false); setIndex(i); }} />
             </div>
           </div>
           <div className="stack" style={{ width: 300 }}>
@@ -116,12 +122,13 @@ export default function RaceSimulator() {
             </div>
             <div className="card">
               <div className="card-title">Ce que voit la voiture <span className="hint">distance au bord (m)</span></div>
-              {frame.sensors_m.map((d, k) => (
-                <div key={k} className="gauge" style={{ margin: "4px 0" }}>
-                  capteur {SENSOR_NAMES[k]} <span style={{ float: "right" }}>{d >= 99.9 ? "> 100" : d.toFixed(0)} m</span>
-                  <div className="bar"><div className="fill" style={{ left: 0, width: `${Math.min(100, d)}%`, background: speedColor(60 - Math.min(60, d * 0.6)) }} /></div>
-                </div>
-              ))}
+              {frame.sensors_m.map((d, k) => {
+                const ratio = Math.min(1, d / sensorRange);
+                return <div key={k} className="gauge" style={{ margin: "4px 0" }}>
+                  capteur {SENSOR_NAMES[k]} <span style={{ float: "right" }}>{d >= sensorRange - 0.1 ? `≥ ${sensorRange}` : d.toFixed(0)} m</span>
+                  <div className="bar"><div className="fill" style={{ left: 0, width: `${ratio * 100}%`, background: speedColor(1 - ratio, 1) }} /></div>
+                </div>;
+              })}
             </div>
             <div className="card">
               <div className="card-title">Résultat de l'épisode</div>

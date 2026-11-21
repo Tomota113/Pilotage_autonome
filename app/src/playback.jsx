@@ -15,20 +15,26 @@ export function PlaybackProvider({ children }) {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const clock = useRef({ last: null, t: 0 });
+  const selection = useRef(0);
 
   const select = useCallback(async (e) => {
+    const id = ++selection.current;
     setPlaying(false);
     setEntry(e);
+    setReplay(null);
+    setTrack(null);
     setError(null);
     try {
       const r = await loadReplay(e.path);
+      if (id !== selection.current) return;
       const t = await loadTrack(r.track_id);
+      if (id !== selection.current) return;
       clock.current.t = 0;
       setIndex(0);
       setReplay(r);
       setTrack(t);
     } catch (err) {
-      setError(String(err));
+      if (id === selection.current) setError(String(err));
     }
   }, []);
 

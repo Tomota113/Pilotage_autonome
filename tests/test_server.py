@@ -187,8 +187,37 @@ def test_lists_replays_with_metadata(client, tmp_path):
     assert len(replays) == 1
     r = replays[0]
     assert r["path"] == rows[0]["replay_path"] and r["condition"] == "classic" and r["algo"] == "classic"
+    assert r["car"] == "v1"
     assert r["track_id"] == "demo_oval" and r["mu_factor"] == 1.0 and r["outcome"] == "lap"
     assert r["lap_time"] == rows[0]["lap_time"] and r["has_activations"] is False
+
+
+def test_replay_car_comes_from_run_config_or_reference_id(client, tmp_path):
+    cases = [
+        ("classic_f1_ref", None, "classic", "f1_2024"),
+        ("raceline_f1_ref", None, "raceline", "f1_2024"),
+        ("raceline_ref", None, "raceline", "v1"),
+        ("ppo_run_legacy", {}, None, "v1"),
+        ("ppo_run_modern", {"car": "f1_2024"}, None, "f1_2024"),
+    ]
+    for run_id, env, condition, _ in cases:
+        run = tmp_path / "runs" / run_id
+        (run / "replays").mkdir(parents=True)
+        algo = "classic" if condition else "ppo"
+        (run / "replays" / f"{algo}_none_demo_oval_mu1.00_ep0.json").write_text(
+            '{"summary": {"outcome": "lap"}}', encoding="utf-8")
+        if env is not None:
+            config = short_config()
+            config["env"].pop("car", None)
+            config["env"].update(env)
+            (run / "config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    response = client.get("/replays")
+    assert response.status_code == 200
+    assert {r["run_id"]: (r["condition"], r["car"]) for r in response.json()} == {
+        run_id: (condition, car) for run_id, _, condition, car in cases
+    }
+    assert all(r["algo"] == "classic" for r in response.json() if r["condition"])
 
 
 def test_raceline_endpoint(client):
@@ -199,3 +228,16 @@ def test_raceline_endpoint(client):
     assert client.get("/tracks/../raceline").status_code in (400, 404)
     assert client.get("/tracks/unknown/raceline").status_code == 404
     assert client.get("/tracks/demo_oval/raceline", params={"mu": -1}).status_code == 400
+    assert client.get("/tracks/demo_oval/raceline", params={"car": "unknown"}).status_code == 400
+
+
+def test_raceline_f1_is_faster_than_v1(client):
+    url = "/tracks/demo_oval/raceline"
+    v1 = client.get(url).json()
+    response = client.get(url, params={"car": "f1_2024"})
+    assert response.status_code == 200
+    f1 = response.json()
+    assert f1["points"] == v1["points"]
+    assert max(f1["speed"]) > max(v1["speed"])
+    assert 0 < f1["lap_time_s"] < v1["lap_time_s"]
+    assert client.get(url, params={"car": "v1"}).json() == v1

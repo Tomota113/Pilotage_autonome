@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import LineChart, { formatNumber, formatPercent } from "../components/charts/LineChart.jsx";
 import { identifyCondition } from "../components/charts/RunCondition.jsx";
 import { CONDITIONS, conditionColor, conditionLabel, muLabel } from "../data/algorithms.js";
-import { getMode, listRuns, listTracks, loadBestEval, loadEval, loadF1Eval, loadProgress } from "../data/api.js";
-import { formatLapTimeGap, identifyF1Rows, isF1Track, lapTimeGap } from "../data/f1.js";
+import { getMode, listRuns, listTracks, loadBestEval, loadEval, loadF1Eval, loadF1EvalV2, loadProgress } from "../data/api.js";
+import { formatLapTimeGap, identifyF1Rows, lapTimeGap } from "../data/f1.js";
 
 const MUS = [1, 0.8, 0.6];
 const CONDITION_ORDER = new Map(CONDITIONS.map(({ id }, index) => [id, index]));
@@ -143,38 +143,53 @@ function Bars({ entries, descriptionId }) {
 
 function F1Results() {
   const [result, setResult] = useState(null);
+  const [preference, setSeries] = useState(null);
   const [mu, setMu] = useState(1);
 
   useEffect(() => {
     let active = true;
     async function load() {
-      const rows = await loadF1Eval();
-      if (!rows.length) return { rows, tracks: [] };
-      const [runs, tracks] = await Promise.all([listRuns(), listTracks()]);
-      return { rows: identifyF1Rows(rows, runs), tracks };
+      const sources = await Promise.allSettled([loadF1Eval(), loadF1EvalV2()]);
+      const [runs, tracks] = sources.some(({ value }) => value?.length)
+        ? await Promise.all([listRuns(), listTracks()]) : [[], []];
+      const [v1, v2] = sources.map(({ status, value }) => status === "rejected"
+        ? { error: true } : { rows: value === null ? null : identifyF1Rows(value, runs) });
+      return { v1, v2, tracks };
     }
     load().then((data) => { if (active) setResult(data); })
       .catch(() => { if (active) setResult({ error: true }); });
     return () => { active = false; };
   }, []);
 
-  const rows = result?.rows ?? [];
+  const series = preference ?? (result?.v2?.rows != null ? "v2" : "v1");
+  const current = result?.[series];
+  const rows = current?.rows ?? [];
   const conditions = [...new Set(rows.map(({ condition }) => condition).filter(Boolean))];
   conditions.sort((a, b) => (CONDITION_ORDER.get(a) ?? CONDITIONS.length) - (CONDITION_ORDER.get(b) ?? CONDITIONS.length)
     || conditionLabel(a).localeCompare(conditionLabel(b), "fr"));
   const names = new Map((result?.tracks ?? []).map(({ id, name }) => [id, name]));
-  const trackIds = [...new Set([...names.keys()].filter(isF1Track).concat(rows.map(({ track_id }) => track_id)))]
+  const trackIds = [...new Set(rows.map(({ track_id }) => track_id))]
     .sort((a, b) => (names.get(a) ?? a).localeCompare(names.get(b) ?? b, "fr"));
   const selected = rows.filter((row) => Number(row.mu_factor) === mu);
   const bars = aggregateEvaluation(selected).sort((a, b) => b.rate - a.rate || conditions.indexOf(a.condition) - conditions.indexOf(b.condition));
 
   return <section className="card" aria-labelledby="f1-title">
     <h3 className="card-title" id="f1-title">Circuits de F1 réels</h3>
-    <p className="note">Les agents n’ont jamais vu ces circuits pendant l’apprentissage. Le pilote trajectoire idéale sert de référence.</p>
+    <div className="controls">
+      <label className="field" style={{ maxWidth: "100%" }}>Série
+        <select value={series} onChange={(event) => setSeries(event.target.value)} disabled={!result}>
+          <option value="v2">Nouvelle série : voiture F1, entraînée sur circuits réels (eval_f1_v2.csv)</option>
+          <option value="v1">Première série : modèle simplifié (eval_f1.csv)</option>
+        </select>
+      </label>
+    </div>
     {!result ? <p role="status">Chargement de l’évaluation F1…</p>
-      : result.error ? <p className="warn" role="alert">Impossible de charger l’évaluation F1.</p>
-      : !rows.length ? <p className="empty">L’évaluation sur les circuits de F1 n’a pas encore été lancée.</p>
+      : result.error || current?.error ? <p className="warn" role="alert">Impossible de charger cette série d’évaluations F1.</p>
+      : !rows.length ? <p className="empty">Aucun résultat disponible pour cette série.</p>
       : <>
+        <p className="note">{series === "v2"
+          ? "Les agents de cette série ont appris sur 17 circuits réels."
+          : "Les agents de cette série découvrent les circuits de F1 pendant l’évaluation."} Le pilote trajectoire idéale sert de référence.</p>
         <div className="controls">
           <div className="segmented" role="group" aria-label="Adhérence sur les circuits de F1">
             {MUS.map((value) => <button key={value} type="button" title={muLabel(value)}
@@ -206,7 +221,7 @@ function F1Results() {
             })}</tbody>
           </table>
         </div>
-        <h4 className="card-title" style={{ marginTop: 20 }}>Tours bouclés sur les 8 circuits F1</h4>
+        <h4 className="card-title" style={{ marginTop: 20 }}>Tours bouclés sur les circuits de cette série</h4>
         <p className="note" id="f1-bars-guide">Part des essais où chaque agent boucle un tour, à l’adhérence choisie. Chaque graine compte autant.</p>
         {bars.length ? <Bars entries={bars} descriptionId="f1-bars-guide" /> : <p className="empty">Aucun résultat à cette adhérence.</p>}
       </>}

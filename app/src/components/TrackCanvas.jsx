@@ -197,7 +197,7 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
       ctx.lineCap = "round";
       if (t.speeds) {
         for (let i = 1; i < t.points.length; i++) {
-          ctx.strokeStyle = speedColor(t.speeds[i]);
+          ctx.strokeStyle = speedColor(t.speeds[i], t.speedColorMax);
           ctx.beginPath();
           ctx.moveTo(...view.toScreen(t.points[i - 1]));
           ctx.lineTo(...view.toScreen(t.points[i]));

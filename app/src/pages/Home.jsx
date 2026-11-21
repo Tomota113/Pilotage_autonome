@@ -64,12 +64,14 @@ export default function Home() {
         <p>Des agents d'apprentissage par renforcement apprennent seuls à conduire une monoplace sur des circuits 2D, par essais
           et erreurs. On compare plusieurs algorithmes à un pilote classique programmé à la main, puis on mesure ce qui se
           passe quand la piste devient glissante.</p>
+        <p>La F1 2024 réaliste atteint 343 km/h et son appui aérodynamique augmente l’adhérence à haute vitesse.
+          Sur cinq circuits, les tours simulés sur la trajectoire idéale sont en moyenne 3 % plus lents que les poles de 2024.</p>
       </div>
 
       <div className="grid-3" style={{ marginBottom: 16 }}>
         <div className="card">
           <div className="card-title">1. La voiture perçoit</div>
-          <p className="note" style={{ margin: 0 }}>7 capteurs mesurent la distance aux bords (jusqu'à 100 m), plus la vitesse,
+          <p className="note" style={{ margin: 0 }}>7 capteurs mesurent la distance aux bords (100 m avec le modèle simplifié, 200 m avec la F1 2024), plus la vitesse,
             l'angle par rapport à la piste, l'écart au centre et la courbure des virages à venir : 12 nombres.</p>
         </div>
         <div className="card">
@@ -79,7 +81,7 @@ export default function Home() {
         </div>
         <div className="card">
           <div className="card-title">3. On évalue</div>
-          <p className="note" style={{ margin: 0 }}>Après 1 million de pas d'entraînement sur 10 circuits, chaque agent roule sur 5
+          <p className="note" style={{ margin: 0 }}>Dans la première série, après 1 million de pas d'entraînement sur 10 circuits, chaque agent roule sur 5
             circuits qu'il n'a jamais vus, à adhérence normale, humide et glissante.</p>
           <p className="note" style={{ marginBottom: 0 }}>On teste aussi les agents sur 8 circuits de F1 réels qu’ils n’ont jamais vus.</p>
         </div>

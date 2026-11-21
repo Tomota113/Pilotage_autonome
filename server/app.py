@@ -31,6 +31,9 @@ STOP_TIMEOUT = 2.0
 FRAME_INTERVAL = 1 / 20
 COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,239}")
 CHECKPOINT = re.compile(r"step_([0-9]{1,20})\.(zip|npy)")
+REPLAY_NAME = re.compile(r"(?P<algo>[a-z]+)_(?P<checkpoint>step_[0-9]+|none)_(?P<track>[a-z0-9_]+)"
+                         r"_mu(?P<mu>[0-9.]+)_ep(?P<episode>[0-9]+)\.json")
+SUMMARY = re.compile(r'"summary":\s*\{([^{}]*)\}\s*\}\s*$')
 
 
 def local_path(path: Path) -> Path:
@@ -264,6 +267,49 @@ def create_app(root: Path | None = None) -> FastAPI:
                 continue  # fichier illisible : ignoré, validate.py dira pourquoi
         return result
 
+    replay_cache: dict[Path, tuple[float, dict]] = {}
+
+    @application.get("/replays")
+    async def get_replays():
+        """Every replay under <root>/runs, with readable metadata (condition, track, mu, outcome)."""
+        from tools.make_configs import condition_of
+
+        result, conditions = [], {}
+        for path in sorted(runs.glob("*/replays/*.json")):
+            run_id = path.parent.parent.name
+            if not COMPONENT.fullmatch(run_id) or path.is_symlink():
+                continue
+            match = REPLAY_NAME.fullmatch(path.name)
+            if not match:
+                continue
+            mtime = path.stat().st_mtime
+            cached = replay_cache.get(path)
+            if cached is None or cached[0] != mtime:
+                with path.open("rb") as stream:
+                    head = stream.read(8192)
+                    stream.seek(max(0, path.stat().st_size - 1024))
+                    tail = stream.read().decode("utf-8", "replace")
+                # Le résumé est la dernière clé du fichier : inutile de lire les milliers d'images
+                summary = SUMMARY.search(tail)
+                info = json.loads("{" + summary.group(1) + "}") if summary else {}
+                cached = (mtime, {"outcome": info.get("outcome"), "lap_time": info.get("lap_time"),
+                                  "total_reward": info.get("total_reward"),
+                                  "has_activations": b'"activations"' in head})
+                replay_cache[path] = cached
+            if run_id not in conditions:
+                if run_id.startswith("classic"):
+                    conditions[run_id] = "classic"
+                else:
+                    try:
+                        conditions[run_id] = condition_of(yaml.safe_load(config_file(run_id).read_text(encoding="utf-8")))
+                    except (HTTPException, OSError, ValueError, KeyError, TypeError, yaml.YAMLError):
+                        conditions[run_id] = None
+            result.append({"path": f"runs/{run_id}/replays/{path.name}", "run_id": run_id,
+                           "condition": conditions[run_id], "algo": match["algo"],
+                           "checkpoint": match["checkpoint"], "track_id": match["track"],
+                           "mu_factor": float(match["mu"]), **cached[1]})
+        return result
+
     @application.get("/runs")
     async def get_runs():
         run_ids = set(jobs) | {path.name for path in runs.iterdir() if COMPONENT.fullmatch(path.name)}
@@ -287,8 +333,14 @@ def create_app(root: Path | None = None) -> FastAPI:
             except (OSError, ValueError, yaml.YAMLError):
                 config = config if isinstance(config, dict) else {}
                 state = "failed"
+            try:
+                from tools.make_configs import condition_of
+
+                condition = condition_of(config) if config else None
+            except (KeyError, TypeError):
+                condition = None
             result.append({"run_id": run_id, "algo": config.get("algo"), "seed": config.get("seed"),
-                           "state": state, "last_step": last_step})
+                           "condition": condition, "state": state, "last_step": last_step})
         return result
 
     @application.post("/runs/{run_id}/stop")

@@ -12,6 +12,7 @@ export default defineConfig({
       "/files": API,
       "/runs": API,
       "/tracks": API,
+      "/replays": API,
       "/ws": { target: API.replace(/^http/, "ws"), ws: true },
     },
   },

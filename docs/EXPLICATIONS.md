@@ -216,3 +216,18 @@ points à bien comprendre pour pouvoir les défendre.
   (le score serait optimiste). Ici, le test reste une mesure indépendante.
 - Résultats dans `results/eval_best.csv`, figures dans `results/figures_best/` ; les résultats du
   dernier checkpoint restent dans `results/eval.csv` et `results/figures/`.
+
+## Refonte de l'application (21/11/2026)
+
+- Nouveau thème, navigation par sections (Découvrir, Voir les agents piloter, Comprendre les résultats,
+  Outils) et page d'accueil qui explique le projet en trois étapes avec les chiffres clés (calculés).
+- Circuit : zoom à la molette, déplacement à la souris, « suivre la voiture », vibreurs dans les virages,
+  damier d'arrivée, trajectoire colorée selon la vitesse.
+- Race Simulator : choix par agent / circuit / adhérence (plus de run_id illisibles), tableau de bord,
+  capteurs, profil de vitesse cliquable. Championship : vraie course de tous les agents sur un circuit
+  de test, classement en direct.
+- Résultats (Codex) : barres par adhérence, robustesse, petits multiples d'apprentissage, explications
+  « comment lire ce graphique ». Réseau de neurones (Codex) : schéma entrées → couches → sorties et
+  phrase qui décrit l'instant. Training Center (Codex) : préréglages, mode avancé repliable.
+- `GET /replays` liste tous les replays avec leur condition ; `tools/make_showcase.py` enregistre une
+  vraie course par agent sur chaque circuit de test.

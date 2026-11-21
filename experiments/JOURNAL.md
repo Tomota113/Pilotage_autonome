@@ -59,3 +59,20 @@ Décision / lecture :
 - Le meilleur checkpoint de SAC arrive tôt (150 000 à 500 000 pas) : 1 M de pas n'apporte rien de plus.
 - Biais à garder en tête : le choix se fait sur les circuits d'entraînement, donc les chiffres « train »
   de eval_best.csv sont légèrement optimistes ; les chiffres « test » ne le sont pas.
+
+## Replays de démonstration pour l'application (21/11/2026, `python -m tools.make_showcase`)
+
+Pour chaque condition, la graine qui a bouclé le plus de tours dans `eval_best.csv`, avec son
+meilleur checkpoint, roule sur les 5 circuits de test × μ ∈ {1,0 ; 0,8 ; 0,6} (activations
+enregistrées pour les réseaux). Ce sont de vraies évaluations ; elles ne servent qu'à l'affichage
+(Race Simulator, Championship) et vont dans `results/eval_showcase.csv`, sans remplacer aucun résultat.
+
+| Condition | run_id montré | Tours bouclés /15 |
+|---|---|---|
+| Pilote classique | classic_ref | 15 |
+| SAC | sac_multi_mufixe_s1_20261121-0335 | 7 |
+| PPO μ aléatoire | ppo_multi_mualea_s0_20261120-2341 | 9 |
+| DQN | dqn_multi_mufixe_s1_20261121-0148 | 7 |
+| PPO sans pénalité (λ = 0) | ppo_multi_mufixe_s0_20261121-0020 | 5 |
+| PPO μ fixe | ppo_multi_mufixe_s2_20261121-0123 | 4 |
+| Q-Learning, SARSA, Monte-Carlo | s0 de chaque | 0 |

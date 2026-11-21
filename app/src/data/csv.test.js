@@ -24,41 +24,40 @@ describe("parseCSV", () => {
 });
 
 describe("agrégations de l’analyse", () => {
-  const source = (seed, date, noPenalty, values, track = "multi") => ({
-    noPenalty,
-    rows: values.map(([step, mean_reward, mean_lap_time]) => ({
-      run_id: `ppo_${track}_mufixe_s${seed}_${date}`, algo: "ppo", mu_mode: "fixed", seed, step,
-      mean_reward, mean_lap_time,
-    })),
+  const source = (seed, date, condition, values) => ({
+    seed, run_id: `ppo_multi_mufixe_s${seed}_${date}`, condition,
+    rows: values.map(([step, mean_reward]) => ({ step, mean_reward })),
   });
 
   it("regroupe par condition, garde la dernière date par graine et aligne les pas communs", () => {
     const entries = [
-      source(0, "20260101-1000", false, [[100, 10, ""]]),
-      source(0, "20260102-1000", false, [[100, 4, ""], [200, 8, 20]]),
-      source(1, "20260103-1000", false, [[100, 8, 30], [300, 5, 25]]),
-      source(2, "20260103-1000", true, [[100, 100, 15]]),
-      source(3, "20260103-1000", false, [[100, 40, 35]], "demo_oval"),
+      source(0, "20260101-1000", "ppo_mufixe", [[100, 10]]),
+      source(0, "20260102-1000", "ppo_mufixe", [[100, 4], [200, 8]]),
+      source(1, "20260103-1000", "ppo_mufixe", [[100, 8], [200, ""], [300, 5]]),
+      source(2, "20260103-1000", "ppo_mufixe_nolambda", [[100, 100]]),
     ];
-    const [group] = aggregateLearning(entries, "mean_reward");
-    expect(aggregateLearning(entries, "mean_reward")).toHaveLength(3);
-    expect(group.points).toEqual([{ step: 100, mean: 6, deviation: Math.sqrt(8), count: 2 }]);
-    expect(aggregateLearning(entries, "mean_lap_time")[0].points[0]).toEqual({
-      step: 100, mean: 30, deviation: 0, count: 1,
-    });
+    const [ppo, noPenalty] = aggregateLearning(entries, "mean_reward");
+    expect(ppo.average).toEqual([{ x: 100, y: 6 }]);
+    expect(ppo.seeds).toEqual([
+      { name: "Graine 0", points: [{ x: 100, y: 4 }, { x: 200, y: 8 }] },
+      { name: "Graine 1", points: [{ x: 100, y: 8 }, { x: 300, y: 5 }] },
+    ]);
+    expect(noPenalty.average).toEqual([{ x: 100, y: 100 }]);
   });
 
   it("pondère les graines également et ignore les temps des épisodes sans tour", () => {
     const rows = [
-      { algo: "ppo", seed: 0, outcome: "lap", lap_time: 40, offtracks: 0 },
-      { algo: "ppo", seed: 0, outcome: "lap", lap_time: 50, offtracks: 0 },
-      { algo: "ppo", seed: 1, outcome: "off_track", lap_time: "", offtracks: 1 },
-      { algo: "classic", seed: 0, outcome: "lap", lap_time: 60, offtracks: 0 },
+      { condition: "ppo_mufixe", split: "test", mu_factor: 1, seed: 0, outcome: "lap", lap_time: 40, offtracks: 0 },
+      { condition: "ppo_mufixe", split: "test", mu_factor: 1, seed: 0, outcome: "lap", lap_time: 50, offtracks: 0 },
+      { condition: "ppo_mufixe", split: "test", mu_factor: 1, seed: 1, outcome: "off_track", lap_time: "", offtracks: 1 },
+      { condition: "classic", split: "test", mu_factor: 1, seed: 0, outcome: "lap", lap_time: 60, offtracks: 0 },
+      { condition: "ppo_mufixe", split: "train", mu_factor: 1, seed: 0, outcome: "lap", lap_time: 35, offtracks: 0 },
+      { condition: "ppo_mufixe", split: "test", mu_factor: 0.6, seed: 0, outcome: "off_track", lap_time: "", offtracks: 1 },
     ];
-    const [ppo, classic] = aggregateEvaluation(rows);
-    expect(ppo.lap_rate.mean).toBe(50);
-    expect(ppo.mean_lap_time).toEqual({ count: 1, mean: 45, deviation: 0 });
-    expect(ppo.offtracks_per_ep.mean).toBe(0.5);
-    expect(classic.algo).toBe("classic");
+    const [ppo, classic, train, slippery] = aggregateEvaluation(rows);
+    expect(ppo).toMatchObject({ rate: 0.5, min: 0, max: 1, lapTime: 45, offtracks: 0.5, seeds: 2, episodes: 3 });
+    expect(classic).toMatchObject({ condition: "classic", rate: 1 });
+    expect(train).toMatchObject({ split: "train", rate: 1 });
+    expect(slippery).toMatchObject({ mu: 0.6, rate: 0, lapTime: null });
   });
 });

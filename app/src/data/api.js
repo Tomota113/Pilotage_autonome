@@ -54,13 +54,21 @@ export async function loadEval() {
   }
 }
 
-// Replays disponibles : lignes de eval.csv qui ont un replay_path.
+// Replays disponibles (GET /replays) : chemin, run_id, condition, algo, circuit, μ, issue, temps au tour,
+// présence des activations.
 export async function listReplays() {
   if ((await getMode()) === "fixtures") return (await manifest()).replays;
-  return (await loadEval())
-    .filter((r) => r.replay_path)
-    .map((r) => ({ path: r.replay_path, run_id: r.run_id, algo: r.algo, track_id: r.track_id,
-                   mu_factor: r.mu_factor, outcome: r.outcome, lap_time: r.lap_time }));
+  return fetchJSON("/replays");
+}
+
+// Résultats de l'évaluation des meilleurs checkpoints (results/eval_best.csv), sinon eval.csv
+export async function loadBestEval() {
+  if ((await getMode()) === "fixtures") return fetchJSON(FIXTURES + (await manifest()).eval);
+  try {
+    return parseCSV(await fetchText("/files/results/eval_best.csv"));
+  } catch {
+    return loadEval();
+  }
 }
 
 export async function loadReplay(path) {

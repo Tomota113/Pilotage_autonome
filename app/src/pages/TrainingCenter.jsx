@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import TrackCanvas from "../components/TrackCanvas.jsx";
-import { ALGO_LABELS } from "../data/algorithms.js";
+import LineChart, { formatNumber, formatPercent } from "../components/charts/LineChart.jsx";
+import { identifyCondition } from "../components/charts/RunCondition.jsx";
+import { ALGO_LABELS, OUTCOME_LABELS, conditionColor, muLabel } from "../data/algorithms.js";
 import { listCheckpoints, listRuns, listTracks, loadProgress, loadTrack, openRunSocket, startRun, stopRun } from "../data/api.js";
 import { ACTION_SPACES, buildTrainingYaml, TRAINING_DEFAULTS } from "../data/yaml.js";
 
 const STATES = { running: "En cours", stopping: "Arrêt en cours", finished: "Terminé", failed: "Échec" };
-const OUTCOMES = { lap: "Tour validé", off_track: "Sortie de piste", stalled: "Progression interrompue", timeout: "Temps écoulé" };
+const STATE_TONES = { running: "good", stopping: "warn", failed: "bad" };
+const SPLITS = { train: "entraînement", test: "test", demo: "démonstration" };
+const RATES = { ppo: 1300, dqn: 1400, sac: 200, qlearning: 3000, sarsa: 3000, montecarlo: 3000 };
+const PRESETS = [
+  { id: "quick", title: "Essai rapide", algo: "ppo", steps: 20000, circuit: "sur l’ovale" },
+  { id: "ppo", title: "PPO sur les 10 circuits", algo: "ppo", steps: 200000 },
+  { id: "sac", title: "SAC sur les 10 circuits", algo: "sac", steps: 100000 },
+];
 const REWARDS = {
   k_progress: "Progression (k)",
   c_time: "Coût du temps (c)",
@@ -18,19 +27,57 @@ const PROGRESS_FIELDS = [
   ["mean_lap_time", "Temps au tour (s)"], ["offtracks_per_ep", "Sorties par épisode"],
 ];
 const FORMAT = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 3 });
+const DATE_FORMAT = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" });
+const COMPACT_STEPS = new Intl.NumberFormat("fr-FR", { notation: "compact" });
 const RECENT_ROWS = 30;
-const CAR_COLOR = "#3987e5";
+
+export function estimateDuration(algo, steps) {
+  const seconds = Number(steps) / RATES[algo];
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  return seconds < 60 ? `≈ ${formatNumber(Math.ceil(seconds / 5) * 5)} s`
+    : `≈ ${formatNumber(Math.ceil(seconds / 60))} min`;
+}
+
+export function presetForm(presetId, tracks) {
+  const preset = PRESETS.find(({ id }) => id === presetId);
+  const oval = tracks.find(({ id }) => id === "demo_oval") ?? tracks.find(({ split }) => split === "demo");
+  const train = tracks.filter(({ split }) => split === "train").map(({ id }) => id).sort().slice(0, 10);
+  const test = tracks.filter(({ split }) => split === "test").map(({ id }) => id).sort();
+  const quick = preset.id === "quick";
+  if (quick ? !oval : train.length !== 10) return null;
+  return {
+    ...TRAINING_DEFAULTS, algo: preset.algo, totalSteps: preset.steps,
+    trainTracks: quick ? [oval.id] : train, testTracks: quick ? [oval.id] : test,
+  };
+}
+
+export function runIdentity(run, tracks) {
+  const { algo, run_id: id, trainTracks } = run;
+  const parts = id.match(/^[^_]+_(.+)_mu(?:fixe|alea)_s\d+_(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(?:_|$)/);
+  const date = parts ? new Date(+parts[2], +parts[3] - 1, +parts[4], +parts[5], +parts[6]) : null;
+  const trackName = (trackId) => tracks.find(({ id }) => id === trackId)?.name ?? trackId;
+  const trackId = trainTracks?.[0] ?? (parts && parts[1] !== "multi" ? parts[1] : null);
+  const circuits = trainTracks?.length > 1 ? `${formatNumber(trainTracks.length)} circuits`
+    : trainTracks?.length === 1 ? trackName(trainTracks[0])
+    : parts?.[1] === "multi" ? "Plusieurs circuits"
+    : parts ? trackName(parts[1]) : "Circuit non renseigné";
+  return { algo: ALGO_LABELS[algo] ?? "Algorithme non renseigné", circuits, date, trackId };
+}
+
+function StateChip({ state }) {
+  return <span className={`chip ${STATE_TONES[state] ?? ""}`}>{STATES[state] ?? "État inconnu"}</span>;
+}
 
 function NumberField({ label, value, onChange, min = 0, step = "any" }) {
   return (
-    <label className="module-field">{label}
+    <label className="field">{label}
       <input type="number" min={min} step={step} required value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
 
 function TrackOptions({ tracks }) {
-  return tracks.map(({ id, name, split }) => <option key={id} value={id}>{name} ({split})</option>);
+  return tracks.map(({ id, name, split }) => <option key={id} value={id}>{name} ({SPLITS[split] ?? split})</option>);
 }
 
 function ConfigForm({ form, setForm, tracks, yaml, error, onSubmit, launching, mode }) {
@@ -39,7 +86,7 @@ function ConfigForm({ form, setForm, tracks, yaml, error, onSubmit, launching, m
     <NumberField label={label} value={form[key]} min={min} step={step} onChange={(value) => field(key, value)} />;
   function trackSelect(key, label) {
     return (
-      <label className="module-field">{label}
+      <label className="field">{label}
         <select multiple size="4" value={form[key]}
                 onChange={(event) => field(key, Array.from(event.target.selectedOptions, (option) => option.value))}>
           <TrackOptions tracks={tracks} />
@@ -49,15 +96,15 @@ function ConfigForm({ form, setForm, tracks, yaml, error, onSubmit, launching, m
   }
   return (
     <div className="row training-config">
-      <form className="panel grow" onSubmit={onSubmit}>
+      <form className="panel" style={{ flex: "2 1 360px", minWidth: 0 }} onSubmit={onSubmit}>
         <h3>Configuration de l’entraînement</h3>
         <div className="module-fields">
-          <label className="module-field">Algorithme
+          <label className="field">Algorithme
             <select value={form.algo} onChange={(event) => field("algo", event.target.value)}>
               {Object.keys(ACTION_SPACES).map((algo) => <option key={algo} value={algo}>{ALGO_LABELS[algo]}</option>)}
             </select>
           </label>
-          <label className="module-field">Espace d’actions
+          <label className="field">Espace d’actions
             <output>{ACTION_SPACES[form.algo] === "continuous" ? "Continu" : "Discret (9 actions)"}</output>
           </label>
           {number("seed", "Graine", 0, 1)}
@@ -74,7 +121,7 @@ function ConfigForm({ form, setForm, tracks, yaml, error, onSubmit, launching, m
         <fieldset>
           <legend>Adhérence</legend>
           <div className="module-fields">
-            <label className="module-field">Mode de μ
+            <label className="field">Mode d’adhérence
               <select value={form.muMode} onChange={(event) => field("muMode", event.target.value)}>
                 <option value="fixed">Fixe</option>
                 <option value="uniform">Aléatoire uniforme</option>
@@ -100,70 +147,62 @@ function ConfigForm({ form, setForm, tracks, yaml, error, onSubmit, launching, m
         <fieldset>
           <legend>Sauvegarde et évaluation</legend>
           <div className="module-fields">
-            {number("checkpointEvery", "Checkpoint tous les N pas", 1, 1)}
+            {number("checkpointEvery", "Sauvegarder tous les N pas", 1, 1)}
             {number("evalEvery", "Évaluation tous les N pas", 1, 1)}
             {number("evalEpisodes", "Épisodes par évaluation", 1, 1)}
           </div>
         </fieldset>
         <div className="controls">
-          <button type="submit" className="on" disabled={mode !== "server" || !yaml || launching}>
+          <button type="submit" className="primary" disabled={mode !== "server" || !yaml || launching}>
             {launching ? "Lancement…" : "Lancer"}
           </button>
-          {mode === "fixtures" && <span className="warn">Serveur absent. Le lancement est désactivé en mode fixtures.</span>}
+          <span className="note">{estimateDuration(form.algo, form.totalSteps)}</span>
         </div>
         {error && <p className="warn" role="status">{error}</p>}
       </form>
-      <section className="panel grow">
-        <h3>Aperçu de config.yaml</h3>
-        {yaml ? <pre className="yaml-preview" tabIndex={0}><code>{yaml}</code></pre>
+      <section className="panel" style={{ flex: "1 1 300px", minWidth: 0 }}>
+        <h3>Aperçu du fichier YAML</h3>
+        {yaml ? <pre style={{ overflow: "auto", maxHeight: 370 }} tabIndex={0}><code>{yaml}</code></pre>
           : <p className="note">Complétez les champs pour générer le YAML.</p>}
       </section>
     </div>
   );
 }
 
-function Progress({ rows }) {
-  if (!rows.length) return <p className="note">Aucune ligne de progression disponible.</p>;
-  const values = rows.filter((row) => Number.isFinite(row.mean_reward));
-  const low = Math.min(...values.map((row) => row.mean_reward));
-  const high = Math.max(...values.map((row) => row.mean_reward));
-  const first = values[0]?.step;
-  const last = values.at(-1)?.step;
-  const x = (step) => first === last ? 230 : 55 + 350 * (step - first) / (last - first);
-  const y = (value) => high === low ? 52 : 90 - 76 * (value - low) / (high - low);
+function Progress({ rows, color }) {
+  if (!rows.length) return <p className="note">La progression apparaît après la première évaluation.</p>;
+  const points = rows.filter((row) => Number.isFinite(row.step) && Number.isFinite(row.lap_rate))
+    .map((row) => ({ x: row.step, y: row.lap_rate }));
+  const xTicks = [...new Set([points[0]?.x, points.at(-1)?.x])];
   return (
     <>
-      <h4>Dernières évaluations</h4>
-      {values.length > 0 && (
-        <svg className="module-chart training-chart" viewBox="0 0 460 125" role="img" aria-label="Récompense moyenne par pas d’entraînement">
-          <path d="M55 14V90H405" fill="none" stroke="var(--line)" />
-          <text x="47" y={y(high)} dy=".35em" textAnchor="end">{FORMAT.format(high)}</text>
-          {low !== high && <text x="47" y="94" textAnchor="end">{FORMAT.format(low)}</text>}
-          <text x={x(first)} y="108" textAnchor="middle">{FORMAT.format(first)}</text>
-          {last !== first && <text x={x(last)} y="108" textAnchor="middle">{FORMAT.format(last)}</text>}
-          <text x="230" y="124" textAnchor="middle">Pas d’entraînement</text>
-          <polyline points={values.map((row) => `${x(row.step)},${y(row.mean_reward)}`).join(" ")}
-                    fill="none" stroke={CAR_COLOR} strokeWidth="2" />
-          {values.map(({ step, mean_reward: reward }) => (
-            <circle key={step} cx={x(step)} cy={y(reward)} r="3" fill={CAR_COLOR}>
-              <title>{`${FORMAT.format(step)} pas · récompense ${FORMAT.format(reward)}`}</title>
-            </circle>
-          ))}
-        </svg>
-      )}
-      <div className="module-table" role="region" aria-label="Dernières évaluations" tabIndex={0}>
-        <table aria-label="Valeurs des dernières évaluations">
-          <thead><tr><th scope="col">Pas</th>{PROGRESS_FIELDS.map(([key, label]) => <th key={key} scope="col">{label}</th>)}</tr></thead>
-          <tbody>{rows.slice().reverse().map((row) => (
-            <tr key={row.step}>
-              <th scope="row">{FORMAT.format(row.step)}</th>
-              {PROGRESS_FIELDS.map(([key]) => <td key={key}>
-                {Number.isFinite(row[key]) ? FORMAT.format(row[key] * (key === "lap_rate" ? 100 : 1)) : "—"}
-              </td>)}
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
+      <h4 className="card-title">Tours bouclés pendant l’entraînement</h4>
+      {points.length > 0 ? <>
+        <p className="note" id="training-progress-guide"><strong>Comment lire ce graphique.</strong> Chaque point indique la part des essais terminés par un tour complet
+          lors d’une évaluation de l’agent.</p>
+        <div style={{ maxWidth: 510 }}>
+          <LineChart label="Tours bouclés" xLabel="Pas d’entraînement" xTicks={xTicks} descriptionId="training-progress-guide"
+                     xFormat={(value) => COMPACT_STEPS.format(value)} yDomain={[0, 1]} yFormat={formatPercent}
+                     tooltipXFormat={(value) => `${formatNumber(value)} pas`}
+                     series={[{ name: "Tours bouclés", color, points }]} height={155} />
+        </div>
+      </> : <p className="note">Aucun taux de tours disponible pour les dernières évaluations.</p>}
+      <details style={{ margin: "8px 0 16px" }}>
+        <summary style={{ cursor: "pointer" }}>Détail des dernières évaluations</summary>
+        <div style={{ overflowX: "auto" }} role="region" aria-label="Dernières évaluations" tabIndex={0}>
+          <table aria-label="Valeurs des dernières évaluations">
+            <thead><tr><th scope="col">Pas</th>{PROGRESS_FIELDS.map(([key, label]) => <th key={key} scope="col" className="num">{label}</th>)}</tr></thead>
+            <tbody>{rows.slice().reverse().map((row) => (
+              <tr key={row.step}>
+                <th scope="row">{FORMAT.format(row.step)}</th>
+                {PROGRESS_FIELDS.map(([key]) => <td key={key} className="num">
+                  {Number.isFinite(row[key]) ? FORMAT.format(row[key] * (key === "lap_rate" ? 100 : 1)) : "—"}
+                </td>)}
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </details>
     </>
   );
 }
@@ -187,10 +226,26 @@ function RunMonitor({ run, mode, tracks }) {
   const [watching, setWatching] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState("");
+  const [savedCondition, setSavedCondition] = useState(null);
   const socket = useRef(null);
   const watch = useRef(null);
-  const selectedTrack = watchTrack || tracks[0]?.id;
+  const selectedTrack = watchTrack || tracks.find(({ id }) => id === run.identity.trackId)?.id
+    || tracks.find(({ split }) => split === "test")?.id || tracks[0]?.id;
   const watchMuValue = Number(watchMu);
+  const muMode = id.includes("mualea") ? "uniform" : "fixed";
+  const color = conditionColor(run.condition ?? savedCondition
+    ?? (run.algo === "ppo" && muMode === "uniform" ? "ppo_mualea" : `${run.algo}_mufixe`));
+  const hasSavedProgress = run.last_step != null || progress.length > 0;
+
+  useEffect(() => {
+    if (mode !== "server" || run.algo !== "ppo" || run.condition || muMode !== "fixed"
+        || (!hasSavedProgress && run.state !== "finished")) return;
+    let active = true;
+    identifyCondition({ run_id: id, algo: run.algo, mu_mode: muMode }, mode).then(({ condition }) => {
+      if (active) setSavedCondition(condition);
+    });
+    return () => { active = false; };
+  }, [id, run.algo, run.condition, run.state, muMode, mode, hasSavedProgress]);
 
   useEffect(() => {
     let disposed = false;
@@ -235,7 +290,7 @@ function RunMonitor({ run, mode, tracks }) {
               if (watch.current?.sent) {
                 watch.current = null;
                 setWatching(false);
-                setViewer((session) => ({ ...session, status: OUTCOMES[message.summary.outcome] ?? "Épisode terminé" }));
+                setViewer((session) => ({ ...session, status: OUTCOME_LABELS[message.summary.outcome] ?? "Épisode terminé" }));
               }
               break;
             case "error":
@@ -324,57 +379,61 @@ function RunMonitor({ run, mode, tracks }) {
   const runState = state ?? run.state;
   const frame = viewer?.frame;
   return (
-    <section className="panel module-section">
+    <section className="card" aria-label="Suivi de l’entraînement sélectionné" style={{ minWidth: 0 }}>
       <div className="controls">
-        <strong>État · {STATES[runState] ?? "Inconnu"}</strong>
+        <StateChip state={runState} />
         {mode === "server" && <span className="note" role="status">{connection}</span>}
         {mode === "server" && ["running", "stopping"].includes(runState) && (
           <button type="button" disabled={stopping || runState === "stopping"} onClick={stopTraining}>Arrêter</button>
         )}
       </div>
       {error && <p role="alert" className="warn">{error}</p>}
-      <Progress rows={progress} />
+      <Progress rows={progress} color={color} />
       {mode === "server" && (
         <>
-          <h4>Checkpoints</h4>
+          <h4 className="card-title">Regarder l’agent conduire</h4>
           {checkpoints.length ? (
             <div className="controls">
-              <label className="module-field">Checkpoint
+              <label className="field">Sauvegarde de l’agent
                 <select value={checkpoint} disabled={watching} onChange={(event) => setCheckpoint(event.target.value)}>
                   <option value="latest">Le plus récent</option>
                   {checkpoints.map((file) => <option key={file.name} value={file.name}>
-                    {file.name} ({FORMAT.format(file.step)} pas)
+                    Après {FORMAT.format(file.step)} pas
                   </option>)}
                 </select>
               </label>
-              <label className="module-field">Circuit du visionnage
+              <label className="field">Circuit
                 <select value={selectedTrack ?? ""} disabled={watching} onChange={(event) => setWatchTrack(event.target.value)}>
                   <TrackOptions tracks={tracks} />
                 </select>
               </label>
-              <label className="module-field">Facteur μ du visionnage
+              <label className="field">Adhérence (μ)
                 <input type="number" value={watchMu} min="0" step="any" disabled={watching}
-                       onChange={(event) => setWatchMu(event.target.value)} />
+                       list="watch-mu-options" onChange={(event) => setWatchMu(event.target.value)} />
+                <datalist id="watch-mu-options">
+                  {[1, 0.8, 0.6].map((mu) => <option key={mu} value={mu} label={muLabel(mu)} />)}
+                </datalist>
               </label>
               <button type="button" onClick={startWatching}
                       disabled={watching || connection !== "Connecté" || !selectedTrack || !(watchMuValue > 0 && Number.isFinite(watchMuValue))}>
-                Regarder en direct
+                Regarder l’agent conduire
               </button>
               {watching && <button type="button" onClick={stopWatching}>Arrêter le visionnage</button>}
             </div>
-          ) : <p className="note">Aucun checkpoint disponible.</p>}
+          ) : <p className="note">Le visionnage sera disponible après la première sauvegarde de l’agent.</p>}
           {viewer && <p className="note">
             <span role="status">{viewer.status}</span>
             {frame && ` · ${FORMAT.format(frame.t)} s · ${FORMAT.format(frame.v * 3.6)} km/h`}
           </p>}
           {viewer?.track && (
-            <TrackCanvas track={viewer.track} height={400} label="Aperçu du circuit et de l’agent pendant le visionnage"
-                         cars={frame ? [{ ...frame, color: CAR_COLOR }] : []}
-                         trails={[{ points: viewer.trail, color: CAR_COLOR }]}
+            <TrackCanvas track={viewer.track} height={300}
+                         cars={frame ? [{ ...frame, color }] : []}
+                         trails={[{ points: viewer.trail, color }]}
                          rays={frame ? { x: frame.x, y: frame.y, psi: frame.psi, distances: frame.sensors_m } : null} />
           )}
         </>
       )}
+      {mode === "fixtures" && <p className="note">Le visionnage en direct nécessite le serveur d’entraînement.</p>}
     </section>
   );
 }
@@ -383,6 +442,7 @@ export default function TrainingCenter({ mode }) {
   const [tracks, setTracks] = useState([]);
   const [runs, setRuns] = useState([]);
   const [form, setForm] = useState(TRAINING_DEFAULTS);
+  const [preset, setPreset] = useState("quick");
   const [selected, setSelected] = useState("");
   const [launchedRun, setLaunchedRun] = useState(null);
   const [launching, setLaunching] = useState(false);
@@ -411,7 +471,7 @@ export default function TrainingCenter({ mode }) {
       try {
         const items = await listRuns();
         if (active) {
-          setRuns(items.slice().reverse());
+          setRuns(items);
           setListError("");
         }
       } catch {
@@ -434,18 +494,24 @@ export default function TrainingCenter({ mode }) {
       return { yaml: "", validation: err.message };
     }
   }, [form]);
+  const simpleForm = useMemo(() => presetForm(preset, tracks), [preset, tracks]);
 
-  const available = launchedRun && !runs.some((run) => run.run_id === launchedRun.run_id) ? [launchedRun, ...runs] : runs;
-  const run = available.find((item) => item.run_id === selected) ?? available[0];
+  const available = runs.map((run) => run.run_id === launchedRun?.run_id ? { ...launchedRun, ...run } : run);
+  if (launchedRun && !available.some(({ run_id }) => run_id === launchedRun.run_id)) available.push(launchedRun);
+  const entries = available.map((run) => ({ ...run, identity: runIdentity(run, tracks) }))
+    .sort((a, b) => (b.identity.date?.getTime() ?? 0) - (a.identity.date?.getTime() ?? 0) || b.run_id.localeCompare(a.run_id));
+  const run = entries.find((item) => item.run_id === selected) ?? entries[0];
 
-  async function launch(event) {
-    event.preventDefault();
-    if (mode !== "server" || launching || !yaml) return;
+  async function launch(config) {
+    if (mode !== "server" || launching || !config) return;
     setLaunching(true);
     setError("");
     try {
-      const result = await startRun(yaml);
-      setLaunchedRun({ ...result, algo: form.algo, seed: form.seed });
+      const result = await startRun(buildTrainingYaml(config));
+      const { algo, muMode, reward, seed, trainTracks } = config;
+      const condition = algo === "ppo" && muMode === "fixed" && Number(reward.lambda_steer) === 0
+        ? "ppo_mufixe_nolambda" : null;
+      setLaunchedRun({ ...result, algo, seed: Number(seed), trainTracks, condition });
       setSelected(result.run_id);
     } catch (err) {
       setError(err.message);
@@ -455,28 +521,72 @@ export default function TrainingCenter({ mode }) {
   }
 
   return (
-    <>
-      <h2>Centre d’entraînement</h2>
+    <div className="stack">
+      <header className="page-header card" style={{ marginBottom: 0 }}>
+        <h2>Centre d’entraînement</h2>
+        <p>Lancez un nouvel entraînement depuis le navigateur, suivez-le en direct, puis regardez l’agent conduire.</p>
+      </header>
       {tracksError && <p className="warn" role="alert">{tracksError}</p>}
-      <ConfigForm form={form} setForm={setForm} tracks={tracks} yaml={yaml} error={validation}
-                  onSubmit={launch} launching={launching} mode={mode} />
+      <section className="card" aria-labelledby="presets-title">
+        <h3 className="card-title" id="presets-title">Choisir un entraînement</h3>
+        <div className="grid-3" role="group" aria-label="Préréglages"
+             style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 215px), 1fr))" }}>
+          {PRESETS.map(({ id, title, algo, steps, circuit }) => (
+            <button type="button" key={id} className={id === preset ? "on" : ""} aria-pressed={id === preset}
+                    onClick={() => setPreset(id)} style={{ textAlign: "left", padding: "13px 15px" }}>
+              <strong style={{ display: "block" }}>{title}</strong>
+              <span style={{ display: "block", marginBlock: 4 }}>{circuit && `${ALGO_LABELS[algo]} · `}
+                {formatNumber(steps)} pas {circuit}</span>
+              <span className="note">{estimateDuration(algo, steps)}</span>
+            </button>
+          ))}
+        </div>
+        <div className="controls" style={{ marginBottom: 0 }}>
+          <button type="button" className="primary" disabled={mode !== "server" || launching || !simpleForm}
+                  onClick={() => launch(simpleForm)}>{launching ? "Lancement…" : "Lancer"}</button>
+          {mode === "fixtures" && <span className="note">Le serveur d’entraînement est absent. Le lancement est désactivé avec les données d’exemple.</span>}
+          {mode === "server" && tracks.length > 0 && !simpleForm && <span className="note">Les circuits de ce préréglage sont indisponibles.</span>}
+        </div>
+        <p className="note" style={{ marginBottom: 0 }}>Un pas correspond à une décision de l’agent. La durée est estimée d’après le débit mesuré
+          et varie selon la machine et les évaluations.</p>
+      </section>
+      <details className="card">
+        <summary style={{ cursor: "pointer", fontWeight: 650 }}>Avancé</summary>
+        <ConfigForm form={form} setForm={setForm} tracks={tracks} yaml={yaml} error={validation}
+                    onSubmit={(event) => { event.preventDefault(); launch(form); }} launching={launching} mode={mode} />
+      </details>
       {error && <p className="warn" role="alert">{error}</p>}
-      <h3>Suivi des entraînements</h3>
-      {listError && <p className="warn" role="alert">{listError}</p>}
-      {run ? (
-        <>
-          <div className="controls">
-            <label className="module-field run-picker">Entraînement
-              <select value={run.run_id} onChange={(event) => setSelected(event.target.value)}>
-                {available.map((item) => <option key={item.run_id} value={item.run_id}>
-                  {item.run_id} · {STATES[item.state] ?? "État inconnu"}
-                </option>)}
-              </select>
-            </label>
+      <section aria-labelledby="runs-title">
+        <h3 className="card-title" id="runs-title">Suivi des entraînements</h3>
+        {listError && <p className="warn" role="alert">{listError}</p>}
+        {run ? (
+          <div className="row">
+            <div className="card" style={{ flex: "1 1 290px", minWidth: 0 }}>
+              <h4 className="card-title">Entraînements récents</h4>
+              <div className="stack" style={{ maxHeight: 370, overflowY: "auto", gap: 6 }}>
+                {entries.map((item) => (
+                  <button key={item.run_id} type="button" title={item.run_id}
+                          className={run.run_id === item.run_id ? "on" : ""} aria-pressed={run.run_id === item.run_id}
+                          onClick={() => setSelected(item.run_id)} style={{ textAlign: "left", paddingBlock: 8 }}>
+                    <span style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "space-between" }}>
+                      <strong>{item.identity.algo} · {item.identity.circuits}</strong>
+                      <StateChip state={item.state} />
+                    </span>
+                    <span className="note" style={{ display: "block" }}>
+                      {item.identity.date ? DATE_FORMAT.format(item.identity.date) : "Date non renseignée"}
+                      {Number.isFinite(item.seed) && ` · Graine ${formatNumber(item.seed)}`}
+                      {Number.isFinite(item.last_step ?? item.step) && ` · ${formatNumber(item.last_step ?? item.step)} pas`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ flex: "2 1 470px", minWidth: 0 }}>
+              <RunMonitor key={run.run_id} run={run} mode={mode} tracks={tracks} />
+            </div>
           </div>
-          <RunMonitor key={run.run_id} run={run} mode={mode} tracks={tracks} />
-        </>
-      ) : <p className="empty">Aucun entraînement disponible.</p>}
-    </>
+        ) : <p className="empty">Aucun entraînement disponible.</p>}
+      </section>
+    </div>
   );
 }

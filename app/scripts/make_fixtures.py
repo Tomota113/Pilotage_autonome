@@ -106,6 +106,8 @@ def main():
         "note": "Données FACTICES de développement (app/scripts/make_fixtures.py). Jamais montrées en démo.",
         "tracks": [{"id": "fixture_oval", "name": "FIXTURE ovale", "split": "demo", "file": "fixture_track_oval.json"}],
         "replays": [{"path": name, "run_id": d["run_id"], "algo": d["agent"]["algo"], "track_id": "fixture_oval",
+                     "condition": "classic" if d["agent"]["algo"] == "classic" else "ppo_mufixe",
+                     "checkpoint": d["agent"]["checkpoint"], "has_activations": "network" in d,
                      "mu_factor": 1.0, "outcome": "lap", "lap_time": d["summary"]["lap_time"]} for name, d in replays],
         "eval": "fixture_eval.json",
         "runs": [{"run_id": "fixture_a", "algo": "ppo", "seed": 0, "state": "finished", "step": 1000000}],

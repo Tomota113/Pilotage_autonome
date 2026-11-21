@@ -78,7 +78,9 @@ def test_train_and_watch(client, tmp_path):
         status = websocket.receive_json()
         assert status["type"] == "status" and status["state"] in ("queued", "running")
         run = wait_for_run(client, run_id, lambda row: row["state"] == "finished")
-        assert run == {"run_id": run_id, "algo": "ppo", "seed": 0, "state": "finished", "last_step": 160}
+        # condition None : essai court, hors des conditions du protocole
+        assert run == {"run_id": run_id, "algo": "ppo", "seed": 0, "condition": None, "state": "finished",
+                       "last_step": 160}
         checkpoints = client.get(f"/runs/{run_id}/checkpoints").json()
         assert [checkpoint["step"] for checkpoint in checkpoints] == [64, 128, 160]
         assert checkpoints[-1]["name"] == "step_160.zip" and all(item["size"] > 0 for item in checkpoints)
@@ -174,3 +176,16 @@ def test_root_serves_the_built_app_or_explains(client, monkeypatch, tmp_path):
     with TestClient(create_app(), backend_options={"use_uvloop": True}) as app_client:
         assert "F1-RL Lab" in app_client.get("/").text
         assert app_client.get("/tracks").status_code == 200  # l'API reste prioritaire
+
+
+def test_lists_replays_with_metadata(client, tmp_path):
+    from agents.evaluate import evaluate
+
+    rows = evaluate("classic", ["demo_oval"], [1.0], run_id="classic_ref", eval_csv=tmp_path / "eval.csv",
+                    runs_dir=tmp_path / "runs")
+    replays = client.get("/replays").json()
+    assert len(replays) == 1
+    r = replays[0]
+    assert r["path"] == rows[0]["replay_path"] and r["condition"] == "classic" and r["algo"] == "classic"
+    assert r["track_id"] == "demo_oval" and r["mu_factor"] == 1.0 and r["outcome"] == "lap"
+    assert r["lap_time"] == rows[0]["lap_time"] and r["has_activations"] is False

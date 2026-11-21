@@ -45,10 +45,10 @@ Résultats dans `results/eval_best.csv`, figures dans `results/figures_best/`.
 | Condition | Checkpoints choisis (s0, s1, s2) | Tours test μ 1,0 / 0,8 / 0,6 (meilleur) | idem (dernier) | Tours totaux /135 (meilleur / dernier) |
 |---|---|---|---|---|
 | ppo_mufixe | step_850000, step_200000, step_1001472 | 0,60 / 0,13 / 0,00 | 0,47 / 0,20 / 0,00 | 26 / 25 |
-| ppo_mualea | step_300000, step_700000, step_1000000 | 0,20 / 0,67 / 0,33 | 0,13 / 0,40 / 0,20 | 58 / 32 |
+| ppo_mualea | step_300000, step_1000000, step_700000 | 0,20 / 0,67 / 0,33 | 0,13 / 0,40 / 0,20 | 58 / 32 |
 | dqn_mufixe | step_800000, step_900000, step_1000000 | 0,27 / 0,20 / 0,20 | 0,13 / 0,07 / 0,00 | 28 / 12 |
-| sac_mufixe | step_150000, step_450000, step_500000 | 0,80 / 0,60 / 0,00 | 0,67 / 0,67 / 0,00 | 62 / 61 |
-| ppo_mufixe_nolambda | step_1001472, step_700000, step_1001472 | 0,60 / 0,27 / 0,00 | 0,40 / 0,20 / 0,00 | 36 / 27 |
+| sac_mufixe | step_150000, step_500000, step_450000 | 0,80 / 0,60 / 0,00 | 0,67 / 0,67 / 0,00 | 62 / 61 |
+| ppo_mufixe_nolambda | step_1001472, step_1001472, step_700000 | 0,60 / 0,27 / 0,00 | 0,40 / 0,20 / 0,00 | 36 / 27 |
 | qlearning / sarsa / montecarlo | step_1000000 (table finale) | 0 / 0 / 0 | 0 / 0 / 0 | 2 / 6 / 0 (inchangé) |
 
 Décision / lecture :

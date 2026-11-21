@@ -18,6 +18,10 @@ pip install -r requirements.txt
 npm --prefix app install
 ```
 
+Toutes les commandes `python`, `pytest` et `uvicorn` ci-dessous supposent l'environnement
+activé (`source .venv/bin/activate`). Sinon, un autre Python du PATH (par exemple celui de
+PlatformIO) est utilisé et il manque les dépendances : préfixer alors par `.venv/bin/`.
+
 ## Lancer les tests
 
 ```bash
@@ -39,8 +43,8 @@ npm --prefix app test  # parties pures de l'application
 | Évaluer un checkpoint | `python -m agents.evaluate runs/<run_id>/checkpoints/step_1000000.zip --tracks gen_10 --mu 1.0 0.6 --with-activations` |
 | Évaluer tous les runs + le pilote classique | `python -m tools.evaluate_all` |
 | Figures | `python -m tools.plots` (PNG dans `results/figures/`) |
-| Serveur du Training Center | `uvicorn server.app:app --port 8000` |
-| Application (développement) | `npm --prefix app run dev` puis http://localhost:5173 (avec le serveur lancé) |
+| Serveur + application | `tools/start_app.sh` puis http://localhost:5173 (Ctrl+C arrête les deux) |
+| Serveur seul | `.venv/bin/uvicorn server.app:app --port 8000` |
 
 Sans serveur, l'application affiche des données factices `fixture_*.json`,
 signalées « FIXTURE » à l'écran : elles ne doivent jamais servir en démonstration.

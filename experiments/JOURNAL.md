@@ -114,3 +114,21 @@ circuits générés plus variés (largeur, rayons, chicanes), ou sur une partie 
 |---|---|---|---|---|---|
 | 2026-11-21 | ppo_multi_mufixe_f1_s0_20261121-1404, sac_multi_mufixe_f1_s0_20261121-1404 (runs/_aborted/) | premiers essais v2 : voiture F1, 17 circuits réels, départs aléatoires, actions continues 3D, γ 0,99, sortie −10 | 0 | PPO 2,4 M pas : récompense d'évaluation bloquée ≈ 42, 0 tour ; diagnostic sur 6 départs : plein gaz (gaz moyen 0,96, frein 0,03), entrée en virage à 230–290 km/h pour une limite de 50–160 km/h ; SAC 200 000 pas : 0 tour | arrêtés ; corrections : action « pédale » (−1 frein … +1 gaz), sortie −(10 + 0,01 v²), γ 0,995 |
 | 2026-11-21 | runs/_pilot/ (essais courts, configs v2 corrigées) | mesure de débit, réseaux 2 × 256 (PPO 4 env.) | 0 | pas/s (évaluations comprises) : PPO 1 436 ; DQN 1 381 ; Q-Learning 2 616 ; SARSA 2 514 ; Monte-Carlo 2 656 ; Deep MC 2 355 (début) ; Deep SARSA 411 ; TD3 183 ; QR-DQN 175 ; SAC 131 ; TQC 66. PPO 400 000 pas : la voiture roule (récompense 34, 0 tour) | budgets et files de tools/run_v2.sh (≈ 5 h 30 par graine en 3 files) ; lancement sur signal de l'étudiant |
+
+## Réévaluation de la série v1 après les deux corrections des checkpoints (21/11/2026)
+
+Mêmes runs et même protocole, après les corrections de l'environnement (saut de projection dans les
+virages serrés ; checkpoint sur un sommet de la ligne centrale). Ces chiffres remplacent ceux des tableaux
+précédents de la série v1 (les écarts sont faibles, les conclusions inchangées). Pilote trajectoire idéale
+(`raceline_ref`) ajouté. Taux de tours sur les 5 circuits de test, moyenne des 3 graines :
+
+| Condition | Dernier checkpoint μ 1,0 / 0,8 / 0,6 | Meilleur checkpoint μ 1,0 / 0,8 / 0,6 | Tours /135 (dernier / meilleur) |
+|---|---|---|---|
+| Pilote classique | 1,00 / 1,00 / 1,00 | — | 45 |
+| Pilote trajectoire idéale | 1,00 / 1,00 / 1,00 | — | 45 |
+| SAC | 0,67 / 0,67 / 0,00 | 0,87 / 0,60 / 0,00 | 66 / 67 |
+| PPO μ fixe | 0,47 / 0,20 / 0,00 | 0,60 / 0,13 / 0,00 | 26 / 27 |
+| PPO sans pénalité (λ = 0) | 0,40 / 0,20 / 0,00 | 0,60 / 0,27 / 0,00 | 28 / 37 |
+| PPO μ aléatoire | 0,20 / 0,40 / 0,20 | 0,20 / 0,67 / 0,33 | 34 / 59 |
+| DQN | 0,13 / 0,07 / 0,00 | 0,33 / 0,27 / 0,20 | 15 / 34 |
+| Q-Learning / SARSA / Monte-Carlo | 0 / 0 / 0 | 0 / 0 / 0 | 2 / 6 / 0 |

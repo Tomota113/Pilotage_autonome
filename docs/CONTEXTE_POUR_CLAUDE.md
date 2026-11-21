@@ -1,0 +1,219 @@
+# F1-RL Lab — état complet du projet (à donner à Claude en conversation)
+
+> **À l'attention de Claude.** Ce document décrit l'état du projet au **21/11/2026**. Tu as déjà
+> expliqué à l'étudiant (L3 Intelligence Artificielle, projet en binôme) une **première version** très
+> différente. Presque tout a changé depuis. Ton rôle : l'aider à **comprendre et défendre** le projet
+> devant son professeur, en français simple et rigoureux. Règles absolues du projet : **aucun résultat
+> inventé** (chaque chiffre vient d'un vrai run, noté dans `experiments/JOURNAL.md` avec son `run_id`,
+> sa configuration et sa graine) ; si une expérience n'a pas encore été faite, dis-le. **La série v2
+> (voiture F1 réaliste) est prête mais pas encore entraînée** : ses résultats n'existent pas encore.
+>
+> Dépôt : https://github.com/Tomota113/Pilotage_autonome (branche `main`). Documents détaillés dans le
+> dépôt : `docs/EXPLICATIONS.md` (mission par mission), `experiments/JOURNAL.md` (tous les runs et
+> résultats), `CLAUDE.md` (règles et modèle physique), `README.md` (commandes).
+
+---
+
+## 1. Le projet en une phrase
+
+Des agents d'apprentissage par renforcement apprennent seuls à piloter une monoplace sur des circuits
+2D ; on les compare entre eux et à deux pilotes programmés à la main, puis on mesure leur **robustesse à
+une baisse d'adhérence** (piste humide μ × 0,8, glissante μ × 0,6) et leur **généralisation** à des
+circuits jamais vus, dont **8 vrais circuits de Formule 1**.
+
+## 2. Ce qui a changé depuis la première version (résumé)
+
+| Avant (première version) | Maintenant |
+|---|---|
+| Une voiture simplifiée (≈ 228 km/h, pas d'aérodynamique) | Deux modèles : **v1** (inchangé) et **F1_2024** réaliste (343 km/h, appui aérodynamique, calibré sur les vraies poles 2024) |
+| Circuits générés au hasard | + **25 vrais circuits** (base publique de l'Université technique de Munich) : 8 circuits F1 pour le test, 17 pour l'entraînement |
+| PPO, DQN, SAC, Q-Learning | + SARSA, Monte-Carlo, **TD3, TQC, QR-DQN, Deep SARSA, Deep Monte-Carlo** |
+| Un pilote classique | + **pilote « trajectoire idéale »** (ligne de courbure minimale + profil de vitesse optimal) |
+| Étudiant devait écrire `reset()/step()` et le Q-Learning | **Tout est écrit** (à sa demande) ; il doit savoir l'expliquer |
+| Interface minimale | Application React refaite (7 modules), serveur FastAPI, replays, course de tous les agents |
+| — | Deux **défauts de l'environnement** trouvés et corrigés ; toutes les évaluations refaites |
+
+## 3. Architecture du code
+
+```
+sim/        physique (sans RL) : car.py (modèles v1 et F1_2024), track.py (circuits), sensors.py
+            (7 rayons), raceline.py (trajectoire idéale + profil de vitesse)
+env/        f1_env.py : environnement Gymnasium F1Env (observation, action, récompense, fin)
+agents/     train.py (entraînement), evaluate.py (évaluation, replays), algorithms.py (SB3/sb3-contrib),
+            classic_driver.py, raceline_driver.py, tabular.py + qlearning.py / sarsa.py / monte_carlo.py,
+            discretize.py (états discrets), deep_value.py (Deep SARSA, Deep Monte-Carlo)
+tracks/     41 circuits .json (16 générés gen_*/demo_oval, 8 f1_*, 17 real_*)
+configs/    63 configurations .yaml (24 série v1, 39 série v2)
+tools/      generate_tracks, import_f1_tracks, validate, make_configs, run_night.sh, run_v2.sh,
+            evaluate_all, evaluate_f1, make_showcase, plots, benchmark, start_app.sh
+server/     FastAPI : API des runs, fichiers, trajectoire idéale, replays, WebSocket (Training Center)
+app/        React + Vite + Canvas 2D : 7 modules (voir § 11)
+runs/       un dossier par entraînement (config.yaml, progress.csv, checkpoints/, replays/) — pas dans git
+results/    eval*.csv et figures — pas dans git (régénérables)
+```
+
+## 4. La physique
+
+### 4.1 Modèle v1 (inchangé depuis la première version, reproductible au bit près)
+Bicyclette cinématique, état (x, y, ψ, v, δ). β = atan((l_r/L) tan δ) ; ẋ = v cos(ψ+β) ; ẏ = v sin(ψ+β) ;
+ψ̇ = (v/l_r) sin β ; v̇ = a_max·gaz − min(b_max·frein, μg) − c_d v². Si v²/R > μg : sous-virage, rayon
+effectif R_eff = v²/(μg). L = 3,6 m, l_r = 1,8 m, a_max = 10 m/s², b_max = 15, c_d = 0,0025 /m.
+Pas physique 0,01 s, décision toutes les 0,05 s. Vitesse de pointe √(a_max/c_d) ≈ 63 m/s (228 km/h).
+
+### 4.2 Modèle F1_2024 (série v2, `sim/car.py`)
+Même bicyclette, plus :
+- **puissance** : 800 kg, ≈ 700 kW aux roues → accélération ≤ min(12 m/s², P/(m v)) ;
+- **traînée** ½ρC_D A v² (C_D A ≈ 1,3 m²) et résistance au roulement ;
+- **appui aérodynamique** : force normale m(g + k_L v²), k_L = ½ρC_L A/m (C_L A ≈ 4,5 m²) ; l'adhérence
+  maximale μ·μ_pneu·(g + k_L v²) passe de ≈ 1,8 g à l'arrêt à ≈ 6 g à 300 km/h (pneus slicks μ_pneu = 1,8) ;
+- **cercle de friction** : √(a_long² + a_lat²) ≤ adhérence → freiner fort en tournant réduit le virage possible.
+- Mesures du modèle : 343 km/h en pointe, 0-100 km/h en 2,4 s, 300 → 100 km/h en 88 m.
+- **Calibrage** (temps au tour sur la trajectoire idéale vs poles officielles 2024 lues dans les
+  classements FIA) : Monza 81,9 s vs 1:19.327 (+3,2 %), Silverstone 86,8 vs 1:25.819 (+1,2 %), Suzuka
+  88,9 vs 1:28.197 (+0,8 %), Hungaroring 80,0 vs 1:15.227 (+6,3 %), Red Bull Ring 67,9 vs 1:04.314
+  (+5,5 %) : **≈ 3 % en moyenne**. Paramètres choisis dans des valeurs plausibles, sans sur-ajustement.
+
+## 5. Les circuits
+
+- **Générés** (`tools/generate_tracks.py`) : courbe polaire r(θ) = R0 + Σ a_k sin(kθ+φ_k), lissée,
+  1,5–3 km, 12 m de large, rayon ≥ 15 m. gen_00–09 entraînement, gen_10–14 test (série v1).
+- **Réels** (`tools/import_f1_tracks.py`, base TUM racetrack-database, licence LGPL-3.0, sources dans
+  `data/f1_tracks_tum/`) : ligne centrale et largeurs mesurées sur images satellite, rééchantillonnées à 5 m.
+  - **Test (jamais vus)** : Monza, Spa, Silverstone, Suzuka, Hungaroring, Barcelone, Red Bull Ring, Zandvoort
+    (longueurs conformes aux vraies, ex. Monza 5 793 m, Spa 7 005 m).
+  - **Entraînement série v2** : Austin, Brands Hatch, Hockenheim, Indianapolis, Melbourne, Mexico,
+    Montréal, Moscou, Norisring, Nürburgring, Oschersleben, Bahreïn, Interlagos, Sepang, Shanghai,
+    Sotchi, Yas Marina.
+
+## 6. Le MDP (`env/f1_env.py`)
+
+- **Observation** (12 valeurs dans [−1, 1]) : 7 distances aux bords (−90° à +90°) ; vitesse ; angle
+  voiture/piste ; écart latéral ; courbure à 2 distances devant. v1 : capteurs 100 m, courbure à 30 et
+  80 m. **F1 : capteurs 200 m, courbure à 50 et 150 m** (il faut ≈ 100 m pour freiner depuis 340 km/h).
+  μ n'est pas observé (sauf ablation `observe_mu`).
+- **Actions** : `continuous` (volant, gaz, frein) ; **`pedal`** (volant + pédale unique −1 frein … +1 gaz,
+  série v2) ; `discrete9` (3 directions × gaz/roue libre/frein).
+- **Récompense** : r = 0,1·Δs − 0,01 − (10 + k_v·v²)·[sortie] + 50·[tour] − 0,05·|Δδ|. Δs = progression
+  projetée sur la ligne centrale, plafonnée à ±(v·dt + 1 m) (un saut plus grand = virage coupé).
+  **Série v2 : k_v = 0,01** (sortie à 300 km/h ≈ −90 au lieu de −10, idée de Gran Turismo Sophy).
+- **Checkpoints** : 20, validés un par un dans l'ordre ; le 20e (ligne d'arrivée) = tour validé.
+- **Fin** : `terminated` (sortie de piste ou tour) ; `truncated` (3 000 pas, ou 100 pas sans progrès).
+- **Série v2 : `random_start`** : l'épisode d'entraînement part d'un point au hasard (checkpoints répartis
+  depuis ce point) pour travailler tous les virages ; l'évaluation part toujours de la ligne de départ.
+
+## 7. Les pilotes de référence (sans apprentissage)
+
+- **Pilote classique** (`agents/classic_driver.py`) : poursuite de cible (pure pursuit) sur la ligne
+  centrale ; vitesse visée = 90 % (v1) ou 85 % (F1) de la vitesse limite des virages des 150 m à venir,
+  avec anticipation du freinage. Connaît μ.
+- **Pilote trajectoire idéale** (`sim/raceline.py`, `agents/raceline_driver.py`) : trajectoire de
+  **courbure minimale** (problème quadratique sous bornes : décalage de chaque point le long de la normale
+  sans sortir de la piste ; résolu exactement par une méthode à ensemble actif, itérée 3 fois avec
+  rééchantillonnage) ; **profil de vitesse** optimal pour la voiture (vitesse limite en virage, passe avant
+  en accélération, passe arrière en freinage, cercle de friction) ; il vise 99 % de ce profil. Connaît μ.
+  Il boucle tous les tours testés et bat partout le pilote classique.
+
+## 8. Les algorithmes
+
+| Famille | Série v1 (fait) | Série v2 (prêt, non entraîné) |
+|---|---|---|
+| Acteur-critique, actions continues | PPO, PPO μ aléatoire, PPO λ = 0, SAC | PPO, PPO μ variable, PPO 2×64 (ablation), SAC, **TD3**, **TQC** |
+| Q-Learning profond | DQN | DQN, **QR-DQN** (distributionnel) |
+| SARSA / Monte-Carlo profonds | — | **Deep SARSA**, **Deep Monte-Carlo** (même réseau que DQN, seule la cible change) |
+| Tabulaires | Q-Learning, SARSA, Monte-Carlo (768 états) | les mêmes, **5 760 états** (vitesse jusqu'à 345 km/h, bords jusqu'à 200 m, courbure du virage à 150 m) |
+| Réseaux | 2 × 64 | **2 × 256** (ablation PPO 2 × 64) ; γ = 0,995 |
+
+Rappels utiles pour expliquer : Q-Learning (hors politique) vise r + γ max Q(s', a') ; SARSA (sur
+politique) vise r + γ Q(s', a') avec a' l'action réellement jouée ; Monte-Carlo vise le retour complet
+G_t ; DQN = Q-Learning avec un réseau de neurones à la place de la table ; TQC = SAC avec des critiques
+distributionnels dont on retire les estimations les plus optimistes.
+
+## 9. Protocole d'évaluation
+
+- 3 graines (0, 1, 2) par condition ; évaluation **politique figée, déterministe**, 1 épisode par
+  (circuit, μ) depuis la ligne de départ ; μ ∈ {1,0 ; 0,8 ; 0,6}.
+- **Meilleur checkpoint** = meilleure évaluation faite **pendant l'entraînement**, sur les circuits
+  d'entraînement uniquement (les circuits de test ne servent jamais à choisir).
+- Fichiers : `results/eval.csv` (dernier checkpoint), `eval_best.csv` (meilleur), `eval_f1.csv`
+  (série v1 sur circuits F1), `eval_f1_v2.csv` (série v2, à venir), `eval_showcase.csv` (replays de démo).
+
+## 10. Résultats réels obtenus (série v1, modèle simplifié)
+
+Tous viennent de vrais runs (1 M de pas chacun, nuit du 20 au 21/11/2026), détaillés dans `JOURNAL.md`.
+Chiffres **après les corrections** de l'environnement (§ 12).
+
+**Circuits générés de test** (taux de tours, moyenne des 3 graines, meilleur checkpoint) :
+
+| Condition | μ 1,0 | μ 0,8 | μ 0,6 |
+|---|---|---|---|
+| Pilote classique / trajectoire idéale | 1,00 | 1,00 | 1,00 |
+| SAC | 0,87 | 0,60 | 0,00 |
+| PPO μ fixe | 0,60 | 0,13 | 0,00 |
+| PPO λ = 0 | 0,60 | 0,27 | 0,00 |
+| PPO μ aléatoire | 0,20 | **0,67** | **0,33** |
+| DQN | 0,33 | 0,27 | 0,20 |
+| Q-Learning / SARSA / Monte-Carlo | 0 | 0 | 0 |
+
+Lecture : SAC est le meilleur à adhérence normale ; PPO entraîné avec μ aléatoire est le plus robuste
+(la robustesse se paie en performance nominale) ; la pénalité de braquage λ ne change rien de net ;
+les méthodes tabulaires (768 états) échouent ; variance entre graines très forte (3 graines = tendances).
+Quand PPO boucle un tour, il est 4 à 5 % plus rapide que le pilote classique sur le même circuit et le
+même μ (rapport moyen 0,951 au dernier checkpoint, 0,964 au meilleur), car le classique ne vise que 90 %
+de la vitesse limite des virages.
+
+**Vrais circuits F1** (série v1) : pilote trajectoire idéale 24/24 tours, pilote classique 23/24, mais
+**aucun agent RL ne sait les piloter** (2 tours sur 576 essais ; ils parcourent 3 à 28 % du tour avant de
+sortir). Échec de généralisation : circuits d'entraînement trop réguliers (12 m de large, virages ≥ 19 m,
+pas de chicane) ; presque tous sortent à la 1re chicane de Monza (16 % du tour). → motivation de la série v2.
+
+## 11. Application et serveur
+
+- Lancer : `.venv/bin/uvicorn server.app:app --port 8000` puis http://localhost:8000 (application compilée)
+  ou `tools/start_app.sh` (développement, http://localhost:5173).
+- Modules : **Accueil** (projet et chiffres clés) ; **Race Simulator** (rejouer un épisode : circuit zoomable,
+  capteurs, profil de vitesse, trajectoire idéale, choix de la voiture) ; **AI Championship** (tous les
+  agents sur le même circuit, classement en direct) ; **Performance Analytics** (barres, robustesse, courbes
+  d'apprentissage, section circuits F1) ; **Neural Network Explorer** (schéma entrées → couches → sorties) ;
+  **Track Designer** ; **Training Center** (lancer et suivre un entraînement depuis le navigateur).
+- Sans serveur, l'application affiche des données factices `fixture_*.json` marquées « FIXTURE ».
+
+## 12. Défauts trouvés et corrigés (à savoir expliquer)
+
+1. **Checkpoint ignoré dans les virages serrés** : à l'intérieur d'un virage, la projection sur la ligne
+   centrale (polyligne) avance par sauts de 2 à 4 m à chaque sommet ; un checkpoint franchi pendant un saut
+   était pris pour un virage coupé → tolérance de 4 m (la récompense ne change pas).
+2. **Checkpoint posé sur un sommet** : à l'extérieur d'une courbe, la projection reste collée au sommet et
+   la position tombe pile sur le checkpoint ; le test strict « distance restante > 0 » avec l'arrondi des
+   flottants ne le comptait jamais → tolérance d'arrondi.
+   Les deux ont été trouvés en testant le pilote trajectoire idéale ; toutes les évaluations ont été refaites
+   (effet faible sur les agents, conclusions inchangées).
+3. **Premier essai de la série v2 (arrêté)** : PPO avait appris « plein gaz » (frein moyen 0,03), entrant
+   dans les virages à 230–290 km/h pour une limite de 50–160 km/h. Causes : horizon trop court (γ = 0,99 ≈
+   5 s), sortie trop peu chère à grande vitesse, gaz et frein séparés et bruités. Corrections : γ = 0,995,
+   sortie −(10 + 0,01 v²), action « pédale ».
+
+## 13. Série v2 : ce qui reste à faire
+
+- 13 conditions × 3 graines (`configs/*_f1*_s{0,1,2}.yaml`), voiture F1, 17 circuits réels, départs
+  aléatoires. Débits mesurés sur le PC (i3-1115G4) : PPO ≈ 1 440 pas/s (4 environnements), DQN ≈ 1 380,
+  tabulaires ≈ 2 600, Deep SARSA ≈ 410, TD3 ≈ 185, QR-DQN ≈ 175, SAC ≈ 130, TQC ≈ 66.
+- Durée : ≈ 5 h 30 par graine en 3 files parallèles (`tools/run_v2.sh 0` puis `tools/run_v2.sh`).
+  **Pas encore lancé** : l'étudiant donnera le signal. Ensuite : `python -m tools.evaluate_f1 --series v2`
+  (agents + 2 pilotes de référence sur les 8 circuits F1, 6 000 pas max par épisode) et
+  `python -m tools.plots --series v2`.
+- Sur un essai court de 400 000 pas, la voiture roule mais ne boucle pas encore de tour : on ne sait pas
+  encore si les agents seront bons ; il faut les vrais entraînements.
+
+## 14. Limites à dire honnêtement
+
+3 graines seulement (forte variance) ; un épisode déterministe par circuit et μ (départ fixe) ; modèle de
+voiture simplifié malgré l'aéro (pas de transfert de charge, pas de modèle de pneu détaillé, pas d'usure) ;
+trajectoire de courbure minimale ≠ trajectoire de temps minimal exacte ; tracés TUM de ~2019 (Barcelone et
+Zandvoort ont changé depuis) ; les pilotes de référence connaissent μ, pas les agents.
+
+## 15. Format des fichiers (contrat de données)
+
+`track.json` (f1rl.track/1.0), `config.yaml` (f1rl.config/**1.3** : 1.1 = SARSA/Monte-Carlo, 1.2 =
+`env.car` et `env.random_start`, 1.3 = action `pedal`, `reward.k_offtrack_speed`, nouveaux algorithmes),
+`replay.json` (f1rl.replay/1.3), `progress.csv`, `eval.csv`. Les anciennes versions restent valides tant
+qu'elles n'utilisent pas les nouveautés. Validation : `python tools/validate.py <fichiers>`.

@@ -76,3 +76,34 @@ enregistrées pour les réseaux). Ce sont de vraies évaluations ; elles ne serv
 | PPO sans pénalité (λ = 0) | ppo_multi_mufixe_s0_20261121-0020 | 5 |
 | PPO μ fixe | ppo_multi_mufixe_s2_20261121-0123 | 4 |
 | Q-Learning, SARSA, Monte-Carlo | s0 de chaque | 0 |
+
+## Circuits de F1 réels (21/11/2026, `python -m tools.evaluate_f1`, après correction des checkpoints)
+
+8 circuits (TUM racetrack-database, jamais vus à l'entraînement) × μ ∈ {1,0 ; 0,8 ; 0,6}, 1 épisode
+déterministe, 6 000 pas maximum ; 24 runs (meilleur checkpoint) + pilote classique + pilote trajectoire
+idéale (`raceline_ref`). Résultats : `results/eval_f1.csv`.
+
+| Agent | Tours bouclés | Distance moyenne avant l'arrêt (meilleure graine, 24 épisodes) |
+|---|---|---|
+| Pilote trajectoire idéale | 24 / 24 | 99,9 % |
+| Pilote classique | 23 / 24 (sortie à Monza, μ 0,6) | 96,5 % |
+| PPO μ aléatoire | 0 / 72 | 27,9 % |
+| SAC | 1 / 72 | 25,5 % |
+| Q-Learning | 1 / 72 (Red Bull Ring, μ 1,0) | 21,0 % |
+| DQN | 0 / 72 | 18,6 % |
+| SARSA | 0 / 72 | 16,6 % |
+| PPO sans pénalité (λ = 0) | 0 / 72 | 15,6 % |
+| PPO μ fixe | 0 / 72 | 15,5 % |
+| Monte-Carlo | 0 / 72 | 3,2 % |
+
+Temps au tour du pilote trajectoire idéale, μ 1,0 (s) : Red Bull Ring 110,2 ; Zandvoort 127,8 ;
+Hungaroring 133,0 ; Barcelone 134,7 ; Monza 136,2 ; Silverstone 152,8 ; Suzuka 155,4 ; Spa 177,6.
+Il est plus rapide que le pilote classique sur tous les circuits et à toutes les adhérences
+(de 4,5 % à Monza à 11,6 % à Silverstone, à μ 1,0).
+
+Décision / lecture : échec de généralisation des agents RL sur les vrais circuits, alors que les deux
+pilotes de référence y roulent sans problème (l'environnement n'est pas en cause). Causes probables :
+pistes plus étroites (7,5 à 18 m, contre 12 m partout à l'entraînement), virages plus serrés (rayons de
+10 à 18 m, contre 19 m au minimum) et chicanes après de longues lignes droites (ex. 16 % du tour à Monza
+pour presque tous les agents : la première chicane, abordée à pleine vitesse). Piste : entraîner sur des
+circuits générés plus variés (largeur, rayons, chicanes), ou sur une partie des circuits F1.

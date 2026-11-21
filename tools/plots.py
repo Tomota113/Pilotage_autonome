@@ -27,7 +27,7 @@ matplotlib.use("Agg")  # pas de fenêtre : fichiers PNG seulement
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from tools.evaluate_all import CLASSIC_RUN_ID, find_runs  # noqa: E402
+from tools.evaluate_all import REFERENCE_RUN_IDS, find_runs  # noqa: E402
 from tools.make_configs import CONDITIONS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -45,6 +45,9 @@ STYLE = {
     "montecarlo_mufixe": ("#e34948", "*"),
 }
 CLASSIC_COLOR = "#52514e"  # gris : référence, pas une série comparée
+# Pilotes de référence (sans apprentissage) : tracés en lignes de référence, pas en séries
+REFERENCES = (("classic", "pilote classique", CLASSIC_COLOR, "--"),
+              ("raceline", "pilote trajectoire idéale", "#0b0b0b", ":"))
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 
 
@@ -90,7 +93,7 @@ def load_eval(runs_dir: Path, eval_csv: Path) -> pd.DataFrame:
         return pd.DataFrame()
     df = pd.read_csv(eval_csv)
     conditions = {run_dir.name: condition for condition, _, run_dir in find_runs(runs_dir)}
-    conditions[CLASSIC_RUN_ID] = "classic"
+    conditions.update({run_id: name for name, run_id in REFERENCE_RUN_IDS.items()})
     df["condition"] = df["run_id"].map(conditions)
     df = df[df["condition"].notna()].copy()
     df["lap"] = (df["outcome"] == "lap").astype(float)
@@ -158,7 +161,7 @@ def _per_seed(df: pd.DataFrame, value: str) -> pd.DataFrame:
     return per_seed.groupby("condition")[value].agg(["mean", "std", "count"]).fillna(0.0)
 
 
-def _bars(stats: pd.DataFrame, classic: float | None, title: str, ylabel: str, source: str,
+def _bars(stats: pd.DataFrame, refs: dict, title: str, ylabel: str, source: str,
           out: Path, name: str, written: list[Path], ylim=None) -> None:
     fig, ax = _setup(title, "condition", ylabel, source)
     order = _ordered(stats.index)
@@ -169,10 +172,13 @@ def _bars(stats: pd.DataFrame, classic: float | None, title: str, ylabel: str, s
         ax.errorbar(k, row["mean"], yerr=row["std"], color=INK, capsize=4, linewidth=1)
         ax.annotate(f"{row['mean']:.2f}", (k, row["mean"]), textcoords="offset points", xytext=(10, 3),
                     fontsize=8, color=INK)
-    if classic is not None:
-        ax.axhline(classic, color=CLASSIC_COLOR, linestyle="--", linewidth=1.5)
+    for ref, label, color, style in REFERENCES:  # « ref » : ne pas écraser « name » (nom du fichier)
+        if refs.get(ref) is None:
+            continue
+        value = refs[ref]
+        ax.axhline(value, color=color, linestyle=style, linewidth=1.5)
         # Étiquette au bord droit du graphique (x en fraction des axes, y en données)
-        ax.annotate(f"pilote classique : {classic:.2f}", xy=(1.0, classic), xycoords=("axes fraction", "data"),
+        ax.annotate(f"{label} : {value:.2f}", xy=(1.0, value), xycoords=("axes fraction", "data"),
                     textcoords="offset points", xytext=(0, 4), ha="right", fontsize=8, color=MUTED)
     ax.set_xticks(range(len(order)), [f"{c} ({int(stats.loc[c, 'count'])} gr.)" for c in order], fontsize=7,
                   rotation=20, ha="right")
@@ -194,10 +200,11 @@ def _robustness(test: pd.DataFrame, value: str, ylabel: str, name: str, out: Pat
         dodge = 0.0035 * (k - (len(conditions) - 1) / 2)  # léger décalage : barres d'erreur lisibles
         ax.errorbar(stats.index + dodge, stats["mean"], yerr=stats["std"], color=color, marker=marker,
                     markersize=7, linewidth=2, capsize=3, label=condition)
-    c = test[test["condition"] == "classic"].groupby("mu_factor")[value].mean()
-    if not c.empty:
-        ax.plot(c.index, c.values, color=CLASSIC_COLOR, linestyle="--", marker="x", linewidth=1.5,
-                label="pilote classique (connaît μ)")
+    for ref, label, color, style in REFERENCES:
+        c = test[test["condition"] == ref].groupby("mu_factor")[value].mean()
+        if not c.empty:
+            ax.plot(c.index, c.values, color=color, linestyle=style, marker="x", linewidth=1.5,
+                    label=f"{label} (connaît μ)")
     if ylim:
         ax.set_ylim(*ylim)
     ax.invert_xaxis()  # de l'adhérence normale vers la piste glissante
@@ -208,21 +215,24 @@ def _robustness(test: pd.DataFrame, value: str, ylabel: str, name: str, out: Pat
 
 def plot_eval(ev: pd.DataFrame, out: Path, written: list[Path], src: str = "results/eval.csv") -> None:
     """Evaluation figures; ``src`` names the eval file in the captions (eval.csv or eval_best.csv)."""
-    agents = ev[ev["condition"] != "classic"]
-    classic = ev[ev["condition"] == "classic"]
+    agents = ev[~ev["condition"].isin([name for name, *_ in REFERENCES])]
     test1 = agents[(agents["split"] == "test") & (agents["mu_factor"] == 1.0)]
-    classic_test1 = classic[(classic["split"] == "test") & (classic["mu_factor"] == 1.0)]
+    refs_test1 = ev[(ev["split"] == "test") & (ev["mu_factor"] == 1.0)]
     which = "meilleur checkpoint" if "best" in src else "dernier checkpoint"
     source = f"{src} (politique figée, {which}), circuits de test, μ = 1,0"
 
+    def ref_values(df: pd.DataFrame, column: str) -> dict:
+        """Mean of ``column`` for each reference driver present in ``df``."""
+        return {name: df[df["condition"] == name][column].mean() for name, *_ in REFERENCES
+                if (df["condition"] == name).any()}
+
     if not test1.empty:
-        _bars(_per_seed(test1, "lap"), classic_test1["lap"].mean() if not classic_test1.empty else None,
+        _bars(_per_seed(test1, "lap"), ref_values(refs_test1, "lap"),
               "Taux de tours valides, circuits de test, μ = 1,0", "taux de tours", source,
               out, "laps_test_mu1.png", written, ylim=(0, 1.05))
         laps = test1[test1["outcome"] == "lap"]
-        classic_laps = classic_test1[classic_test1["outcome"] == "lap"]
         if not laps.empty:
-            _bars(_per_seed(laps, "lap_time"), classic_laps["lap_time"].mean() if not classic_laps.empty else None,
+            _bars(_per_seed(laps, "lap_time"), ref_values(refs_test1[refs_test1["outcome"] == "lap"], "lap_time"),
                   "Temps au tour moyen (tours valides seulement), circuits de test, μ = 1,0", "temps au tour (s)",
                   source, out, "lap_time_test_mu1.png", written)
 

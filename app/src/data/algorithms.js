@@ -16,6 +16,8 @@ export const ALGO_LABELS = {
 export const CONDITIONS = [
   { id: "classic", label: "Pilote classique", short: "Classique", color: "#a3a29b",
     help: "Référence sans apprentissage : il connaît le circuit et l'adhérence." },
+  { id: "raceline", label: "Pilote trajectoire idéale", short: "Idéal", color: "#e8e9ec",
+    help: "Référence : suit la trajectoire de courbure minimale à la vitesse maximale permise par l'adhérence." },
   { id: "sac_mufixe", label: "SAC", short: "SAC", color: "#c98500",
     help: "Deep RL, actions continues, entraîné à adhérence normale." },
   { id: "ppo_mufixe", label: "PPO", short: "PPO", color: "#3987e5",

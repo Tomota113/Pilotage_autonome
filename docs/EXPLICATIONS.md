@@ -231,3 +231,29 @@ points à bien comprendre pour pouvoir les défendre.
   phrase qui décrit l'instant. Training Center (Codex) : préréglages, mode avancé repliable.
 - `GET /replays` liste tous les replays avec leur condition ; `tools/make_showcase.py` enregistre une
   vraie course par agent sur chaque circuit de test.
+
+## Circuits de F1 réels et pilote trajectoire idéale (21/11/2026)
+
+- 8 vrais circuits (Monza, Spa, Silverstone, Suzuka, Hungaroring, Barcelone, Red Bull Ring, Zandvoort),
+  convertis depuis la base publique de l'Université technique de Munich (ligne centrale lissée et
+  largeurs mesurées sur images satellite, licence LGPL-3.0). Les longueurs correspondent aux vraies
+  (Monza 5 793 m, Spa 7 005 m…). Aucun agent ne les a vus pendant l'entraînement.
+- Trajectoire idéale (`sim/raceline.py`) : on décale chaque point de la ligne centrale pour minimiser la
+  somme des courbures au carré, sans sortir de la piste (marge de 1,6 m). C'est un problème quadratique
+  sous bornes, résolu exactement par une méthode à ensemble actif (moins d'1 s par circuit), itéré
+  3 fois avec rééchantillonnage, car la différence seconde ne mesure la courbure que si les points sont
+  également espacés. Résultat : virages élargis (Monza : rayon minimal 11 → 18 m).
+- Profil de vitesse : la vitesse maximale en chaque point avec la physique de `sim/car.py` (limite
+  v² κ ≤ μ g en virage, accélération a_max − c_d v², freinage μ g + c_d v²), par une passe avant et une
+  passe arrière. Le temps au tour qui en découle est une borne théorique pour notre voiture (tour lancé).
+- Pilote trajectoire idéale (`agents/raceline_driver.py`) : poursuite de cible sur cette ligne, vitesse
+  visée = 97 % du profil, recalculé pour l'adhérence (il connaît μ, comme le pilote classique). Il boucle
+  les 24 tours (8 circuits × 3 μ) et bat partout le pilote classique ; il reste ≈ 11 % au-dessus du temps
+  théorique (départ arrêté, marge de 3 %, suivi imparfait).
+- Défaut corrigé dans l'environnement en le testant : à l'intérieur d'un virage serré, la projection sur
+  la ligne centrale avance par sauts de 2 à 4 m à chaque sommet ; un checkpoint franchi pendant un de ces
+  sauts était ignoré (tour jamais validé). La validation tolère désormais 4 m de saut (la récompense ne
+  change pas) ; un vrai virage coupé fait sauter la projection de plusieurs dizaines de mètres. Les
+  évaluations ont été refaites après cette correction.
+- Sur F1, épisodes de 6 000 pas maximum (un tour de Spa dure plus de 150 s) : les agents ne perçoivent
+  pas le temps, leur comportement n'en dépend pas.

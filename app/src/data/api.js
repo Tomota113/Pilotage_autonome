@@ -45,6 +45,20 @@ export async function loadTrack(id) {
   return fetchJSON(`/files/tracks/${encodeURIComponent(id)}.json`);
 }
 
+export async function loadRaceline(trackId, mu) {
+  if ((await getMode()) === "fixtures") return null;
+  return fetchJSON(`/tracks/${encodeURIComponent(trackId)}/raceline?${new URLSearchParams({ mu })}`);
+}
+
+export async function loadF1Eval() {
+  if ((await getMode()) === "fixtures") return [];
+  const url = "/files/results/eval_f1.csv";
+  const response = await fetch(url);
+  if (response.status === 404) return [];
+  if (!response.ok) throw new Error(`${url} : ${response.status}`);
+  return parseCSV(await response.text());
+}
+
 export async function loadEval() {
   if ((await getMode()) === "fixtures") return fetchJSON(FIXTURES + (await manifest()).eval);
   try {

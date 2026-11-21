@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CONDITIONS, OUTCOME_LABELS, conditionLabel, muLabel } from "../data/algorithms.js";
 import { listReplays } from "../data/api.js";
 import { usePlayback } from "../playback.jsx";
+import TrackOptions from "./TrackOptions.jsx";
 
 export { replayTitle as replayLabel } from "../data/algorithms.js";
 
@@ -62,7 +63,7 @@ export default function ReplayPicker({ onlyWithActivations = false }) {
       </label>
       <label className="field">Circuit
         <select value={track} onChange={(e) => choose(condition, e.target.value, shown?.mu_factor ?? 1)}>
-          {tracks.map((t) => <option key={t} value={t}>{t}</option>)}
+          <TrackOptions ids={tracks} />
         </select>
       </label>
       <label className="field">Adhérence

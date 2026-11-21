@@ -136,6 +136,8 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .analytics-filters { flex-wrap: wrap; padding: 4px 2px; }
 .analytics-filters .module-field { flex: 0 0 auto; }
 .analytics-metric { width: fit-content; max-width: 100%; }
+.f1-table { overflow-x: auto; }
+.f1-table tbody th, .f1-table td { white-space: nowrap; }
 
 @media (max-width: 900px) {
   .layout { flex-direction: column; }

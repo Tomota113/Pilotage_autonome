@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import LineChart, { formatNumber, formatPercent } from "../components/charts/LineChart.jsx";
 import { identifyCondition } from "../components/charts/RunCondition.jsx";
 import { CONDITIONS, conditionColor, conditionLabel, muLabel } from "../data/algorithms.js";
-import { getMode, listRuns, loadBestEval, loadEval, loadProgress } from "../data/api.js";
+import { getMode, listRuns, listTracks, loadBestEval, loadEval, loadF1Eval, loadProgress } from "../data/api.js";
+import { formatLapTimeGap, identifyF1Rows, isF1Track, lapTimeGap } from "../data/f1.js";
 
 const MUS = [1, 0.8, 0.6];
+const CONDITION_ORDER = new Map(CONDITIONS.map(({ id }, index) => [id, index]));
 const DEFAULT_CONDITIONS = ["classic", "sac_mufixe", "ppo_mufixe", "ppo_mualea", "dqn_mufixe"];
 const MAX_CONDITIONS = 5;
 const MAX_SEEDS_PER_CHART = 6;
@@ -107,8 +109,8 @@ function StatTile({ label, entry, detail }) {
   </div>;
 }
 
-function Bars({ entries }) {
-  return <div className="stack" role="list" aria-label="Taux de tours bouclés par condition" aria-describedby="bars-guide">
+function Bars({ entries, descriptionId }) {
+  return <div className="stack" role="list" aria-label="Taux de tours bouclés par condition" aria-describedby={descriptionId}>
     {entries.map((entry) => {
       const { condition, rate, min, max, seeds, episodes } = entry;
       const width = `${rate * 100}%`;
@@ -137,6 +139,78 @@ function Bars({ entries }) {
       );
     })}
   </div>;
+}
+
+function F1Results() {
+  const [result, setResult] = useState(null);
+  const [mu, setMu] = useState(1);
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      const rows = await loadF1Eval();
+      if (!rows.length) return { rows, tracks: [] };
+      const [runs, tracks] = await Promise.all([listRuns(), listTracks()]);
+      return { rows: identifyF1Rows(rows, runs), tracks };
+    }
+    load().then((data) => { if (active) setResult(data); })
+      .catch(() => { if (active) setResult({ error: true }); });
+    return () => { active = false; };
+  }, []);
+
+  const rows = result?.rows ?? [];
+  const conditions = [...new Set(rows.map(({ condition }) => condition).filter(Boolean))];
+  conditions.sort((a, b) => (CONDITION_ORDER.get(a) ?? CONDITIONS.length) - (CONDITION_ORDER.get(b) ?? CONDITIONS.length)
+    || conditionLabel(a).localeCompare(conditionLabel(b), "fr"));
+  const names = new Map((result?.tracks ?? []).map(({ id, name }) => [id, name]));
+  const trackIds = [...new Set([...names.keys()].filter(isF1Track).concat(rows.map(({ track_id }) => track_id)))]
+    .sort((a, b) => (names.get(a) ?? a).localeCompare(names.get(b) ?? b, "fr"));
+  const selected = rows.filter((row) => Number(row.mu_factor) === mu);
+  const bars = aggregateEvaluation(selected).sort((a, b) => b.rate - a.rate || conditions.indexOf(a.condition) - conditions.indexOf(b.condition));
+
+  return <section className="card" aria-labelledby="f1-title">
+    <h3 className="card-title" id="f1-title">Circuits de F1 réels</h3>
+    <p className="note">Les agents n’ont jamais vu ces circuits pendant l’apprentissage. Le pilote trajectoire idéale sert de référence.</p>
+    {!result ? <p role="status">Chargement de l’évaluation F1…</p>
+      : result.error ? <p className="warn" role="alert">Impossible de charger l’évaluation F1.</p>
+      : !rows.length ? <p className="empty">L’évaluation sur les circuits de F1 n’a pas encore été lancée.</p>
+      : <>
+        <div className="controls">
+          <div className="segmented" role="group" aria-label="Adhérence sur les circuits de F1">
+            {MUS.map((value) => <button key={value} type="button" title={muLabel(value)}
+              className={mu === value ? "on" : ""} aria-pressed={mu === value} onClick={() => setMu(value)}>{muTick(value)}</button>)}
+          </div>
+          <span className="note">{muLabel(mu).split(" (")[0]}</span>
+        </div>
+        <p className="note">Temps moyens des tours bouclés. Un écart positif indique un tour plus lent que celui du pilote idéal.</p>
+        <div className="f1-table" role="region" aria-label="Temps au tour sur les circuits de F1" tabIndex={0}>
+          <table>
+            <thead><tr>
+              <th scope="col">Circuit</th>
+              {conditions.map((id) => <th scope="col" key={id} className="num">{conditionLabel(id)}</th>)}
+            </tr></thead>
+            <tbody>{trackIds.map((id) => {
+              const laps = new Map(aggregateEvaluation(selected.filter((row) => row.track_id === id))
+                .map(({ condition, lapTime }) => [condition, lapTime]));
+              return <tr key={id}>
+                <th scope="row">{names.get(id) ?? id}</th>
+                {conditions.map((condition) => {
+                  const time = laps.get(condition);
+                  const gap = lapTimeGap(time, laps.get("raceline"));
+                  const tone = gap > 0 ? "bad" : gap < 0 ? "good" : "";
+                  return <td key={condition} className="num">
+                    {time > 0 ? <>{displayNumber(time)} s <span className={`chip ${tone}`}>{gap == null ? "—" : formatLapTimeGap(gap)}</span></> : "—"}
+                  </td>;
+                })}
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>
+        <h4 className="card-title" style={{ marginTop: 20 }}>Tours bouclés sur les 8 circuits F1</h4>
+        <p className="note" id="f1-bars-guide">Part des essais où chaque agent boucle un tour, à l’adhérence choisie. Chaque graine compte autant.</p>
+        {bars.length ? <Bars entries={bars} descriptionId="f1-bars-guide" /> : <p className="empty">Aucun résultat à cette adhérence.</p>}
+      </>}
+  </section>;
 }
 
 function Robustness({ entries, wanted, setWanted }) {
@@ -373,10 +447,11 @@ export default function Analytics({ mode }) {
           </div>
           <p className="note" id="bars-guide"><strong>Comment lire ce graphique.</strong> Plus la barre est longue, plus l’agent boucle de tours.
             Le trait blanc va du taux le plus bas au plus haut quand plusieurs graines sont disponibles.</p>
-          {bars.length ? <Bars entries={bars} /> : <p className="empty">Aucun test à cette adhérence.</p>}
+          {bars.length ? <Bars entries={bars} descriptionId="bars-guide" /> : <p className="empty">Aucun test à cette adhérence.</p>}
         </section>
-        <Robustness entries={test} wanted={wanted} setWanted={setWanted} />
       </>}
+    <F1Results />
+    {entries.length > 0 && <Robustness entries={test} wanted={wanted} setWanted={setWanted} />}
     <Learning sources={sources} metric={metric} setMetric={setMetric} error={learningError} />
     {entries.length > 0 && <>
       <EvaluationDetails entries={entries} />

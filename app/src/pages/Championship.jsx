@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import TrackCanvas from "../components/TrackCanvas.jsx";
+import TrackOptions from "../components/TrackOptions.jsx";
+import { RacelineToggle, useRacelineOverlay } from "../components/RacelineOverlay.jsx";
 import { CONDITIONS, OUTCOME_LABELS, conditionColor, conditionLabel } from "../data/algorithms.js";
 import { listReplays, loadReplay, loadTrack } from "../data/api.js";
+import { isF1Track } from "../data/f1.js";
 import { SPEEDS } from "../playback.jsx";
 
 const ORDER = Object.fromEntries(CONDITIONS.map((c, i) => [c.id, i]));
@@ -24,13 +27,13 @@ export default function Championship() {
   const [all, setAll] = useState(null);
   const [trackId, setTrackId] = useState(null);
   const [mu, setMu] = useState(1);
-  const [track, setTrack] = useState(null);
-  const [racers, setRacers] = useState([]); // [{condition, entry, replay}]
+  const [race, setRace] = useState(null);
   const [hidden, setHidden] = useState(new Set());
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(2);
   const [showTrails, setShowTrails] = useState(false);
+  const ideal = useRacelineOverlay(trackId, mu);
 
   useEffect(() => { listReplays().then(setAll).catch(() => setAll([])); }, []);
   const tracks = useMemo(() => {
@@ -38,7 +41,12 @@ export default function Championship() {
     for (const r of all ?? []) if (r.condition) count[r.track_id] = (count[r.track_id] ?? new Set()).add(r.condition);
     return Object.entries(count).filter(([, s]) => s.size >= 2).map(([t]) => t).sort();
   }, [all]);
-  useEffect(() => { if (!trackId && tracks.length) setTrackId(tracks.includes("gen_10") ? "gen_10" : tracks[0]); }, [tracks, trackId]);
+  useEffect(() => {
+    if (!trackId && tracks.length) {
+      const f1 = tracks.includes("f1_monza") ? "f1_monza" : tracks.find(isF1Track);
+      setTrackId(f1 ?? (tracks.includes("gen_10") ? "gen_10" : tracks[0]));
+    }
+  }, [tracks, trackId]);
 
   // Chargement du circuit et de la meilleure course de chaque agent
   useEffect(() => {
@@ -46,19 +54,25 @@ export default function Championship() {
     let cancelled = false;
     setPlaying(false);
     setTime(0);
-    loadTrack(trackId).then((t) => !cancelled && setTrack(t));
     const byCondition = {};
     for (const r of all) {
       if (r.track_id === trackId && Number(r.mu_factor) === mu && r.condition) (byCondition[r.condition] ??= []).push(r);
     }
     const entries = Object.entries(byCondition).map(([condition, list]) => ({ condition, entry: bestOf(list) }))
       .sort((a, b) => (ORDER[a.condition] ?? 99) - (ORDER[b.condition] ?? 99));
-    Promise.all(entries.map(async (e) => ({ ...e, replay: await loadReplay(e.entry.path) }))).then((loaded) => {
-      if (!cancelled) setRacers(loaded);
+    Promise.all([
+      loadTrack(trackId),
+      Promise.all(entries.map(async (e) => ({ ...e, replay: await loadReplay(e.entry.path) }))),
+    ]).then(([track, racers]) => {
+      if (!cancelled) setRace({ trackId, mu, track, racers });
+    }).catch(() => {
+      if (!cancelled) setRace({ trackId, mu, error: true });
     });
     return () => { cancelled = true; };
   }, [trackId, mu, all]);
 
+  const current = race?.trackId === trackId && race?.mu === mu ? race : null;
+  const racers = current?.racers ?? [];
   const visible = racers.filter((r) => !hidden.has(r.condition));
   const duration = useMemo(() => Math.max(0, ...visible.map((r) => r.replay.frames.at(-1).t)), [visible]);
 
@@ -107,7 +121,7 @@ export default function Championship() {
           <div className="controls">
             <label className="field">Circuit
               <select value={trackId ?? ""} onChange={(e) => setTrackId(e.target.value)}>
-                {tracks.map((t) => <option key={t} value={t}>{t}</option>)}
+                <TrackOptions ids={tracks} />
               </select>
             </label>
             <div className="field" style={{ fontSize: 12.5, color: "var(--muted)" }}>Adhérence
@@ -122,7 +136,9 @@ export default function Championship() {
           </div>
           <div className="row">
             <div className="grow card" style={{ padding: 10 }}>
-              <TrackCanvas track={track} cars={cars} trails={trails} height={580} />
+              {current?.track ? <TrackCanvas track={current.track} cars={cars} trails={trails} draw={ideal.draw} height={580} />
+                : current?.error ? <p className="warn" role="alert">Impossible de charger cette course.</p>
+                : <p role="status">Chargement de la course…</p>}
               <div className="controls">
                 <button className="primary" onClick={() => { if (time >= duration) setTime(0); setPlaying(!playing); }}
                         disabled={!visible.length}>{playing ? "Pause" : time > 0 && time < duration ? "Reprendre" : "Départ"}</button>
@@ -133,6 +149,7 @@ export default function Championship() {
                        onChange={(e) => { setPlaying(false); setTime(Number(e.target.value)); }} aria-label="Curseur temporel" />
                 <span className="note">{time.toFixed(1)} s</span>
                 <label className="note"><input type="checkbox" checked={showTrails} onChange={(e) => setShowTrails(e.target.checked)} /> trajectoires</label>
+                <RacelineToggle {...ideal} />
               </div>
             </div>
             <div className="card" style={{ width: 380 }}>

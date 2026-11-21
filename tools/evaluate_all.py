@@ -12,7 +12,8 @@ Usage : ``python -m tools.evaluate_all [--checkpoint last|best] [--mu 1.0 0.8 0.
   récent. Les circuits de test ne servent donc pas au choix. Les méthodes tabulaires ne
   sauvegardent que leur table finale : pour elles, meilleur = dernier ;
 - circuits : ceux d'entraînement et de test de la config, pour comparer train / test ;
-- le pilote classique (run_id ``classic_ref``) roule sur les mêmes circuits et μ ;
+- le pilote classique (``classic_ref``) et le pilote trajectoire idéale (``raceline_ref``)
+  roulent sur les mêmes circuits et μ ;
 - replays de démonstration : premier circuit de test, à chaque μ, avec les
   activations pour les réseaux ; les autres épisodes ne remplissent que eval.csv.
 
@@ -34,6 +35,8 @@ from tools.make_configs import TEST_TRACKS, TRAIN_TRACKS, condition_of
 ROOT = Path(__file__).resolve().parent.parent
 MU_FACTORS = (1.0, 0.8, 0.6)
 CLASSIC_RUN_ID = "classic_ref"
+RACELINE_RUN_ID = "raceline_ref"
+REFERENCE_RUN_IDS = {"classic": CLASSIC_RUN_ID, "raceline": RACELINE_RUN_ID}  # pilotes sans apprentissage
 
 
 def last_checkpoint(run_dir: Path) -> Path | None:
@@ -83,11 +86,11 @@ def evaluate_all(runs_dir: Path, out: Path, mu_factors=MU_FACTORS,
     others = [t for t in list(train_tracks) + list(test_tracks) if t != demo_track]
 
     choose = {"last": last_checkpoint, "best": best_checkpoint}[checkpoint]
-    agents = [("classic", "classic")] + [(str(choose(run_dir)), f"{cond} s{seed}")
-                                         for cond, seed, run_dir in find_runs(runs_dir)]
+    agents = [("classic", "classic"), ("raceline", "raceline")]
+    agents += [(str(choose(run_dir)), f"{cond} s{seed}") for cond, seed, run_dir in find_runs(runs_dir)]
     n_rows = 0
     for agent, label in agents:
-        run_id = CLASSIC_RUN_ID if agent == "classic" else None  # sinon : run_id lu dans le chemin du checkpoint
+        run_id = REFERENCE_RUN_IDS.get(agent)  # sinon : run_id lu dans le chemin du checkpoint
         print(f"{label} : {agent}", flush=True)
         # Replays de démonstration (avec activations), puis le reste sans replay
         rows = evaluate(agent, [demo_track], list(mu_factors), run_id=run_id, with_activations=True,

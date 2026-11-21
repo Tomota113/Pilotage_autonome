@@ -1,10 +1,13 @@
 import { useMemo } from "react";
 import TrackCanvas, { speedColor } from "../components/TrackCanvas.jsx";
 import ReplayPicker from "../components/ReplayPicker.jsx";
+import { RacelineToggle, useRacelineOverlay } from "../components/RacelineOverlay.jsx";
 import { CONDITION_BY_ID, OUTCOME_LABELS, conditionColor, conditionLabel, muLabel } from "../data/algorithms.js";
+import { formatLapTimeGap, lapTimeGap } from "../data/f1.js";
 import { PlaybackControls, usePlayback } from "../playback.jsx";
 
 const SENSOR_NAMES = ["−90°", "−60°", "−30°", "0°", "+30°", "+60°", "+90°"];
+const TIME = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 function Gauge({ label, value, min = 0, color, left: leftLabel, right: rightLabel }) {
   // Jauge horizontale : de 0 à 1, ou de -1 à 1 centrée (direction)
@@ -55,6 +58,9 @@ function SpeedProfile({ frames, index, onSeek }) {
 
 export default function RaceSimulator() {
   const { entry, replay, track, index, setIndex, setPlaying } = usePlayback();
+  const ideal = useRacelineOverlay(replay?.track_id, replay?.mu_factor, true);
+  const idealTime = ideal.line?.lap_time_s;
+  const gap = replay?.summary.outcome === "lap" ? lapTimeGap(replay.summary.lap_time, idealTime) : null;
   const frame = replay?.frames[index];
   const trail = useMemo(() => {
     if (!replay) return null;
@@ -76,10 +82,11 @@ export default function RaceSimulator() {
         <div className="row">
           <div className="grow stack">
             <div className="card" style={{ padding: 10 }}>
-              <TrackCanvas track={track} trails={[{ ...trail, width: 3 }]}
+              <TrackCanvas track={track} trails={[{ ...trail, width: 3 }]} draw={ideal.draw}
                            cars={[{ x: frame.x, y: frame.y, psi: frame.psi, color, label: CONDITION_BY_ID[condition]?.short }]}
                            rays={{ x: frame.x, y: frame.y, psi: frame.psi, distances: frame.sensors_m }} height={560} />
               <PlaybackControls />
+              <div className="controls"><RacelineToggle {...ideal} /></div>
             </div>
             <div className="card">
               <div className="card-title">Vitesse au cours de l'épisode <span className="hint">clic = aller à cet instant</span></div>
@@ -122,7 +129,10 @@ export default function RaceSimulator() {
                 <span className={`chip ${replay.summary.outcome === "lap" ? "good" : "bad"}`}>{OUTCOME_LABELS[replay.summary.outcome]}</span>
                 {replay.summary.lap_time != null && <> en <strong>{replay.summary.lap_time.toFixed(1)} s</strong></>}
               </p>
-              <p className="note">{muLabel(replay.mu_factor)} · circuit {replay.track_id} · checkpoint {replay.agent.checkpoint}
+              {idealTime != null && <p className="note">Temps idéal théorique : <strong>{TIME.format(idealTime)} s</strong>
+                {gap != null && <> · Écart : <strong>{formatLapTimeGap(gap)}</strong></>}
+              </p>}
+              <p className="note">{muLabel(replay.mu_factor)} · {track.name ?? replay.track_id} · checkpoint {replay.agent.checkpoint}
                 {replay.agent.train_steps ? ` (${replay.agent.train_steps.toLocaleString("fr-FR")} pas d'entraînement)` : ""}</p>
             </div>
           </div>

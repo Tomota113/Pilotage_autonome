@@ -37,7 +37,9 @@ def test_demo_oval_is_a_stadium():
 
 def test_committed_tracks_match_the_generator():
     """Les fichiers de tracks/ sont exactement ceux que produit le générateur."""
-    expected = {f"gen_{k:02d}" for k in range(15)} | {"demo_oval"}
+    from tools.import_f1_tracks import CIRCUITS
+
+    expected = {f"gen_{k:02d}" for k in range(15)} | {"demo_oval"} | {tid for tid, _ in CIRCUITS.values()}
     files = {p.stem: p for p in TRACKS_DIR.glob("*.json")}
     assert set(files) == expected
     for track_id, path in files.items():
@@ -47,3 +49,13 @@ def test_committed_tracks_match_the_generator():
             seed = int(track_id[4:])
             assert data["split"] == ("train" if seed < 10 else "test")
             assert data == generate_track(seed, data["split"])
+
+
+def test_committed_f1_tracks_match_the_importer():
+    """tracks/f1_*.json = conversion exacte des CSV de data/f1_tracks_tum/ (TUM, LGPL-3.0)."""
+    from tools.import_f1_tracks import CIRCUITS, RAW, convert
+
+    for stem, (track_id, name) in CIRCUITS.items():
+        data = json.loads((TRACKS_DIR / f"{track_id}.json").read_text(encoding="utf-8"))
+        assert data == convert(RAW / f"{stem}.csv", track_id, name)
+        assert data["split"] == "test" and data["name"] == name

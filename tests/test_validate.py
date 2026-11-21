@@ -133,7 +133,7 @@ def test_script_validates_committed_tracks():
     tracks = sorted(str(p) for p in (ROOT / "tracks").glob("*.json"))
     result = subprocess.run([sys.executable, "tools/validate.py", *tracks], cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.count("OK") == len(tracks) == 16
+    assert result.stdout.count("OK") == len(tracks) == 16 + 8  # 16 circuits générés + 8 circuits F1
 
 
 def test_schema_1_1_adds_tabular_algorithms_and_keeps_1_0():

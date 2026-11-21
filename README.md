@@ -50,6 +50,14 @@ npm --prefix app test  # parties pures de l'application
 Sans serveur, l'application affiche des données factices `fixture_*.json`,
 signalées « FIXTURE » à l'écran : elles ne doivent jamais servir en démonstration.
 
+## Circuits de F1 réels
+
+Les 8 circuits `tracks/f1_*.json` (Monza, Spa, Silverstone, Suzuka, Hungaroring, Barcelone,
+Red Bull Ring, Zandvoort) sont convertis par `python -m tools.import_f1_tracks` depuis la base
+publique **racetrack-database** de l'Université technique de Munich (TUM FTM,
+https://github.com/TUMFTM/racetrack-database), sous licence LGPL-3.0 : voir
+`data/f1_tracks_tum/SOURCE.md`. Évaluation de tous les agents : `python -m tools.evaluate_f1`.
+
 ## Organisation
 
 - `docs/EXPLICATIONS.md` : ce qui a été fait à chaque mission, et pourquoi.

@@ -73,12 +73,12 @@ def test_evaluate_all_and_figures(tmp_path):
 
     out = tmp_path / "results" / "eval.csv"
     n = evaluate_all(runs, out, mu_factors=(1.0, 0.6), train_tracks=["gen_00"], test_tracks=["gen_10"])
-    assert n == 4 * 2 * 2  # (classique + 3 runs) × 2 circuits × 2 μ
+    assert n == 5 * 2 * 2  # (classique + trajectoire idéale + 3 runs) × 2 circuits × 2 μ
     assert validate_file(out) == "eval"
     replays = sorted(runs.glob("*/replays/*.json"))
-    assert len(replays) == 4 * 2  # replays de démo : premier circuit de test, à chaque μ
+    assert len(replays) == 5 * 2  # replays de démo : premier circuit de test, à chaque μ
     assert all(validate_file(p) == "replay" for p in replays)
-    assert (runs / "classic_ref" / "replays").is_dir()
+    assert (runs / "classic_ref" / "replays").is_dir() and (runs / "raceline_ref" / "replays").is_dir()
 
     # Données de test pour les courbes d'apprentissage (écrites à la main, dans tmp_path)
     for _, seed, run_dir in found:

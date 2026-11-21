@@ -1,4 +1,5 @@
 numpy
+scipy
 gymnasium
 stable-baselines3
 # torch en version CPU : installer d'abord avec

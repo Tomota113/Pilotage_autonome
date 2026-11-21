@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CONDITIONS, conditionColor, conditionLabel } from "../data/algorithms.js";
-import { listRuns, loadBestEval } from "../data/api.js";
+import { listRuns, loadBestEval, loadF1Eval } from "../data/api.js";
+import { identifyF1Rows } from "../data/f1.js";
 
 const MODULES = [
   ["race", "Race Simulator", "Regarder un agent faire un tour, avec ses capteurs, sa vitesse et ses commandes."],
@@ -13,12 +14,12 @@ const MODULES = [
 
 const pct = (x) => `${Math.round(100 * x)} %`;
 
-// Taux de tours bouclés par condition sur les circuits de test, pour une adhérence donnée
+// Taux de tours bouclés par condition sur les circuits de test, avec le même poids par graine.
 function lapRates(rows, conditionOf, mu) {
   const perSeed = {};
   for (const r of rows) {
     const c = conditionOf(r);
-    if (!c || r.split !== "test" || Number(r.mu_factor) !== mu) continue;
+    if (!c || r.split !== "test" || (mu != null && Number(r.mu_factor) !== mu)) continue;
     const key = `${c}|${r.seed}`;
     perSeed[key] ??= { c, laps: 0, n: 0 };
     perSeed[key].laps += r.outcome === "lap" ? 1 : 0;
@@ -42,17 +43,19 @@ function Tile({ label, value, detail, color }) {
 export default function Home() {
   const [stats, setStats] = useState(null);
   useEffect(() => {
-    Promise.all([loadBestEval(), listRuns()]).then(([rows, runs]) => {
+    Promise.all([loadBestEval(), listRuns(), loadF1Eval().catch(() => [])]).then(([rows, runs, f1Rows]) => {
       const byRun = Object.fromEntries(runs.map((r) => [r.run_id, r.condition]));
       const conditionOf = (r) => (String(r.run_id).startsWith("classic") ? "classic" : byRun[r.run_id]);
       const n = runs.filter((r) => r.condition).length;
-      setStats({ normal: lapRates(rows, conditionOf, 1), slippery: lapRates(rows, conditionOf, 0.6), runs: n, episodes: rows.length });
-    }).catch(() => setStats({ normal: {}, slippery: {}, runs: 0, episodes: 0 }));
+      setStats({ normal: lapRates(rows, conditionOf, 1), slippery: lapRates(rows, conditionOf, 0.6), runs: n, episodes: rows.length,
+        f1: lapRates(identifyF1Rows(f1Rows, runs), (row) => row.condition), f1Episodes: f1Rows.length });
+    }).catch(() => setStats({ normal: {}, slippery: {}, runs: 0, episodes: 0, f1: {}, f1Episodes: 0 }));
   }, []);
 
-  const best = (rates) => Object.entries(rates).filter(([c]) => c !== "classic").sort((a, b) => b[1] - a[1])[0];
+  const best = (rates) => Object.entries(rates).filter(([c]) => c !== "classic" && c !== "raceline").sort((a, b) => b[1] - a[1])[0];
   const bestNormal = stats && best(stats.normal);
   const bestSlippery = stats && best(stats.slippery);
+  const bestF1 = stats && best(stats.f1);
 
   return (
     <>
@@ -78,10 +81,11 @@ export default function Home() {
           <div className="card-title">3. On évalue</div>
           <p className="note" style={{ margin: 0 }}>Après 1 million de pas d'entraînement sur 10 circuits, chaque agent roule sur 5
             circuits qu'il n'a jamais vus, à adhérence normale, humide et glissante.</p>
+          <p className="note" style={{ marginBottom: 0 }}>On teste aussi les agents sur 8 circuits de F1 réels qu’ils n’ont jamais vus.</p>
         </div>
       </div>
 
-      <div className="card-title" style={{ fontSize: 17 }}>Résultats clés <span className="hint">calculés sur les évaluations réelles (meilleurs checkpoints)</span></div>
+      <div className="card-title" style={{ fontSize: 17 }}>Résultats clés <span className="hint">calculés sur les évaluations réelles</span></div>
       {stats === null ? <p className="note">Chargement…</p> : (
         <div className="grid-3" style={{ marginBottom: 20 }}>
           <Tile label="Pilote classique (référence)" value={stats.normal.classic != null ? pct(stats.normal.classic) : "—"}
@@ -91,6 +95,9 @@ export default function Home() {
           {bestSlippery && <Tile label={`Le plus robuste, piste glissante (μ 0,6) : ${conditionLabel(bestSlippery[0])}`} value={pct(bestSlippery[1])}
                                  detail="les autres agents ne bouclent presque plus aucun tour" color={conditionColor(bestSlippery[0])} />}
           <Tile label="Entraînements (1 million de pas chacun)" value={stats.runs} detail={`${stats.episodes} épisodes d'évaluation`} />
+          {bestF1 ? <Tile label={`Meilleur agent sur les circuits de F1 · ${conditionLabel(bestF1[0])}`} value={pct(bestF1[1])}
+                          detail="de tours bouclés, toutes adhérences confondues" color={conditionColor(bestF1[0])} />
+            : stats.f1Episodes > 0 && <Tile label="Évaluation sur les circuits de F1" value={stats.f1Episodes} detail="essais enregistrés" />}
         </div>
       )}
 

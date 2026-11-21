@@ -189,3 +189,13 @@ def test_lists_replays_with_metadata(client, tmp_path):
     assert r["path"] == rows[0]["replay_path"] and r["condition"] == "classic" and r["algo"] == "classic"
     assert r["track_id"] == "demo_oval" and r["mu_factor"] == 1.0 and r["outcome"] == "lap"
     assert r["lap_time"] == rows[0]["lap_time"] and r["has_activations"] is False
+
+
+def test_raceline_endpoint(client):
+    data = client.get("/tracks/demo_oval/raceline", params={"mu": 0.8}).json()
+    assert data["track_id"] == "demo_oval" and data["mu"] == 0.8
+    assert len(data["points"]) == len(data["speed"]) > 50
+    assert 0 < data["lap_time_s"] < 60  # ovale de 977 m
+    assert client.get("/tracks/../raceline").status_code in (400, 404)
+    assert client.get("/tracks/unknown/raceline").status_code == 404
+    assert client.get("/tracks/demo_oval/raceline", params={"mu": -1}).status_code == 400

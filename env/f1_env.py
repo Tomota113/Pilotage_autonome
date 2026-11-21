@@ -44,6 +44,12 @@ CURVATURE_SCALE = 10.0  # courbure × 10 : rayon 15 m -> 0,67
 LOOKAHEAD = (30.0, 80.0)  # distances de lecture de la courbure devant la voiture (m)
 MU_SCALE = 1.5  # mu observé (ablation observe_mu) divisé par 1,5
 PROGRESS_MARGIN = 1.0  # Δs plafonné à v dt + 1 m
+# Tolérance supplémentaire pour valider un checkpoint : à l'intérieur d'un virage serré, la
+# projection sur la ligne centrale (polyligne) avance par sauts de 2 à 4 m à chaque sommet,
+# même quand la voiture roule normalement. Un virage coupé, lui, fait sauter la projection de
+# plusieurs dizaines de mètres. (Corrigé le 21/11/2026 : avec une tolérance nulle, un
+# checkpoint franchi pendant un de ces petits sauts était ignoré et le tour jamais validé.)
+CHECKPOINT_EXTRA = 4.0
 
 # Actions discrètes : {gauche, droit, droite} × {accélérer, roue libre, freiner}.
 # Colonne 0 : steer (positif = à gauche, sens trigonométrique), 1 : throttle, 2 : brake.
@@ -260,10 +266,11 @@ class F1Env(gym.Env):
 
         The next checkpoint (``checkpoint + 1``; number N_CHECKPOINTS is the
         start/finish line) is validated only if the step crossed it going
-        forwards with a plausible progress (``ds_raw == ds``, no jump).
-        Checkpoints are thus validated one by one, in order.
+        forwards with a plausible progress: ``ds_raw`` may exceed the reward cap
+        ``ds`` by at most CHECKPOINT_EXTRA (small projection jumps in tight bends),
+        not more (corner cut). Checkpoints are thus validated one by one, in order.
         """
-        if ds_raw <= 0.0 or ds_raw != ds or checkpoint >= N_CHECKPOINTS:
+        if ds_raw <= 0.0 or ds_raw > ds + CHECKPOINT_EXTRA or checkpoint >= N_CHECKPOINTS:
             return checkpoint
         target = self.track.checkpoint_s[(checkpoint + 1) % N_CHECKPOINTS]
         ahead = (target - s_prev) % self.track.length  # distance jusqu'au prochain checkpoint

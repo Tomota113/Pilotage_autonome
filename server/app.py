@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
 import yaml
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -267,6 +268,31 @@ def create_app(root: Path | None = None) -> FastAPI:
                 continue  # fichier illisible : ignoré, validate.py dira pourquoi
         return result
 
+    raceline_cache: dict[tuple[str, float], tuple[float, dict]] = {}
+
+    @application.get("/tracks/{track_id}/raceline")
+    async def get_raceline(track_id: str, mu: float = 1.0):
+        """Minimum-curvature racing line and fastest speed profile of a track (sim/raceline.py)."""
+        from sim.raceline import racing_line, speed_profile
+        from sim.track import Track
+
+        if not COMPONENT.fullmatch(track_id) or not math.isfinite(mu) or not 0.1 <= mu <= 2.0:
+            raise HTTPException(400, "Invalid track ID or mu")
+        path = tracks / f"{track_id}.json"
+        if not path.is_file() or path.is_symlink():
+            raise HTTPException(404, "Unknown track")
+        key, mtime = (track_id, round(mu, 3)), path.stat().st_mtime
+        if key not in raceline_cache or raceline_cache[key][0] != mtime:
+            # Calcul en quelques dixièmes de seconde, hors de la boucle d'événements
+            def compute():
+                line = racing_line(Track.from_json(path))
+                profile = speed_profile(line, mu)
+                return {"track_id": track_id, "mu": mu, "points": np.round(line.points, 2).tolist(),
+                        "speed": np.round(profile.speed, 2).tolist(), "lap_time_s": round(profile.lap_time, 2),
+                        "length_m": round(line.length, 1)}
+            raceline_cache[key] = (mtime, await asyncio.to_thread(compute))
+        return raceline_cache[key][1]
+
     replay_cache: dict[Path, tuple[float, dict]] = {}
 
     @application.get("/replays")
@@ -299,6 +325,8 @@ def create_app(root: Path | None = None) -> FastAPI:
             if run_id not in conditions:
                 if run_id.startswith("classic"):
                     conditions[run_id] = "classic"
+                elif run_id.startswith("raceline"):
+                    conditions[run_id] = "raceline"
                 else:
                     try:
                         conditions[run_id] = condition_of(yaml.safe_load(config_file(run_id).read_text(encoding="utf-8")))

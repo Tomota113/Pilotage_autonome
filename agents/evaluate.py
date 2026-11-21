@@ -21,6 +21,7 @@ l'instant t.
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import json
 import re
@@ -44,13 +45,19 @@ EVAL_CSV = ROOT / "results" / "eval.csv"
 
 
 class ClassicPolicy:
+    """Rule-based driver (no learning): the centreline driver, or the racing-line driver.
+
+    Les deux sont des pilotes classiques (algo « classic » dans le contrat) ; on les distingue
+    par leur run_id (classic_ref / raceline_ref).
+    """
+
     algo = "classic"
     checkpoint = "none"
     train_steps = 0
     network = None
 
-    def __init__(self):
-        self.driver = ClassicDriver()
+    def __init__(self, driver=None):
+        self.driver = driver or ClassicDriver()
 
     def act(self, env: F1Env, obs: np.ndarray):
         return self.driver.act(env)
@@ -137,6 +144,10 @@ def load_policy(agent: str, with_activations: bool = False):
     """Policy, run config (None for the classic driver) and run_id (None for classic)."""
     if agent == "classic":
         return ClassicPolicy(), None, None
+    if agent == "raceline":
+        from agents.raceline_driver import RacelineDriver
+
+        return ClassicPolicy(RacelineDriver()), None, None
     path = Path(agent)
     run_dir = path.resolve().parent.parent  # runs/<run_id>/checkpoints/<fichier>
     with open(run_dir / "config.yaml", encoding="utf-8") as f:
@@ -215,13 +226,20 @@ def append_eval_rows(rows: list[dict], path: Path = EVAL_CSV) -> None:
 
 def evaluate(agent: str, track_ids: list[str], mu_factors: list[float], episodes: int = 1,
              run_id: str | None = None, with_activations: bool = False, save_replays: bool = True,
-             eval_csv: Path = EVAL_CSV, runs_dir: Path = ROOT / "runs") -> list[dict]:
-    """Evaluate ``agent`` on every track × mu factor × episode; return the eval.csv rows written."""
+             eval_csv: Path = EVAL_CSV, runs_dir: Path = ROOT / "runs", max_steps: int | None = None) -> list[dict]:
+    """Evaluate ``agent`` on every track × mu factor × episode; return the eval.csv rows written.
+
+    ``max_steps`` allonge la durée maximale d'un épisode (circuits F1 plus longs que les circuits
+    générés) ; les agents ne perçoivent pas le temps, leur comportement n'en dépend pas.
+    """
     policy, config, ckpt_run_id = load_policy(agent, with_activations)
     run_id = run_id or ckpt_run_id
     if run_id is None:
-        raise ValueError("--run-id is required for the classic driver")
-    env = F1Env(config, load_tracks(track_ids))
+        raise ValueError("--run-id is required for the classic and racing-line drivers")
+    env_config = copy.deepcopy(config) if config else {}
+    if max_steps is not None:
+        env_config.setdefault("env", {})["max_steps"] = max_steps
+    env = F1Env(env_config or None, load_tracks(track_ids))
     seed = int(config["seed"]) if config else 0
     mu_mode = config["mu"]["mode"] if config else "fixed"
     replay_dir = runs_dir / run_id / "replays"
@@ -262,7 +280,7 @@ def evaluate(agent: str, track_ids: list[str], mu_factors: list[float], episodes
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("agent", help="'classic', or a checkpoint runs/<run_id>/checkpoints/<file>.zip|.npy")
+    parser.add_argument("agent", help="'classic', 'raceline', or a checkpoint runs/<run_id>/checkpoints/<file>.zip|.npy")
     parser.add_argument("--tracks", nargs="+", required=True, help="track ids")
     parser.add_argument("--mu", nargs="+", type=float, default=[1.0], help="mu factors (default: 1.0)")
     parser.add_argument("--episodes", type=int, default=1)
@@ -270,10 +288,11 @@ def main() -> None:
     parser.add_argument("--with-activations", action="store_true", help="record hidden layers (SB3 only)")
     parser.add_argument("--no-replay", action="store_true", help="only append to eval.csv")
     parser.add_argument("--eval-csv", type=Path, default=EVAL_CSV)
+    parser.add_argument("--max-steps", type=int, help="longer episodes (e.g. 6000 on real F1 circuits)")
     args = parser.parse_args()
 
     rows = evaluate(args.agent, args.tracks, args.mu, args.episodes, args.run_id,
-                    args.with_activations, not args.no_replay, args.eval_csv)
+                    args.with_activations, not args.no_replay, args.eval_csv, max_steps=args.max_steps)
     for r in rows:
         lap = f"{r['lap_time']} s" if r["lap_time"] != "" else "-"
         print(f"{r['track_id']:10s} mu={r['mu_factor']:.2f} ep{r['episode']}  {r['outcome']:9s} "

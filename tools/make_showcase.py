@@ -2,7 +2,7 @@
 
 Usage : ``python -m tools.make_showcase [--eval-csv results/eval_best.csv] [--mu 1.0 0.8 0.6]``
 
-Pour chaque condition (et le pilote classique), on prend la graine qui a bouclé le plus de
+Pour chaque condition (et les pilotes classique et trajectoire idéale), on prend la graine qui a bouclé le plus de
 tours dans l'évaluation des meilleurs checkpoints (``results/eval_best.csv``), et son
 meilleur checkpoint (choisi sur l'entraînement, voir tools/evaluate_all.py). Il roule sur
 chaque circuit de test × μ, avec les activations pour les réseaux. Les replays vont dans
@@ -19,7 +19,7 @@ from pathlib import Path
 import pandas as pd
 
 from agents.evaluate import evaluate
-from tools.evaluate_all import CLASSIC_RUN_ID, MU_FACTORS, best_checkpoint, find_runs
+from tools.evaluate_all import MU_FACTORS, REFERENCE_RUN_IDS, best_checkpoint, find_runs
 from tools.make_configs import TEST_TRACKS
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -46,7 +46,7 @@ def main() -> None:
     if args.out.exists():
         args.out.unlink()  # régénéré entièrement
 
-    agents = [("classic", "classic", CLASSIC_RUN_ID)]
+    agents = [(name, name, run_id) for name, run_id in REFERENCE_RUN_IDS.items()]
     agents += [(condition, str(best_checkpoint(run_dir)), None) for condition, run_dir in
                showcase_runs(args.runs_dir, args.eval_csv)]
     for condition, agent, run_id in agents:

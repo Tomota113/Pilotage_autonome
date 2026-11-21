@@ -48,6 +48,11 @@ Débits mesurés sur l'i3-1115G4 (20 000 pas) : simulateur seul ≈ 10 000 pas/s
 Q-Learning ≈ 4 000, SARSA et Monte-Carlo ≈ 2 750 (mesurés pendant un PPO),
 PPO ≈ 1 240, DQN ≈ 1 210, SAC ≈ 190 pas/s.
 
+Circuits F1 réels : `tracks/f1_*.json` (source TUM racetrack-database, LGPL-3.0,
+`data/f1_tracks_tum/`), split « test », jamais utilisés pour entraîner. Référence non-RL
+supplémentaire : pilote trajectoire idéale (`sim/raceline.py`, `agents/raceline_driver.py`,
+run_id `raceline_ref`, algo `classic`).
+
 Contrat de données : version 1.1 de config.yaml et replay.json (ajout de
 `sarsa` et `montecarlo`) ; les fichiers 1.0 restent valides avec les
 algorithmes de la 1.0.

@@ -123,6 +123,8 @@ def test_checkpoints_are_validated_in_order():
     assert env._check_checkpoints(0, cp[1] + 0.5, -1.0, -1.0) == 0
     # Saut de la projection (Δs plafonné) : rien, même si le checkpoint est dans l'intervalle
     assert env._check_checkpoints(0, cp[1] - 10.0, 30.0, 2.0) == 0
+    # Petit saut de projection dans un virage serré (2,5 m pour un plafond de 1,7 m) : validé
+    assert env._check_checkpoints(0, cp[1] - 1.0, 2.5, 1.7) == 1
     # Après le 19e, la ligne d'arrivée (checkpoint 0, s = 0) valide le tour
     assert env._check_checkpoints(N_CHECKPOINTS - 1, env.track.length - 0.5, 1.0, 1.0) == N_CHECKPOINTS
     assert env._check_checkpoints(N_CHECKPOINTS, 10.0, 1.0, 1.0) == N_CHECKPOINTS

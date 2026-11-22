@@ -27,11 +27,14 @@ function Gauge({ label, value, min = 0, color, left: leftLabel, right: rightLabe
 // Profil de vitesse au cours de l'épisode, avec le curseur de lecture
 function SpeedProfile({ frames, index, onSeek, car }) {
   const w = 900, h = 120, pad = 28;
-  const tMax = frames.at(-1).t || 1;
-  const vMax = Math.max(car === "f1_2024" ? 350 : 72, ...frames.map((f) => f.v * 3.6));
-  const x = (t) => pad + ((w - pad - 8) * t) / tMax;
-  const y = (v) => h - 18 - ((h - 30) * v * 3.6) / vMax;
-  const d = frames.map((f, i) => `${i ? "L" : "M"}${x(f.t).toFixed(1)},${y(f.v).toFixed(1)}`).join("");
+  const { tMax, vMax, x, y, d, slips } = useMemo(() => {
+    const tMax = frames.at(-1).t || 1;
+    const vMax = frames.reduce((max, f) => Math.max(max, f.v * 3.6), car === "f1_2024" ? 350 : 72);
+    const x = (t) => pad + ((w - pad - 8) * t) / tMax;
+    const y = (v) => h - 18 - ((h - 30) * v * 3.6) / vMax;
+    const d = frames.map((f, i) => `${i ? "L" : "M"}${x(f.t).toFixed(1)},${y(f.v).toFixed(1)}`).join("");
+    return { tMax, vMax, x, y, d, slips: frames.filter((f) => f.slip) };
+  }, [frames, car]);
   const cur = frames[index];
   return (
     <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 130, cursor: "pointer" }} role="img"
@@ -47,7 +50,7 @@ function SpeedProfile({ frames, index, onSeek, car }) {
           <text x={pad - 4} y={y((vMax * k) / 3.6) + 4} fill="#7d838e" fontSize="10" textAnchor="end">{Math.round(vMax * k)}</text>
         </g>
       ))}
-      {frames.map((f, i) => (f.slip ? <line key={i} x1={x(f.t)} x2={x(f.t)} y1={h - 16} y2={h - 12} stroke="#fab219" /> : null))}
+      {slips.map((f) => <line key={f.t} x1={x(f.t)} x2={x(f.t)} y1={h - 16} y2={h - 12} stroke="#fab219" />)}
       <path d={d} fill="none" stroke="#3987e5" strokeWidth="2" />
       <line x1={x(cur.t)} x2={x(cur.t)} y1={8} y2={h - 18} stroke="#e8402f" strokeWidth="1.5" />
       <circle cx={x(cur.t)} cy={y(cur.v)} r="4" fill="#e8402f" />
@@ -59,20 +62,34 @@ function SpeedProfile({ frames, index, onSeek, car }) {
 
 export default function RaceSimulator() {
   const { car, setCar, replays } = useCarReplays();
-  const { entry, replay: loadedReplay, track, index, setIndex, setPlaying } = usePlayback();
+  const { entry, replay: loadedReplay, track, index, setIndex, playing, setPlaying, getTime, getFrame } = usePlayback();
   const replay = replays?.some((r) => r.path === entry?.path) ? loadedReplay : null;
   const { sensorRange, speedColorMax } = CAR_MODELS[car];
   const ideal = useRacelineOverlay(replay?.track_id, replay?.mu_factor, car, true);
   const idealTime = ideal.line?.lap_time_s;
   const gap = replay?.summary.outcome === "lap" ? lapTimeGap(replay.summary.lap_time, idealTime) : null;
   const frame = replay?.frames[index];
-  const trail = useMemo(() => {
+  const visuals = useMemo(() => {
     if (!replay) return null;
-    const upto = replay.frames.slice(0, index + 1);
-    return { points: upto.map((f) => [f.x, f.y]), speeds: upto.map((f) => f.v) };
-  }, [replay, index]);
+    return {
+      trail: { points: replay.frames.map((f) => [f.x, f.y]), speeds: replay.frames.map((f) => f.v) },
+      impact: replay.frames.find((f) => f.off_track),
+    };
+  }, [replay]);
   const condition = entry?.condition;
   const color = conditionColor(condition);
+
+  function getScene() {
+    const pose = getFrame();
+    const time = getTime();
+    return {
+      cars: [{
+        ...pose, time, color, label: CONDITION_BY_ID[condition]?.short, frames: replay.frames,
+        impact: time >= visuals.impact?.t ? visuals.impact : null,
+      }],
+      rays: { x: pose.x, y: pose.y, psi: pose.psi, distances: pose.sensors_m },
+    };
+  }
 
   return (
     <>
@@ -88,9 +105,8 @@ export default function RaceSimulator() {
         <div className="row">
           <div className="grow stack">
             <div className="card" style={{ padding: 10 }}>
-              <TrackCanvas track={track} trails={[{ ...trail, speedColorMax, width: 3 }]} draw={ideal.draw}
-                           cars={[{ x: frame.x, y: frame.y, psi: frame.psi, color, label: CONDITION_BY_ID[condition]?.short }]}
-                           rays={{ x: frame.x, y: frame.y, psi: frame.psi, distances: frame.sensors_m }} height={560} />
+              <TrackCanvas track={track} trails={[{ ...visuals.trail, count: index + 1, speedColorMax, width: 2.5, alpha: 0.5 }]}
+                           draw={ideal.draw} getScene={getScene} animating={playing} height={560} />
               <PlaybackControls />
               <div className="controls"><RacelineToggle {...ideal} /></div>
             </div>

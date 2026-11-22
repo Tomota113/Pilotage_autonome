@@ -121,6 +121,34 @@ canvas { display: block; width: 100%; background: #101215; border-radius: 8px; }
 .canvas-tools button { background: #181b20e6; backdrop-filter: blur(4px); padding: 5px 9px; }
 .canvas-hint { position: absolute; left: 12px; bottom: 10px; font-size: 11.5px; color: var(--faint); pointer-events: none; }
 
+/* --- Départ et classement du championnat --- */
+.race-stage { position: relative; }
+.start-lights { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); display: flex; gap: 9px;
+  padding: 10px 12px; background: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--radius);
+  box-shadow: var(--shadow); pointer-events: none; }
+.start-light { width: 18px; height: 18px; border-radius: 50%; background: var(--panel-3); border: 1px solid var(--line-2); }
+.start-light.lit { background: var(--accent); border-color: var(--bad); box-shadow: 0 0 12px var(--accent); }
+.start-go { position: absolute; clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; white-space: nowrap; }
+.start-go.visible { clip-path: none; width: auto; height: auto; inset: 100% 0 auto; margin: 7px auto 0;
+  padding: 3px 13px; border-radius: 6px; background: var(--bg-2); color: var(--good); font-weight: 800; text-align: center; }
+.standings { --row-height: 42px; font-size: 13.5px; }
+.standings-body { position: relative; height: calc(var(--rows) * var(--row-height)); }
+.standings-row { display: grid; grid-template-columns: 2ch minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  min-height: var(--row-height); padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.standings-row > :last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.standings-row.headings { min-height: 32px; color: var(--faint); font-size: 12.5px; }
+.standings-row.racer { position: absolute; inset: 0 0 auto; height: var(--row-height); background: var(--panel);
+  transform: translateY(calc(var(--rank) * var(--row-height))); transition: transform 180ms ease-out; }
+.finish-chip { animation: finish-chip 550ms ease-out; }
+@keyframes finish-chip {
+  from { box-shadow: 0 0 12px var(--good); transform: scale(1.08); }
+  to { box-shadow: none; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .standings-row.racer { transition: none; }
+  .finish-chip { animation: none; }
+}
+
 /* --- Classes utilisées par les modules existants --- */
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 .module-section, .training-config { margin: 12px 0 18px; }

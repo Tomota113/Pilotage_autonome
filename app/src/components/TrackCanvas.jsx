@@ -5,9 +5,12 @@
 // `draw(ctx, view)` ajoute des éléments ; `onPointer(type, [x, y], event, view)` reçoit la souris en mètres.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bounds, SENSOR_ANGLES_DEG, trackBorders } from "../data/geometry.js";
+import { frameIndexAt, interpolateFrame } from "../data/interpolate.js";
 
 const CAR_LENGTH = 5.5; // m
 const KERB_CURVATURE = 1 / 90; // vibreurs dans les virages de rayon < 90 m
+const TRAIL_SECONDS = 2;
+const IMPACT_MS = 420;
 
 function curvatures(points) {
   const n = points.length;
@@ -55,24 +58,38 @@ export function drawCar(ctx, view, { x, y, psi, color, label }) {
   ctx.save();
   ctx.translate(sx, sy);
   ctx.rotate(-psi); // y écran vers le bas : angle inversé
-  ctx.shadowColor = "#000a";
-  ctx.shadowBlur = 6;
+
+  // Les pneus débordent du châssis et restent lisibles même en vue d'ensemble.
+  ctx.fillStyle = "#090b0e";
+  ctx.strokeStyle = "#626773";
+  ctx.lineWidth = 0.65;
+  for (const axle of [-0.37, 0.23]) {
+    for (const side of [-1, 1]) {
+      const tx = len * axle;
+      const ty = w * side * 0.48 - w * 0.15;
+      ctx.fillRect(tx, ty, len * 0.19, w * 0.3);
+      ctx.strokeRect(tx, ty, len * 0.19, w * 0.3);
+    }
+  }
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 5;
   ctx.fillStyle = color;
   ctx.strokeStyle = "#0b0c0e";
-  ctx.lineWidth = 1.5;
-  // Monoplace stylisée : nez pointu, ailerons avant et arrière
+  ctx.lineWidth = 0.8;
   ctx.beginPath();
   ctx.moveTo(len * 0.55, 0);
-  ctx.lineTo(len * 0.1, w * 0.28);
-  ctx.lineTo(-len * 0.45, w * 0.32);
-  ctx.lineTo(-len * 0.45, -w * 0.32);
-  ctx.lineTo(len * 0.1, -w * 0.28);
+  ctx.lineTo(len * 0.12, w * 0.2);
+  ctx.lineTo(-len * 0.12, w * 0.34);
+  ctx.lineTo(-len * 0.45, w * 0.24);
+  ctx.lineTo(-len * 0.45, -w * 0.24);
+  ctx.lineTo(-len * 0.12, -w * 0.34);
+  ctx.lineTo(len * 0.12, -w * 0.2);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+  ctx.fillRect(len * 0.39, -w * 0.62, len * 0.10, w * 1.24); // aileron avant
+  ctx.fillRect(-len * 0.49, -w * 0.51, len * 0.11, w * 1.02); // aileron arrière
   ctx.shadowBlur = 0;
-  ctx.fillRect(len * 0.32, -w * 0.5, len * 0.08, w);   // aileron avant
-  ctx.fillRect(-len * 0.5, -w * 0.5, len * 0.1, w);    // aileron arrière
   ctx.fillStyle = "#0b0c0e";
   ctx.beginPath();
   ctx.arc(-len * 0.05, 0, w * 0.14, 0, 2 * Math.PI);    // cockpit
@@ -88,11 +105,67 @@ export function drawCar(ctx, view, { x, y, psi, color, label }) {
   }
 }
 
+function drawWake(ctx, view, car) {
+  const { frames, time, color } = car;
+  if (!frames || car.t <= frames[0].t || time - car.t >= TRAIL_SECONDS) return;
+  const start = time - TRAIL_SECONDS;
+  const first = frameIndexAt(frames, start);
+  const last = frameIndexAt(frames, time);
+  let previous = interpolateFrame(frames, start);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3.5;
+  ctx.lineCap = "round";
+  for (let i = first + 1; i <= last + 1; i++) {
+    const next = i <= last ? frames[i] : car;
+    if (next.t <= previous.t) continue;
+    ctx.globalAlpha = 0.65 * (1 - (time - (next.t + previous.t) / 2) / TRAIL_SECONDS);
+    ctx.beginPath();
+    ctx.moveTo(...view.toScreen([previous.x, previous.y]));
+    ctx.lineTo(...view.toScreen([next.x, next.y]));
+    ctx.stroke();
+    previous = next;
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawImpact(ctx, view, frame, age) {
+  const [x, y] = view.toScreen([frame.x, frame.y]);
+  ctx.save();
+  ctx.globalAlpha = (1 - age) * 0.72;
+  ctx.fillStyle = ctx.strokeStyle = "#ef493d";
+  ctx.beginPath();
+  ctx.arc(x, y, 8 + 18 * age, 0, 2 * Math.PI);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.globalAlpha *= 0.3;
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFollowMarker(ctx, view, car) {
+  const [x, y] = view.toScreen([car.x, car.y]);
+  const top = y - Math.max(16, CAR_LENGTH * view.scale) * 0.55 - 10;
+  ctx.fillStyle = "#f1f2f4";
+  ctx.strokeStyle = "#0b0c0e";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x - 5, top);
+  ctx.lineTo(x + 5, top);
+  ctx.lineTo(x, top + 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
 export default function TrackCanvas({ track, cars = [], trails = [], rays = null, draw = null, onPointer = null,
-                                      height = 520, extraPoints = [], fixedView = null, label,
-                                      followable = true, tools = true }) {
+                                      height = 520, extraPoints, fixedView = null, label,
+                                      followable = true, tools = true, getScene = null, animating = false }) {
   const ref = useRef(null);
   const drag = useRef(null);
+  const background = useRef(null);
+  const impacts = useRef(new Map());
+  const paint = useRef(null);
+  const pending = useRef(null);
   const [zoom, setZoom] = useState(1);
   const zoomRef = useRef(1);
   zoomRef.current = zoom;
@@ -119,25 +192,17 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
     return () => obs.disconnect();
   }, [geom]);
 
-  function baseView() {
-    const box = extraPoints.length ? bounds([...geom.left, ...geom.right, ...extraPoints], 12) : geom.box;
+  const fitView = useMemo(() => {
+    if (!geom) return null;
+    const box = extraPoints?.length ? bounds([...geom.left, ...geom.right, ...extraPoints], 12) : geom.box;
     const fit = Math.min((width - 32) / (box.maxX - box.minX), (height - 32) / (box.maxY - box.minY));
-    const target = follow && cars[0] ? [cars[0].x, cars[0].y] : center ?? [(box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2];
+    const target = center ?? [(box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2];
     return makeView(width, height, target[0], target[1], fit * zoom);
-  }
+  }, [center, extraPoints, geom, height, width, zoom]);
 
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas || !geom) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  function drawTrack(ctx, view) {
     ctx.fillStyle = "#101418";
     ctx.fillRect(0, 0, width, height);
-    const view = fixedView ?? baseView();
-    canvas._view = view;
     const px = Math.max(1, view.scale); // 1 m en pixels
 
     // Asphalte : surface entre les deux bords (règle pair-impair)
@@ -188,15 +253,50 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
         ctx.stroke();
       }
     });
+  }
+
+  function render(now) {
+    const canvas = ref.current;
+    if (!canvas || !geom || !width || !height) return false;
+    const dpr = window.devicePixelRatio || 1;
+    const pixelWidth = Math.round(width * dpr);
+    const pixelHeight = Math.round(height * dpr);
+    if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+    if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return false;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const scene = getScene?.() ?? { cars, rays };
+    const followed = follow ? scene.cars[0] : null;
+    const view = fixedView ?? (followed ? makeView(width, height, followed.x, followed.y, fitView.scale) : fitView);
+    canvas._view = view;
+
+    // On réutilise le fond tant que la caméra reste fixe.
+    ctx.lineCap = "butt";
+    if (followed && !fixedView) drawTrack(ctx, view);
+    else {
+      const cached = background.current;
+      if (!cached || cached.view !== view || cached.geom !== geom || cached.width !== pixelWidth || cached.height !== pixelHeight || cached.dpr !== dpr) {
+        const layer = cached?.layer ?? document.createElement("canvas");
+        layer.width = pixelWidth;
+        layer.height = pixelHeight;
+        const layerCtx = layer.getContext("2d");
+        layerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawTrack(layerCtx, view);
+        background.current = { layer, view, geom, width: pixelWidth, height: pixelHeight, dpr };
+      }
+      ctx.drawImage(background.current.layer, 0, 0, width, height);
+    }
 
     // Trajectoires : une couleur, ou la vitesse segment par segment
     for (const t of trails) {
-      if (t.points.length < 2) continue;
+      const count = t.count ?? t.points.length;
+      if (count < 2) continue;
       ctx.globalAlpha = t.alpha ?? 0.9;
       ctx.lineWidth = t.width ?? 2.5;
       ctx.lineCap = "round";
       if (t.speeds) {
-        for (let i = 1; i < t.points.length; i++) {
+        for (let i = 1; i < count; i++) {
           ctx.strokeStyle = speedColor(t.speeds[i], t.speedColorMax);
           ctx.beginPath();
           ctx.moveTo(...view.toScreen(t.points[i - 1]));
@@ -210,7 +310,9 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
       }
       ctx.globalAlpha = 1;
     }
-    if (rays) {
+    scene.cars.forEach((car) => drawWake(ctx, view, car));
+    if (scene.rays) {
+      const { rays } = scene;
       SENSOR_ANGLES_DEG.forEach((deg, k) => {
         const a = rays.psi + (deg * Math.PI) / 180;
         const d = rays.distances[k];
@@ -227,9 +329,42 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
         ctx.fill();
       });
     }
-    cars.forEach((c) => drawCar(ctx, view, c));
+    scene.cars.forEach((car) => drawCar(ctx, view, car));
+    if (followed) drawFollowMarker(ctx, view, followed);
     if (draw) draw(ctx, view);
+
+    // Le flash continue à s'estomper même si la sortie de piste a arrêté le replay.
+    const currentImpacts = new Map();
+    let flashing = false;
+    for (const { impact } of scene.cars) {
+      if (!impact) continue;
+      const began = impacts.current.get(impact) ?? now;
+      currentImpacts.set(impact, began);
+      const age = (now - began) / IMPACT_MS;
+      if (age >= 1) continue;
+      drawImpact(ctx, view, impact, age);
+      flashing = true;
+    }
+    impacts.current = currentImpacts;
+    return animating || flashing;
+  }
+
+  function queuePaint() {
+    if (pending.current !== null) return;
+    pending.current = requestAnimationFrame((now) => {
+      pending.current = null;
+      if (paint.current(now)) queuePaint();
+    });
+  }
+
+  useEffect(() => {
+    paint.current = render;
+    queuePaint();
   });
+  useEffect(() => () => {
+    if (pending.current !== null) cancelAnimationFrame(pending.current);
+    pending.current = null;
+  }, []);
 
   const pointer = (type) => (e) => {
     const canvas = ref.current;
@@ -295,7 +430,7 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
           <button onClick={() => { setZoom(1); setCenter(null); setFollow(false); }} title="Recentrer">
             {compact ? "⟲" : "Recentrer"}
           </button>
-          {followable && cars.length > 0 && (
+          {followable && (getScene || cars.length > 0) && (
             <button className={follow ? "on" : ""} title="Suivre la voiture"
                     onClick={() => { setFollow(!follow); if (!follow) setZoom((z) => Math.max(z, 4)); }}>
               {compact ? "◎" : "Suivre la voiture"}

@@ -45,6 +45,34 @@ export async function loadTrack(id) {
   return fetchJSON(`/files/tracks/${encodeURIComponent(id)}.json`);
 }
 
+async function customTrackRequest(path, data) {
+  const options = data === undefined ? { cache: "no-store" } : {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  };
+  const response = await fetch(`/tracks/custom${path}`, options).catch(() => {
+    throw new Error("Le serveur F1-RL Lab est inaccessible.");
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result) {
+    throw new Error(result?.detail ?? `Serveur F1-RL Lab indisponible (HTTP ${response.status}).`);
+  }
+  return result;
+}
+
+export function saveCustomTrack(track) {
+  return customTrackRequest("", track);
+}
+
+export function startCustomRace(trackId, car, muFactors = [1]) {
+  return customTrackRequest(`/${encodeURIComponent(trackId)}/race`, { car, mu_factors: muFactors });
+}
+
+export function getCustomRace(trackId) {
+  return customTrackRequest(`/${encodeURIComponent(trackId)}/race`);
+}
+
 export async function loadRaceline(trackId, mu, car = "v1") {
   if ((await getMode()) === "fixtures") return null;
   return fetchJSON(`/tracks/${encodeURIComponent(trackId)}/raceline?${new URLSearchParams({ mu, car })}`);

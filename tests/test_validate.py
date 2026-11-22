@@ -130,10 +130,10 @@ def test_cli_exit_code(tmp_path):
 
 def test_script_validates_committed_tracks():
     """`python tools/validate.py tracks/*.json` fonctionne lancé comme un script."""
-    tracks = sorted(str(p) for p in (ROOT / "tracks").glob("*.json"))
+    tracks = sorted(str(p) for p in (ROOT / "tracks").glob("*.json") if not p.stem.startswith("custom_"))
     result = subprocess.run([sys.executable, "tools/validate.py", *tracks], cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.count("OK") == len(tracks) == 16 + 25  # 16 circuits générés + 25 circuits TUM
+    assert result.stdout.count("OK") == len(tracks) == 16 + 6 + 25  # 16 générés, 6 générés à l'échelle F1, 25 circuits TUM
 
 
 def test_schema_1_1_adds_tabular_algorithms_and_keeps_1_0():

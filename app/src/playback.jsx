@@ -2,6 +2,7 @@
 // image, dans le Neural Network Explorer (les deux modules sont synchronisés).
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { loadReplay, loadTrack } from "./data/api.js";
+import { frameIndexAt, interpolateFrame } from "./data/interpolate.js";
 
 const PlaybackContext = createContext(null);
 export const SPEEDS = [0.5, 1, 2, 4, 8];
@@ -11,10 +12,10 @@ export function PlaybackProvider({ children }) {
   const [replay, setReplay] = useState(null);
   const [track, setTrack] = useState(null);
   const [error, setError] = useState(null);
-  const [index, setIndex] = useState(0);
+  const [index, setFrameIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const clock = useRef({ last: null, t: 0 });
+  const time = useRef(0);
   const selection = useRef(0);
 
   const select = useCallback(async (e) => {
@@ -29,8 +30,8 @@ export function PlaybackProvider({ children }) {
       if (id !== selection.current) return;
       const t = await loadTrack(r.track_id);
       if (id !== selection.current) return;
-      clock.current.t = 0;
-      setIndex(0);
+      time.current = 0;
+      setFrameIndex(0);
       setReplay(r);
       setTrack(t);
     } catch (err) {
@@ -38,28 +39,36 @@ export function PlaybackProvider({ children }) {
     }
   }, []);
 
+  const setIndex = useCallback((next) => {
+    time.current = replay.frames[next].t;
+    setFrameIndex(next);
+  }, [replay]);
+  const getTime = useCallback(() => time.current, []);
+  const getFrame = useCallback(() => interpolateFrame(replay.frames, time.current), [replay]);
+
   // Horloge : en lecture, le temps du replay avance de (temps réel × vitesse)
   useEffect(() => {
     if (!playing || !replay) return undefined;
-    let raf;
-    clock.current.last = null;
-    clock.current.t = index * replay.dt;
+    let raf, last = null;
+    const frames = replay.frames;
+    const end = frames.at(-1).t;
+    let previousIndex = frameIndexAt(frames, time.current);
     const tick = (now) => {
-      const c = clock.current;
-      if (c.last !== null) c.t += ((now - c.last) / 1000) * speed;
-      c.last = now;
-      const i = Math.min(replay.frames.length - 1, Math.floor(c.t / replay.dt));
-      setIndex(i);
-      if (i >= replay.frames.length - 1) setPlaying(false);
+      if (last !== null) time.current = Math.min(end, time.current + ((now - last) / 1000) * speed);
+      last = now;
+      const nextIndex = frameIndexAt(frames, time.current);
+      if (nextIndex !== previousIndex) {
+        previousIndex = nextIndex;
+        setFrameIndex(nextIndex);
+      }
+      if (time.current >= end) setPlaying(false);
       else raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-    // index volontairement absent : il est piloté par l'horloge pendant la lecture
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, speed, replay]);
 
-  const value = { entry, replay, track, error, index, setIndex, playing, setPlaying, speed, setSpeed, select };
+  const value = { entry, replay, track, error, index, setIndex, getTime, getFrame, playing, setPlaying, speed, setSpeed, select };
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
 }
 

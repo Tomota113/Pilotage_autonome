@@ -1,10 +1,11 @@
-"""Training, progress and replay endpoints for the Training Center."""
+"""Training, custom races and replay endpoints for F1-RL Lab."""
 
 from __future__ import annotations
 
 import asyncio
 import csv
 import json
+import logging
 import math
 import os
 import re
@@ -15,6 +16,7 @@ import tempfile
 import zipfile
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from itertools import count
 from pathlib import Path
 
 import numpy as np
@@ -24,7 +26,8 @@ from fastapi.staticfiles import StaticFiles
 
 from agents.train import PROGRESS_COLUMNS, make_run_id
 from env.f1_env import CAR_MODELS
-from tools.validate import validate_config
+from tools.custom_race import TRACK_ID, validate_race_options
+from tools.validate import validate_config, validate_track
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_DIST = REPO_ROOT / "app" / "dist"
@@ -37,6 +40,7 @@ CHECKPOINT = re.compile(r"step_([0-9]{1,20})\.(zip|npy|pt)")
 REPLAY_NAME = re.compile(r"(?P<algo>[a-z][a-z0-9]*(?:_[a-z]+)?)_(?P<checkpoint>step_[0-9]+|none)_(?P<track>[a-z0-9_]+)"
                          r"_mu(?P<mu>[0-9.]+)_ep(?P<episode>[0-9]+)\.json")
 SUMMARY = re.compile(r'"summary":\s*\{([^{}]*)\}\s*\}\s*$')
+LOGGER = logging.getLogger(__name__)
 
 
 def local_path(path: Path) -> Path:
@@ -177,6 +181,8 @@ def create_app(root: Path | None = None) -> FastAPI:
     queue = runs / "_queue"
     logs = runs / "_logs"
     jobs: dict[str, Training] = {}
+    race_states: dict[str, dict] = {}
+    race_tasks: set[asyncio.Task] = set()
     child_env = {**os.environ, "PYTHONPATH": str(REPO_ROOT), "PYTHONDONTWRITEBYTECODE": "1"}
 
     @asynccontextmanager
@@ -188,7 +194,8 @@ def create_app(root: Path | None = None) -> FastAPI:
         finally:
             for job in jobs.values():
                 job.stop()
-            await asyncio.gather(*(job.task for job in jobs.values()))
+            await asyncio.gather(*(job.task for job in jobs.values()),
+                                 *(cancel_task(task) for task in race_tasks))
 
     application = FastAPI(lifespan=lifespan)
     for name in ("tracks", "runs", "results"):
@@ -254,6 +261,109 @@ def create_app(root: Path | None = None) -> FastAPI:
         job = jobs[run_id] = Training(config, process)
         job.task = asyncio.create_task(job.reap(queued_config))
         return {"run_id": run_id, "state": job.state}
+
+    # Le préfixe /tracks passe aussi par le proxy de développement de Vite.
+    @application.post("/tracks/custom", include_in_schema=False)
+    @application.post("/custom-tracks")
+    async def save_custom_track(request: Request):
+        try:
+            data = await request.json()
+            if not isinstance(data, dict) or not isinstance(data.get("id"), str):
+                raise ValueError("Un circuit JSON avec un identifiant texte est attendu.")
+            if not isinstance(data.get("name"), str) or not data["name"].strip():
+                raise ValueError("Le nom du circuit est obligatoire.")
+            source_id = data["id"].lower().removeprefix("custom_")
+            slug = re.sub(r"[^a-z0-9_]+", "_", source_id).strip("_")[:100].rstrip("_")
+            if not slug:
+                raise ValueError("Indiquez un identifiant contenant une lettre ou un chiffre.")
+            base_id = data["id"] = f"custom_{slug}"
+            validate_track(data)
+            content = json.dumps(data, allow_nan=False, sort_keys=True) + "\n"
+        except (ValueError, TypeError, OverflowError, IndexError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+        try:
+            for suffix in count(1):
+                track_id = base_id if suffix == 1 else f"{base_id}_{suffix}"
+                destination = tracks / f"{track_id}.json"
+                data["id"] = track_id
+                if suffix != 1:
+                    content = json.dumps(data, sort_keys=True) + "\n"
+                # Publier sans écraser. Un circuit modifié reçoit un autre ID pour
+                # que les replays précédents gardent la géométrie de leur fichier.
+                with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=local_path(tracks)) as stream:
+                    stream.write(content)
+                    stream.flush()
+                    try:
+                        os.link(stream.name, destination)
+                    except FileExistsError:
+                        if (destination.is_symlink() or not destination.is_file()
+                                or destination.read_bytes() != content.encode("utf-8")):
+                            continue
+                return {"track_id": track_id}
+        except (OSError, ValueError) as exc:
+            LOGGER.exception("Could not save custom track")
+            raise HTTPException(500, "Impossible d’enregistrer le circuit.") from exc
+
+    def check_custom_track(track_id: str) -> None:
+        if not TRACK_ID.fullmatch(track_id) or not track_id.startswith("custom_") or track_id == "custom_":
+            raise HTTPException(400, "La course est réservée aux identifiants custom_.")
+        path = tracks / f"{track_id}.json"
+        if path.resolve() != path or not path.is_file():
+            raise HTTPException(404, "Circuit personnalisé introuvable.")
+
+    async def run_custom_race(track_id: str, car: str, mu_factors: list[float]) -> None:
+        log_name = f"custom-race_{track_id}.log"
+        process = None
+        try:
+            with local_path(logs / log_name).open("w", encoding="utf-8") as log:
+                process = await asyncio.create_subprocess_exec(
+                    sys.executable, "-m", "tools.custom_race", track_id, "--car", car,
+                    "--runs-dir", str(runs), "--out", str(local_path(root / "results" / "eval_custom.csv")),
+                    "--mu", *(str(factor) for factor in mu_factors), cwd=root, env=child_env,
+                    stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=log,
+                )
+                stdout, _ = await process.communicate()
+            if process.returncode != 0:
+                raise ValueError(f"Evaluation exited with code {process.returncode}")
+            count = int(stdout.splitlines()[-1])
+            race_states[track_id] = {"state": "done", "replay_count": count}
+        except (OSError, ValueError, IndexError):
+            LOGGER.exception("Custom race failed for %s", track_id)
+            race_states[track_id] = {"state": "failed", "replay_count": 0,
+                                     "error": "La course a échoué.", "log_url": f"/files/runs/_logs/{log_name}"}
+        finally:
+            if process is not None and process.returncode is None:
+                await terminate_watch(process)
+
+    @application.post("/tracks/custom/{track_id}/race", include_in_schema=False)
+    @application.post("/custom-tracks/{track_id}/race")
+    async def start_custom_race(track_id: str, request: Request):
+        check_custom_track(track_id)
+        try:
+            options = await request.json()
+            if not isinstance(options, dict):
+                raise ValueError("Un objet JSON est attendu pour les options de course.")
+            car = options.get("car")
+            mu_factors = options.get("mu_factors", [1.0])
+            validate_race_options(car, mu_factors)
+        except (ValueError, OverflowError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        if race_states.get(track_id, {}).get("state") == "running":
+            raise HTTPException(409, "Une course est déjà en cours sur ce circuit.")
+        state = race_states[track_id] = {"state": "running", "replay_count": 0}
+        task = asyncio.create_task(run_custom_race(track_id, car, mu_factors))
+        race_tasks.add(task)
+        task.add_done_callback(race_tasks.discard)
+        return state
+
+    @application.get("/tracks/custom/{track_id}/race", include_in_schema=False)
+    @application.get("/custom-tracks/{track_id}/race")
+    async def get_custom_race(track_id: str):
+        check_custom_track(track_id)
+        if track_id not in race_states:
+            raise HTTPException(404, "Aucune course lancée sur ce circuit.")
+        return race_states[track_id]
 
     @application.get("/tracks")
     async def get_tracks():

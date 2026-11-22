@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import TrackCanvas from "../components/TrackCanvas.jsx";
-import { listTracks, loadTrack } from "../data/api.js";
+import { getCustomRace, getMode, listTracks, loadTrack, saveCustomTrack, startCustomRace } from "../data/api.js";
 import { createOvalTrack, resampleTrack, TRACK_SPLITS, updateTrackGeometry, validateTrack } from "../data/trackValidation.js";
 
 const FORMAT = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
@@ -55,10 +55,14 @@ export default function TrackDesigner() {
   const [width, setWidth] = useState("");
   const [mu, setMu] = useState("");
   const [fixedView, setFixedView] = useState(null);
+  const [mode, setMode] = useState(null);
+  const [car, setCar] = useState("f1_2024");
+  const [race, setRace] = useState(null);
   const drag = useRef(null);
 
   useEffect(() => {
     let active = true;
+    getMode().then((value) => { if (active) setMode(value); });
     listTracks().then((items) => { if (active) setTracks(items); })
       .catch(() => { if (active) setSourceError("La liste des circuits est indisponible."); });
     return () => { active = false; };
@@ -85,7 +89,30 @@ export default function TrackDesigner() {
     return () => { active = false; };
   }, [source]);
 
+  useEffect(() => {
+    if (race?.state !== "running") return;
+    const { trackId } = race;
+    let active = true;
+    let timer;
+    async function poll() {
+      try {
+        const status = await getCustomRace(trackId);
+        if (!active) return;
+        if (status.state === "running") timer = setTimeout(poll, 1000);
+        else setRace({ trackId, ...status });
+      } catch (error) {
+        if (active) setRace({ trackId, state: "error", error: error.message });
+      }
+    }
+    timer = setTimeout(poll, 1000);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [race]);
+
   const errors = useMemo(() => validateTrack(track), [track]);
+  const racePending = race?.state === "starting" || race?.state === "running";
   const count = track.centerline.length;
   const [from, to] = range.map(Number);
   const validRange = range.every((value) => value !== "") && Number.isInteger(from) && Number.isInteger(to)
@@ -225,6 +252,19 @@ export default function TrackDesigner() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  async function saveAndRace() {
+    setRace({ state: "starting" });
+    try {
+      const { track_id: trackId } = await saveCustomTrack(track);
+      setTracks((items) => items.some((item) => item.id === trackId) ? items
+        : [...items, { id: trackId, name: track.name, split: track.split }]);
+      const status = await startCustomRace(trackId, car);
+      setRace({ trackId, ...status });
+    } catch (error) {
+      setRace({ state: "error", error: error.message });
+    }
+  }
+
   return (
     <>
       <h2>Éditeur de circuit</h2>
@@ -300,13 +340,32 @@ export default function TrackDesigner() {
           </form>
           {errors.length > 0 && (
             <div className="warn" role="status">
-              <strong>À corriger avant l’export</strong>
+              <strong>À corriger avant l’export ou la course</strong>
               <ul>{errors.map((error) => <li key={error}>{error}</li>)}</ul>
             </div>
           )}
           <div className="controls">
             <button type="button" className="on" disabled={loading || errors.length > 0} onClick={exportTrack}>Exporter</button>
           </div>
+          <div className="module-fields">
+            <label className="module-field">Voiture de la course
+              <select value={car} disabled={racePending} onChange={(event) => setCar(event.target.value)}>
+                <option value="v1">v1</option>
+                <option value="f1_2024">F1 2024</option>
+              </select>
+            </label>
+            <button type="button" disabled={mode !== "server" || loading || errors.length > 0 || racePending}
+                    onClick={saveAndRace}>Enregistrer et faire rouler les agents</button>
+          </div>
+          {mode === "fixtures" && <p className="note" role="status">Le serveur F1-RL Lab est absent (mode fixtures). Lancez-le puis rechargez la page pour faire rouler les agents.</p>}
+          {race?.state === "starting" && <p role="status">Enregistrement et lancement de la course…</p>}
+          {race?.state === "running" && <p role="status">Course en cours sur {race.trackId}…</p>}
+          {race?.state === "done" && (
+            <p role="status">{race.replay_count} replay(s) disponible(s) sur {race.trackId}. <a href="#/championship">Ouvrir AI Championship</a></p>
+          )}
+          {race?.error && (
+            <p className="warn" role="alert">{race.error} {race.log_url && <a href={race.log_url}>Voir le journal</a>}</p>
+          )}
         </div>
       </div>
     </>

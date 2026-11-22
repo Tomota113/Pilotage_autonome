@@ -1,5 +1,6 @@
 """Exercise the Training Center with local data and real child processes."""
 
+import csv
 import shutil
 import time
 from pathlib import Path
@@ -9,6 +10,7 @@ import yaml
 from fastapi.testclient import TestClient
 
 from server.app import create_app
+from tests.conftest import circle_track_dict
 from tests.test_validate import valid_config
 from tools.validate import FRAME_NUMBERS, SUMMARY_FIELDS
 
@@ -162,6 +164,79 @@ def test_lists_tracks(client, tmp_path):
     (tmp_path / "tracks" / "broken.json").write_text("{", encoding="utf-8")  # illisible : ignoré
     tracks = client.get("/tracks").json()
     assert tracks == [{"id": "demo_oval", "name": "Ovale de démonstration", "split": "demo", "length": 976.9}]
+
+
+def test_saves_validated_custom_tracks_without_overwriting(client, tmp_path):
+    tracks = tmp_path / "tracks"
+    original = (tracks / "demo_oval.json").read_bytes()
+    source = dict(circle_track_dict(radius=12), id="demo_oval")
+    assert client.post("/custom-tracks", json=dict(source, width=[])).status_code == 400
+    assert client.post("/custom-tracks", json=dict(source, id="../../")).status_code == 400
+    response = client.post("/custom-tracks", json=source)
+    assert response.status_code == 200, response.text
+    assert response.json() == {"track_id": "custom_demo_oval"}
+    assert client.post("/custom-tracks", json=source).json() == response.json()
+    assert (tracks / "demo_oval.json").read_bytes() == original
+    assert client.get("/files/tracks/custom_demo_oval.json").json() == dict(source, id="custom_demo_oval")
+    changed = dict(source, name="Une variante")
+    assert client.post("/custom-tracks", json=changed).json() == {"track_id": "custom_demo_oval_2"}
+    assert client.get("/files/tracks/custom_demo_oval.json").json()["name"] == source["name"]
+    (tracks / "custom_piste.json").symlink_to(tracks / "demo_oval.json")
+    assert client.post("/custom-tracks", json=dict(source, id="../PISTE!")).json() == {
+        "track_id": "custom_piste_2",
+    }
+    assert (tracks / "demo_oval.json").read_bytes() == original
+
+
+def wait_for_custom_race(client, url):
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        response = client.get(url)
+        assert response.status_code == 200, response.text
+        status = response.json()
+        if status["state"] != "running":
+            return status
+        time.sleep(0.05)
+    pytest.fail(f"Timed out waiting for {url}")
+
+
+def test_custom_race_publishes_replays(client, tmp_path):
+    track = circle_track_dict(radius=12)
+    track_id = client.post("/tracks/custom", json=track).json()["track_id"]
+    url = f"/custom-tracks/{track_id}/race"
+    options = {"car": "f1_2024", "mu_factors": [1.0, 0.8]}
+    assert client.post("/custom-tracks/demo_oval/race", json=options).status_code == 400
+    assert client.post("/custom-tracks/custom_missing/race", json=options).status_code == 404
+    assert client.get(url).status_code == 404
+    for invalid in ({"car": []}, {"mu_factors": []}, {"mu_factors": [True]}, {"mu_factors": [0.005]}):
+        assert client.post(url, json={**options, **invalid}).status_code == 400
+    started = client.post(url, json=options)
+    assert started.status_code == 200, started.text
+    assert started.json() == {"state": "running", "replay_count": 0}
+    assert client.post(url, json=options).status_code == 409
+
+    assert wait_for_custom_race(client, f"/tracks/custom/{track_id}/race") == {
+        "state": "done", "replay_count": 4,
+    }
+    replays = client.get("/replays").json()
+    assert {(r["run_id"], r["mu_factor"]) for r in replays} == {
+        (run_id, mu) for run_id in ("classic_f1_ref", "raceline_f1_ref") for mu in (1.0, 0.8)
+    }
+    assert all(r["track_id"] == track_id and r["car"] == "f1_2024" for r in replays)
+    with (tmp_path / "results" / "eval_custom.csv").open(encoding="utf-8", newline="") as stream:
+        assert {row["replay_path"] for row in csv.DictReader(stream)} == {r["path"] for r in replays}
+    replay = client.get(f"/files/{replays[0]['path']}").json()
+    assert replay["track_id"] == track_id and replay["frames"]
+
+
+def test_custom_race_reports_child_failure(client, tmp_path):
+    (tmp_path / "tracks" / "custom_broken.json").write_text("{}", encoding="utf-8")
+    url = "/custom-tracks/custom_broken/race"
+    assert client.post(url, json={"car": "v1"}).json()["state"] == "running"
+    status = wait_for_custom_race(client, url)
+    assert status["state"] == "failed" and status["replay_count"] == 0 and status["error"]
+    assert "missing fields" in client.get(status["log_url"]).text
+    assert client.get("/replays").json() == []
 
 
 def test_root_serves_the_built_app_or_explains(client, monkeypatch, tmp_path):

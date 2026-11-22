@@ -9,7 +9,9 @@ vi.mock("../components/CarSelector.jsx", async (importOriginal) => ({
 }));
 vi.mock("../playback.jsx", () => ({ usePlayback: () => data.playback, PlaybackControls: () => null }));
 vi.mock("../components/TrackCanvas.jsx", () => ({
-  default: ({ trails }) => <canvas data-speed-max={trails[0].speedColorMax} />,
+  default: ({ trails, getScene }) => (
+    <canvas data-speed-max={trails[0].speedColorMax} data-car-x={getScene().cars[0].x} />
+  ),
   speedColor: () => "#000",
 }));
 
@@ -20,6 +22,8 @@ it("affiche 345 km/h et une échelle F1 pour le replay de la voiture sélectionn
   data.playback = {
     entry, track: { name: "Montréal" }, index: 0,
     replay: { track_id: entry.track_id, mu_factor: 1, frames: [frame], summary: { outcome: "timeout" }, agent: {} },
+    getFrame: () => ({ ...frame, x: 2, v: 100 / 3.6, sensors_m: [5] }),
+    getTime: () => 1.025,
   };
 
   const html = renderToStaticMarkup(<RaceSimulator />);
@@ -27,6 +31,7 @@ it("affiche 345 km/h et une échelle F1 pour le replay de la voiture sélectionn
   expect(html).toContain("345 <small>km/h</small>");
   expect(html).toContain(">350</text>");
   expect(html).toContain('data-speed-max="96"');
+  expect(html).toContain('data-car-x="2"');
   expect(html).toContain("≥ 200 m");
 
   data.replays = [];

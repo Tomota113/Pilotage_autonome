@@ -8,7 +8,7 @@ import pytest
 
 from sim.track import Track
 from tools.generate_tracks import (
-    LENGTH_RANGE, MIN_GAP, MIN_RADIUS, demo_oval, generate_track, max_curvature, min_gap,
+    F1_SEEDS, LENGTH_RANGE, MIN_GAP, MIN_RADIUS, demo_oval, generate_f1_track, generate_track, max_curvature, min_gap,
 )
 from tools.import_f1_tracks import CIRCUITS, RAW, TRAIN_CIRCUITS, convert
 
@@ -38,15 +38,18 @@ def test_demo_oval_is_a_stadium():
 
 def test_committed_tracks_match_the_generator():
     """Inventaire complet et vérification des circuits générés."""
-    expected = {f"gen_{k:02d}" for k in range(15)} | {"demo_oval"}
+    expected = {f"gen_{k:02d}" for k in range(15)} | {"demo_oval"} | {f"gen_f1_{k}" for k in F1_SEEDS}
     expected.update(tid for tid, _ in CIRCUITS.values())
     expected.update(tid for tid, _ in TRAIN_CIRCUITS.values())
-    files = {p.stem: p for p in TRACKS_DIR.glob("*.json")}
+    # Les circuits dessinés dans le Track Designer (custom_*) ne font pas partie de l'inventaire
+    files = {p.stem: p for p in TRACKS_DIR.glob("*.json") if not p.stem.startswith("custom_")}
     assert set(files) == expected
     for track_id, path in files.items():
         data = json.loads(path.read_text(encoding="utf-8"))
         Track(data)
-        if track_id.startswith("gen_"):
+        if track_id.startswith("gen_f1_"):
+            assert data == generate_f1_track(int(track_id[7:]))
+        elif track_id.startswith("gen_"):
             seed = int(track_id[4:])
             assert data["split"] == ("train" if seed < 10 else "test")
             assert data == generate_track(seed, data["split"])

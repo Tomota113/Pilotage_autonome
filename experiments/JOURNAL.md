@@ -132,3 +132,33 @@ précédents de la série v1 (les écarts sont faibles, les conclusions inchang�
 | PPO μ aléatoire | 0,20 / 0,40 / 0,20 | 0,20 / 0,67 / 0,33 | 34 / 59 |
 | DQN | 0,13 / 0,07 / 0,00 | 0,33 / 0,27 / 0,20 | 15 / 34 |
 | Q-Learning / SARSA / Monte-Carlo | 0 / 0 / 0 | 0 / 0 / 0 | 2 / 6 / 0 |
+
+## Série v2 — nuit du 21 au 22/11/2026 (en cours)
+
+Lancée le 21/11 à 20 h 39 (`tools/run_v2.sh`, 3 files). En parallèle sur l'i3 (2 cœurs, 4 threads), les
+débits sont bien plus bas que mesurés seuls : SAC 42 pas/s (au lieu de 131), TD3 57 (183), TQC ≈ 21 (66),
+PPO ≈ 800 (1 436). Les 3 graines complètes auraient demandé ≈ 38 h de plus. **Décision de l'étudiant
+(22/11, 8 h 50) : réduire** (`tools/run_v2_reduced.sh`) : graine 0 de toutes les conditions ; graines 1 et 2
+pour PPO (3 variantes), TQC (500 000 pas au lieu de 1 M), DQN, Deep Monte-Carlo et les tabulaires ;
+SAC, TD3, QR-DQN et Deep SARSA restent à une graine. td3_f1_s1 arrêté à 200 000 pas (runs/_aborted/).
+
+État au 22/11 à 8 h 48 (récompense moyenne d'évaluation sur les circuits d'entraînement, 5 épisodes ;
+« tours » = meilleur taux de tours vu pendant l'entraînement) :
+
+| Condition | Graine | Pas | Récompense finale | Meilleure (au pas) | Tours max |
+|---|---|---|---|---|---|
+| ppo_f1_net64 | 0 | 3 M | 417,0 | 431,6 (2,4 M) | 0,6 |
+| ppo_f1_mualea | 0 | 3 M | 309,9 | 373,0 (2,3 M) | 0,4 |
+| ppo_f1 | 0 | 3 M | 33,5 | 43,3 (2,7 M) | 0 |
+| ppo_f1 | 1 | 3 M | 386,3 | 399,3 (2,7 M) | 0,4 |
+| ppo_f1_mualea | 1 | 3 M | 214,0 | 322,2 (2,2 M) | 0,2 |
+| ppo_f1_net64 | 1 | 3 M | 217,0 | 217,0 (3 M) | 0,2 |
+| tqc_f1 | 0 | 0,9 M (en cours) | 214,2 | 246,3 (0,7 M) | 0 |
+| deep_mc_f1 | 0 | 1,5 M | 47,4 | 173,4 (1,4 M) | 0 |
+| td3_f1 | 0 | 1 M | 36,6 | 36,6 (1 M) | 0 |
+| qrdqn_f1 | 0 | 1,1 M (en cours) | 23,9 | 35,1 (0,9 M) | 0 |
+| sac_f1 | 0 | 1 M | −6,6 | 30,8 (0,1 M) | 0 |
+
+Premiers tours bouclés en série v2 (PPO). ppo_f1_s0 : politique bloquée (diagnostic sur 8 départs :
+sorties de piste entre 7 et 21 % du tour, ou arrêt complet sur Shanghai). Grande variance entre graines.
+Ces chiffres sont des évaluations d'entraînement ; l'évaluation sur les circuits F1 suivra.

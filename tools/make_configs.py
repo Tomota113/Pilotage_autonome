@@ -89,6 +89,11 @@ F1_CONDITIONS = {
 ALL_CONDITIONS = list(CONDITIONS) + list(F1_CONDITIONS)
 
 
+# Budgets réduits par graine (22/11/2026, décision de l'étudiant) : en parallèle sur l'i3, TQC ne fait
+# que ≈ 21 pas/s ; ses graines 1 et 2 s'arrêtent à 500 000 pas (la graine 0 a fait 1 M).
+F1_SEED_BUDGETS = {("tqc_f1", 1): 500_000, ("tqc_f1", 2): 500_000}
+
+
 def make_f1_config(condition: str, seed: int, total_steps: int | None = None) -> dict:
     spec = F1_CONDITIONS[condition]
     space = ALGO_ACTION_SPACE[spec["algo"]]
@@ -98,7 +103,7 @@ def make_f1_config(condition: str, seed: int, total_steps: int | None = None) ->
         "schema": CONFIG_SCHEMA,
         "algo": spec["algo"],
         "seed": seed,
-        "total_steps": total_steps or spec["total_steps"],
+        "total_steps": total_steps or F1_SEED_BUDGETS.get((condition, seed), spec["total_steps"]),
         "n_envs": spec["n_envs"],
         "tracks": {"train": REAL_TRAIN_TRACKS, "test": F1_TEST_TRACKS},
         "mu": {"mode": spec["mu_mode"], "value": 1.0, "range": F1_MU_RANGE},

@@ -76,8 +76,9 @@ function EpisodeChart({ frames, index, metric, rank }) {
       {[0, duration / 2, duration].map((time) => (
         <text key={time} x={x(time)} y={115} textAnchor="middle">{NUMBER.format(time)} s</text>
       ))}
-      <path d={path} fill="none" stroke={color} strokeWidth={2} />
-      <line x1={x(frame.t)} x2={x(frame.t)} y1={TOP} y2={BOTTOM} className="network-cursor" />
+      <path d={path} fill="none" stroke={color} className="chart-stroke" style={{ "--series-width": 2 }} />
+      <line x1={x(frame.t)} x2={x(frame.t)} y1={TOP} y2={BOTTOM} className="network-cursor chart-stroke"
+        style={{ "--series-width": 1 }} />
       {Number.isFinite(current) && <circle cx={x(frame.t)} cy={y(current)} r={4} fill={color} stroke="var(--text)" />}
     </svg>
   </figure>;
@@ -93,8 +94,9 @@ export function NeuronHistory({ frames, index, layer, neuron, rank }) {
   return <EpisodeChart frames={frames} index={index} metric={metric} rank={rank} />;
 }
 
-export default function EpisodeCharts({ frames, index, mode }) {
-  const metrics = [SPEED, STEER, ...(mode === "pedal" ? [PEDAL] : [THROTTLE, BRAKE])];
+export default function EpisodeCharts({ frames, index, mode, car }) {
+  const hasPedal = mode === "pedal" || (mode === "discrete9" && car === "f1_2024");
+  const metrics = [SPEED, STEER, ...(hasPedal ? [PEDAL] : [THROTTLE, BRAKE])];
   return <section className="card">
     <h3 className="card-title">Vitesse et commandes au fil de l’épisode</h3>
     <div className="network-charts">
@@ -102,7 +104,7 @@ export default function EpisodeCharts({ frames, index, mode }) {
     </div>
     <details className="network-details">
       <summary>En savoir plus sur les courbes</summary>
-      <p>Le trait blanc suit l’image affichée. La vitesse est mesurée après la commande.</p>
+      <p>Le trait vertical suit l’image affichée. La vitesse est mesurée après la commande.</p>
       <p>{metrics.map(({ help }) => help).filter(Boolean).join(" ")}</p>
     </details>
   </section>;

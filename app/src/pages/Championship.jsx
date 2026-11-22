@@ -57,7 +57,7 @@ function Standings({ racers, selectedId, onSelect, title, compact = false }) {
                 <span role="cell">{index + 1}</span>
                 <span role="cell">
                   <button type="button" className="standing-agent" aria-label={`Suivre ${name}`} aria-pressed={selected}
-                          onClick={() => onSelect(racer.condition)}>
+                          title={name} onClick={() => onSelect(racer.condition)}>
                     <span className="swatch" />{name}
                   </button>
                 </span>

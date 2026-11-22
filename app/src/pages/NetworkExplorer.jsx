@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import TrackCanvas from "../components/TrackCanvas.jsx";
-import ReplayPicker from "../components/ReplayPicker.jsx";
+import { ReplayFields } from "../components/ReplayPicker.jsx";
 import EpisodeCharts from "../components/network/EpisodeCharts.jsx";
 import NetworkDiagram from "../components/network/NetworkDiagram.jsx";
 import NetworkPlayback from "../components/network/NetworkPlayback.jsx";
 import { ActivationBars, ObservationBars } from "../components/network/NetworkReadings.jsx";
 import { conditionColor, replayTitle } from "../data/algorithms.js";
+import { evaluationRows, summarizeTrials } from "../data/analytics.js";
+import { listReplays, listRuns, loadF1EvalV2 } from "../data/api.js";
+import { identifyF1Rows } from "../data/f1.js";
 import { getActionMode, getAgentKind, getPerception, pickNetworkReplay } from "../data/network.js";
-import { listReplays } from "../data/api.js";
 import { usePlayback } from "../playback.jsx";
 import "../components/network/network.css";
 
@@ -65,10 +67,20 @@ function LearningGuide() {
   </details>;
 }
 
+async function loadNetworkCatalog() {
+  const evaluation = Promise.all([loadF1EvalV2(), listRuns()]).then(([rows, runs]) => {
+    const tests = (rows ?? []).filter(({ split }) => split === "test");
+    return summarizeTrials(evaluationRows(identifyF1Rows(tests, runs)));
+  }).catch(() => []);
+  const [replays, results] = await Promise.all([listReplays(), evaluation]);
+  return { replays, results };
+}
+
 export default function NetworkExplorer() {
   const { entry, replay, track, index, error, select, playing, speed } = usePlayback();
   const [showCar, setShowCar] = useState(false);
   const [catalog, setCatalog] = useState(null);
+  const [catalogError, setCatalogError] = useState(false);
   const [automatic, setAutomatic] = useState(null);
   const [excluded, setExcluded] = useState(() => new Set());
   const frame = replay?.frames[index];
@@ -80,32 +92,37 @@ export default function NetworkExplorer() {
     const recorded = replay?.frames.find(({ activations }) => activations?.some((values) => values.length))?.activations;
     return recorded?.map((values) => values.length);
   }, [replay]);
-  const needsReplay = !entry || (replay ? !layerSizes : !entry.has_activations || Boolean(error && automatic?.path === entry.path));
+  const needsReplay = !entry || (replay ? !layerSizes : !entry.has_activations || Boolean(error));
   const fallback = useMemo(() => {
     if (!needsReplay || !catalog) return null;
     const unavailable = new Set(excluded);
     if (entry) unavailable.add(entry.path);
-    return pickNetworkReplay(catalog, unavailable);
+    return pickNetworkReplay(catalog.replays, unavailable, catalog.results);
   }, [needsReplay, catalog, excluded, entry]);
+  const withActivations = useMemo(() => catalog?.replays.filter((item) =>
+    !excluded.has(item.path) && (item.has_activations || (item.path === entry?.path && layerSizes))) ?? [],
+  [catalog, excluded, entry?.path, layerSizes]);
 
   useEffect(() => {
-    if (!needsReplay || catalog !== null) return undefined;
     let active = true;
-    listReplays().then((replays) => { if (active) setCatalog(replays); })
-      .catch(() => { if (active) setCatalog([]); });
+    loadNetworkCatalog().then((data) => { if (active) setCatalog(data); })
+      .catch(() => { if (active) setCatalogError(true); });
     return () => { active = false; };
-  }, [needsReplay, catalog]);
+  }, []);
 
   useEffect(() => {
     if (!fallback) return;
     // Le catalogue détecte la clé « activations ». Le replay chargé confirme qu’elle contient des valeurs.
     if (entry) setExcluded((previous) => new Set(previous).add(entry.path));
-    setAutomatic({ path: fallback.path, replaced: Boolean(entry) });
+    setAutomatic((previous) => ({
+      path: fallback.path,
+      replaced: previous?.path === entry?.path ? Boolean(previous?.replaced) : Boolean(entry),
+    }));
     select(fallback);
   }, [fallback, select, entry]);
 
-  const choosing = needsReplay && (catalog === null || fallback);
-  const pulseDuration = playing ? Math.max(20, Math.min(200, ((replay?.dt ?? 0.05) * 1000) / speed - 6)) : 220;
+  const choosing = needsReplay && ((!catalog && !catalogError) || fallback);
+  const pulseDuration = Math.max(140, Math.min(300, ((replay?.dt ?? 0.05) * 1000) / speed));
 
   return <div className="stack network-explorer">
     <header className="page-header">
@@ -113,21 +130,24 @@ export default function NetworkExplorer() {
       <p>Suivez une décision, des capteurs aux commandes de la voiture.</p>
     </header>
     <div className="network-replay">
-      {choosing ? <p role="status">Recherche d’un replay avec activations…</p>
-        : <ReplayPicker onlyWithActivations={Boolean(entry?.has_activations && (!replay || layerSizes))} />}
+      {catalogError ? <p className="warn" role="alert">Impossible de charger la liste des replays.</p>
+        : choosing ? <p role="status">Recherche d’un replay avec activations…</p>
+        : <ReplayFields replays={withActivations.length ? withActivations : catalog?.replays ?? null}
+          onlyWithActivations={Boolean(withActivations.length)} autoSelect={!entry && !withActivations.length} />}
+      {catalog && needsReplay && !fallback && <p className="network-replay-note" role="status">Aucun autre replay avec activations disponible.</p>}
       {entry && automatic && automatic.path === entry.path && !error && <p className="network-replay-note" role="status">
         {automatic.replaced ? "Le replay précédent ne permettait pas de voir les activations. " : ""}
-        Replay choisi pour le schéma · {replayTitle(entry)}
+        Replay avec activations sélectionné automatiquement · {replayTitle(entry)}
       </p>}
       {entry && !frame && !error && !choosing && <p role="status">Chargement du replay…</p>}
     </div>
     {frame && !choosing && <>
       <NetworkPlayback />
       {layerSizes ? <NetworkDiagram key={entry?.path ?? replay.run_id} frames={replay.frames} index={index} car={car} track={track}
-        layerSizes={layerSizes} mode={mode} algo={algo} pulseDuration={pulseDuration} />
+        layerSizes={layerSizes} mode={mode} algo={algo} playing={playing} pulseDuration={pulseDuration} />
         : kind !== "network" ? <NoNetwork kind={kind} car={car} /> : <p className="card warn">Aucune activation enregistrée pour ce replay.</p>}
       {Number.isFinite(frame.t) && Number.isFinite(frame.v) &&
-        <EpisodeCharts frames={replay.frames} index={index} mode={mode} />}
+        <EpisodeCharts frames={replay.frames} index={index} mode={mode} car={car} />}
       {layerSizes && <ActivationBars frame={frame} layerSizes={layerSizes} />}
       <details className="card network-details" open={showCar} onToggle={(event) => setShowCar(event.currentTarget.open)}>
         <summary>En savoir plus sur la voiture et ses mesures</summary>

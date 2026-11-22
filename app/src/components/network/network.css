@@ -2,12 +2,14 @@
   --network-negative: #65aaff;
   --network-zero: #777e8a;
   --network-positive: #ffa34f;
+  --network-signal: #ffe0a8;
   gap: 12px;
 }
 [data-theme="light"] .network-explorer {
   --network-negative: #1a68c9;
   --network-zero: #a9b1be;
   --network-positive: #aa4900;
+  --network-signal: #a32c00;
 }
 .network-explorer .page-header { margin-bottom: 0; }
 .network-explorer .page-header h2 { font-size: clamp(26px, 3vw, 40px); }
@@ -15,9 +17,7 @@
 .network-explorer .card > p:last-child { margin-bottom: 0; }
 
 .network-replay .controls { margin: 0; }
-.network-replay .field { flex: 1 1 165px; min-width: 0; max-width: 320px; }
-.network-replay .field select { width: 100%; min-width: 0; text-overflow: ellipsis; }
-.network-replay-note { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.network-replay-note { margin: 6px 0 0; color: var(--muted); font-size: .82rem; }
 .network-playback {
   padding: 10px 12px;
   border: 1px solid var(--line);
@@ -44,7 +44,7 @@
 }
 .network-diagram-heading { justify-content: space-between; margin-bottom: 8px; }
 .network-diagram-heading .card-title { margin: 0; }
-.network-legend { font-size: 14px; }
+.network-legend { font-size: .85rem; }
 .network-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .network-legend .negative { background: var(--network-negative); }
 .network-legend .zero { background: var(--network-zero); }
@@ -67,15 +67,19 @@
   outline: none;
 }
 .network-link, .network-pulse { fill: none; stroke: var(--network-positive); }
-.network-link { stroke-opacity: .31; }
+.network-link { stroke-opacity: .42; }
 .network-pulse {
-  stroke: #ffd39f;
-  stroke-dasharray: 11 100;
-  stroke-dashoffset: 11;
+  stroke: var(--network-signal);
+  stroke-linecap: round;
+  stroke-dasharray: 15 100;
+  stroke-dashoffset: 15;
   animation: network-signal var(--network-pulse-duration, 200ms) linear both;
 }
+.network-diagram[data-playing] .network-pulse { animation-iteration-count: infinite; }
 @keyframes network-signal {
-  to { stroke-dashoffset: -100; }
+  0% { opacity: 0; }
+  12%, 84% { opacity: 1; }
+  100% { opacity: 0; stroke-dashoffset: -100; }
 }
 @media (prefers-reduced-motion: reduce) {
   .network-pulse { display: none; }
@@ -116,7 +120,7 @@
 
 .network-inspector { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 8px; }
 .network-inspector > p { margin: 0; color: var(--muted); }
-.network-history { width: min(100%, 410px); }
+.network-history { width: min(100%, 24rem); }
 .network-details { margin-top: 8px; }
 .network-details summary { cursor: pointer; color: var(--text); font-weight: 650; }
 .network-details > p { color: var(--muted); }
@@ -134,7 +138,7 @@
 .network-chart figcaption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0 8px; }
 .network-chart svg { display: block; width: 100%; fill: var(--muted); font-size: 11px; }
 .network-chart .network-cursor { stroke: var(--text); }
-.network-layers h4 { margin: 0 0 6px; font-size: 15px; }
+.network-layers h4 { margin: 0 0 6px; font-size: .94rem; }
 .network-readings { margin: 0; padding: 0; list-style: none; }
 .network-readings li, .network-reading-key {
   display: grid;
@@ -143,7 +147,7 @@
   align-items: center;
   padding: 5px 0;
   border-bottom: 1px solid var(--line);
-  font-size: 14px;
+  font-size: .875rem;
 }
 .network-reading-key { color: var(--muted); }
 .network-reading-key > :nth-child(2) { grid-column: 2 / 4; text-align: right; }
@@ -160,6 +164,15 @@
 .network-guide dl div + div { margin-top: 6px; }
 .network-guide dt { font-weight: 650; }
 .network-guide dd { margin: 0; color: var(--muted); }
+
+[data-presentation="true"] .network-diagram { width: min(100%, 1320px); margin-inline: auto; }
+[data-presentation="true"] .network-chart svg { font-size: 13px; }
+
+@media (min-width: 901px) and (max-height: 850px) {
+  [data-presentation="true"] .network-explorer { gap: .5rem; }
+  [data-presentation="true"] .network-explorer .page-header > p { display: none; }
+  [data-presentation="true"] .network-diagram { width: min(100%, 1060px); }
+}
 
 @media (max-width: 1100px) {
   main:has(> .network-explorer) { padding-inline: 12px; }

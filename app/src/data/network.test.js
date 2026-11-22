@@ -109,6 +109,9 @@ it("s√©lectionne un tour v2 avec activations en comparant les agents dans les m√
     runnerUp, winner,
   ];
   expect(pickNetworkReplay(replays)).toBe(winner);
+  const evaluation = [{ condition: "ppo", rate: 0.1 }, { condition: "sac", rate: 0.2 }];
+  expect(pickNetworkReplay(replays, new Set(), evaluation)).toBe(runnerUp);
+  expect(pickNetworkReplay(replays, new Set([runnerUp.path]), evaluation)?.condition).toBe("ppo");
   expect(pickNetworkReplay([winner, runnerUp], new Set([winner.path]))).toBe(runnerUp);
   expect(pickNetworkReplay([replays[0]])).toBeUndefined();
 });

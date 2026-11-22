@@ -1,8 +1,7 @@
 // Choix d'un replay en trois menus lisibles : agent (condition), circuit, adhérence.
 // `onlyWithActivations` limite la liste aux replays de réseaux de neurones (Neural Network Explorer).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { CONDITIONS, OUTCOME_LABELS, conditionLabel, muLabel } from "../data/algorithms.js";
-import { listReplays } from "../data/api.js";
 import { usePlayback } from "../playback.jsx";
 import TrackOptions from "./TrackOptions.jsx";
 
@@ -14,15 +13,7 @@ function pickDefault(list) {
   return list.find((r) => ["sac_mufixe", "sac_f1"].includes(r.condition) && r.mu_factor === 1) ?? list[0];
 }
 
-export default function ReplayPicker({ onlyWithActivations = false }) {
-  const [all, setAll] = useState(null);
-  useEffect(() => { listReplays().then(setAll).catch(() => setAll([])); }, []);
-
-  const replays = useMemo(() => all?.filter((r) => !onlyWithActivations || r.has_activations) ?? null, [all, onlyWithActivations]);
-  return <ReplayFields replays={replays} onlyWithActivations={onlyWithActivations} />;
-}
-
-export function ReplayFields({ replays, onlyWithActivations = false, children }) {
+export function ReplayFields({ replays, onlyWithActivations = false, autoSelect = true, children }) {
   const { entry, select, error } = usePlayback();
   const conditions = useMemo(() => [...new Set((replays ?? []).map((r) => r.condition ?? ""))]
     .sort((a, b) => (ORDER[a] ?? 99) - (ORDER[b] ?? 99)), [replays]);
@@ -37,8 +28,8 @@ export function ReplayFields({ replays, onlyWithActivations = false, children })
 
   // Premier affichage : un replay est choisi automatiquement
   useEffect(() => {
-    if (!current && replays?.length) select(pickDefault(replays));
-  }, [current, replays, select]);
+    if (autoSelect && !current && replays?.length) select(pickDefault(replays));
+  }, [autoSelect, current, replays, select]);
 
   function choose(cond, trk, mu) {
     const pool = replays.filter((r) => (r.condition ?? "") === cond);
@@ -56,7 +47,7 @@ export function ReplayFields({ replays, onlyWithActivations = false, children })
     </div>;
   }
   return (
-    <div className="controls">
+    <div className="controls replay-fields">
       {children}
       <label className="field">Agent
         <select value={condition} onChange={(e) => choose(e.target.value, track, current?.mu_factor ?? 1)}>

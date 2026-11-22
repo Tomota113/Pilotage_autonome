@@ -199,7 +199,10 @@ export function V2Showcase({ rows }) {
   const demo = new Map(groups.get("demo").map((entry) => [entry.condition, entry]));
   const conditions = [...new Set([...train.keys(), ...demo.keys()])];
   const max = Math.max(...[...train.values(), ...demo.values()].map(({ attempts }) => attempts));
-  const title = "Les tours de démonstration sur pistes réelles et générées";
+  const compared = conditions.filter((id) => !isReference(id) && train.has(id) && demo.has(id))
+    .map((condition) => ({ condition, laps: train.get(condition).laps + demo.get(condition).laps }));
+  const title = leaderTitle(compared, ({ laps }) => laps, () => "boucle le plus de tours en démonstration",
+    "Tours de démonstration sur pistes réelles et générées");
   if (!conditions.length) return <p className="card empty">Aucun résultat de démonstration disponible.</p>;
   const sets = [
     { label: "Circuits réels d’entraînement", color: "var(--info)", entries: train },

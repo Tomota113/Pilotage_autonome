@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ALGO_LABELS } from "../../data/algorithms.js";
 import {
   ACTION_LABELS, denormalizeObservation, getDiscreteOutput, getObservationLabels, getTrackHalfWidth,
@@ -72,21 +72,23 @@ function NeuronLayer({ points, values, ranks, scale, layer, active, pinned, onPr
   </g>;
 }
 
-function ActivationLinks({ groups, index }) {
+function ActivationLinks({ groups, index, playing }) {
+  // En lecture, le signal continue son trajet même si les extrémités changent à l’image suivante.
+  const pulse = playing ? "playing" : index;
   return <g aria-hidden="true" pointerEvents="none">
     {groups.slice(1).map((to, stage) => {
       const from = groups[stage];
-      return <g key={stage}>{topActivationLinks(from.values, to.values).map((link) => {
+      return <g key={stage}>{topActivationLinks(from.values, to.values).map((link, rank) => {
         const start = from.points[link.from];
         const end = to.points[link.to];
         const { x: x1, y: y1 } = start;
         const { x: x2, y: y2 } = end;
         const mid = (x1 + x2) / 2;
         const path = `M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}`;
-        return <g key={`${link.from}-${link.to}`}>
+        return <g key={rank}>
           <path className="network-link" d={path} strokeWidth={0.7 + link.strength * 2.2} />
-          <path key={index} className="network-pulse" d={path} pathLength="100" strokeWidth={1.2 + link.strength * 2.2}
-            style={{ animationDelay: `${stage * 5}ms` }} />
+          <path key={pulse} className="network-pulse" d={path} pathLength="100" strokeWidth={1.8 + link.strength * 2.2}
+            style={{ animationDelay: `${stage * 15 + rank * 6}ms` }} />
         </g>;
       })}</g>;
     })}
@@ -106,6 +108,7 @@ function SteeringWheel({ value }) {
 }
 
 const PERCENT = new Intl.NumberFormat("fr-FR", { style: "percent", maximumFractionDigits: 1, signDisplay: "exceptZero" });
+const SCORE = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 4 });
 
 function SteeringGauge({ value }) {
   return <div className="network-steering">
@@ -131,8 +134,10 @@ function OutputColumn({ mode, action, points, discrete }) {
     return <foreignObject x={OUTPUT_X + 8} y={points[0].y - 13} width={190} height={282}>
       <ul className="network-actions">
         {ACTION_LABELS.map((label, index) => <li key={label} aria-current={chosen === index ? "true" : undefined}>
-          <span>{label}</span>
-          <span className="network-number">{scores ? formatNumber(scores[index]) : "—"}</span>
+          <span>{chosen === index && <span aria-hidden="true">✓ </span>}{label}</span>
+          <span className="network-number" title={scores ? formatNumber(scores[index]) : undefined}>
+            {scores ? SCORE.format(scores[index]) : "—"}
+          </span>
           {scores && <SignedBar value={scores[index]} max={max} />}
         </li>)}
       </ul>
@@ -157,10 +162,14 @@ function OutputColumn({ mode, action, points, discrete }) {
   </g>;
 }
 
-export default function NetworkDiagram({ frames, index, car, track, layerSizes, mode, algo, pulseDuration }) {
+export default function NetworkDiagram({ frames, index, car, track, layerSizes, mode, algo, playing, pulseDuration }) {
   const [preview, setPreview] = useState(null);
   const [pinned, setPinned] = useState(null);
-  const active = preview ?? pinned;
+  const active = pinned ?? preview;
+  const inspector = useRef(null);
+  useEffect(() => {
+    if (pinned) inspector.current.scrollIntoView({ block: "nearest" });
+  }, [pinned]);
   const frame = frames[index];
   const { obs, action, activations = [] } = frame;
   const labels = getObservationLabels(car, obs.length);
@@ -186,6 +195,7 @@ export default function NetworkDiagram({ frames, index, car, track, layerSizes, 
   });
 
   const discrete = mode === "discrete9" ? getDiscreteOutput(frame) : null;
+  // Sans valeurs Q, seule la destination de la commande enregistrée est connue.
   const outputValues = discrete ? (discrete.scores ?? ACTION_LABELS.map((_, i) => Number(discrete.chosen === i)))
     : mode === "pedal" ? [action.steer, pedalValue(action)] : [action.steer, action.throttle, action.brake];
   const outputYs = discrete ? ACTION_LABELS.map((_, i) => 73 + i * 24) : mode === "pedal" ? [129, 224] : [105, 185, 245];
@@ -201,7 +211,7 @@ export default function NetworkDiagram({ frames, index, car, track, layerSizes, 
   ];
 
   function pin(layer, neuron) {
-    setPinned((previous) => previous?.layer === layer && previous.neuron === neuron ? null : { layer, neuron });
+    setPinned({ layer, neuron });
   }
 
   return <section className="card network-diagram-card" aria-labelledby="network-diagram-title">
@@ -214,12 +224,13 @@ export default function NetworkDiagram({ frames, index, car, track, layerSizes, 
       </div>
     </div>
     <div className="network-diagram-scroll" tabIndex={0} role="region" aria-label="Schéma interactif du réseau">
-      <svg className="network-diagram" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} style={{ "--network-pulse-duration": `${pulseDuration}ms` }} aria-label="Entrées, couches de neurones et sorties">
+      <svg className="network-diagram" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} data-playing={playing || undefined}
+        style={{ "--network-pulse-duration": `${pulseDuration}ms` }} aria-label="Entrées, couches de neurones et sorties">
         {headings.map(({ x, text, centered }) => <text className="network-stage-title" key={text} x={x} y={27}
           textAnchor={centered ? "middle" : "start"}>{text}</text>)}
         {layerLayouts.map((_, layer) => <rect key={layer} x={265 + layer * 270} y={70} width={234} height={236} rx={10}
           className="network-layer-panel" />)}
-        <ActivationLinks groups={stages} index={index} />
+        <ActivationLinks groups={stages} index={index} playing={playing} />
         {inputPoints.map(({ x, y }, input) => <g key={input} className="network-input">
           <title>{`${labels[input]} · ${formatMeasure(measures[input])} · ${formatNumber(obs[input])} normalisé`}</title>
           <text x={12} y={y} dy=".35em">{labels[input].replace("Distance au bord à ", "Bord à ")
@@ -232,7 +243,7 @@ export default function NetworkDiagram({ frames, index, car, track, layerSizes, 
         <OutputColumn mode={mode} action={action} points={outputPoints} discrete={discrete} />
       </svg>
     </div>
-    <div className="network-inspector">
+    <div className="network-inspector" ref={inspector}>
       {active ? <NeuronHistory frames={frames} index={index} {...active} rank={ranksByLayer[active.layer][active.neuron]} />
         : <p>Survolez un neurone pour suivre sa courbe. Cliquez pour la garder affichée.</p>}
       {pinned && <button type="button" onClick={() => { setPinned(null); setPreview(null); }}>Détacher la courbe</button>}
@@ -244,7 +255,7 @@ export default function NetworkDiagram({ frames, index, car, track, layerSizes, 
         Les traits associent les valeurs les plus fortes entre colonnes pour illustrer le sens du calcul.
         Le replay enregistre des activations, sans les poids nécessaires pour attribuer la décision à un neurone.</p>
       {discrete ? <>
-        <p>{ALGO_LABELS[algo] ?? "L’agent"} choisit parmi neuf actions possibles. La ligne orange indique
+        <p>{ALGO_LABELS[algo] ?? "L’agent"} choisit parmi neuf actions possibles. La ligne cochée indique
           la commande enregistrée. Une valeur Q estime la somme des récompenses futures pondérées pour une action.</p>
         <SteeringGauge value={action.steer} />
       </> : <p>Une commande de volant positive braque à gauche. {mode === "pedal"

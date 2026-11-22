@@ -136,15 +136,20 @@ export function getDiscreteOutput(frame) {
   return { chosen, scores };
 }
 
-export function pickNetworkReplay(replays, excluded = new Set()) {
+export function pickNetworkReplay(replays, excluded = new Set(), evaluation = []) {
   const candidates = replays.filter((replay) => replay.has_activations && !excluded.has(replay.path));
   const f1 = candidates.filter(({ car, track_id }) => car === "f1_2024" && isF1Track(track_id));
   const testTracks = f1.filter(({ track_id }) => track_id.startsWith("f1_"));
   const circuits = [testTracks, f1, candidates].find((group) => group.length) ?? [];
   const normal = circuits.filter(({ mu_factor }) => mu_factor === 1);
   const pool = normal.length ? normal : circuits;
-  const laps = pool.filter(({ outcome, lap_time }) => outcome === "lap" && Number.isFinite(lap_time));
-  if (!laps.length) return pool[0];
+  const laps = pool.filter(({ outcome, lap_time }) => outcome === "lap" && Number.isFinite(lap_time) && lap_time > 0);
+  // Privilégier la condition la mieux évaluée parmi les tours de démonstration disponibles.
+  const comparable = laps.length ? laps : pool;
+  const rates = new Map(evaluation.map(({ condition, rate }) => [condition, rate]));
+  const bestRate = Math.max(...comparable.map(({ condition }) => rates.get(condition) ?? -Infinity));
+  const preferred = Number.isFinite(bestRate) ? comparable.filter(({ condition }) => rates.get(condition) === bestRate) : comparable;
+  if (!laps.length) return preferred[0];
 
   // Choisir le circuit avec le plus de conditions ayant bouclé un tour,
   // puis comparer les temps à circuit et adhérence identiques.
@@ -156,6 +161,8 @@ export function pickNetworkReplay(replays, excluded = new Set()) {
     const condition = lap.condition ?? lap.run_id;
     if (!byCondition.has(condition) || lap.lap_time < byCondition.get(condition).lap_time) byCondition.set(condition, lap);
   }
-  const [comparison] = [...groups.values()].sort((a, b) => b.size - a.size);
-  return [...comparison.values()].sort((a, b) => a.lap_time - b.lap_time)[0];
+  const preferredPaths = new Set(preferred.map(({ path }) => path));
+  const ordered = [...groups.values()].sort((a, b) => b.size - a.size);
+  const best = ordered.find((group) => [...group.values()].some(({ path }) => preferredPaths.has(path)));
+  return [...best.values()].filter(({ path }) => preferredPaths.has(path)).sort((a, b) => a.lap_time - b.lap_time)[0];
 }

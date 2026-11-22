@@ -31,3 +31,37 @@ export function interpolateFrame(frames, time) {
     psi: from.psi + Math.atan2(Math.sin(turn), Math.cos(turn)) * fraction,
   };
 }
+
+// Premier passage à chaque nouveau maximum : un recul ou un palier ne réécrit pas le chrono.
+export function progressTimeline(frames) {
+  const crossings = [];
+  let furthest = -Infinity;
+  frames.forEach((frame, index) => {
+    if (frame.progress > furthest) {
+      crossings.push({ progress: frame.progress, time: frame.t, index, before: frames[index - 1] });
+      furthest = frame.progress;
+    }
+  });
+  return crossings;
+}
+
+export function passageAt(timeline, progress) {
+  if (!timeline.length || progress < timeline[0].progress || progress > timeline.at(-1).progress) return null;
+  let lower = 0;
+  let upper = timeline.length - 1;
+  while (lower < upper) {
+    const middle = Math.floor((lower + upper) / 2);
+    if (timeline[middle].progress < progress) lower = middle + 1;
+    else upper = middle;
+  }
+  const next = timeline[lower];
+  if (progress === next.progress || !next.before) return next;
+  const { before } = next;
+  const fraction = (progress - before.progress) / (next.progress - before.progress);
+  return { time: before.t + fraction * (next.time - before.t), index: next.index };
+}
+
+export function gapAtProgress(frame, reference) {
+  const passage = passageAt(reference, frame.progress);
+  return passage == null ? null : frame.t - passage.time;
+}

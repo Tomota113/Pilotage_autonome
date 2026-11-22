@@ -6,26 +6,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bounds, SENSOR_ANGLES_DEG, trackBorders } from "../data/geometry.js";
 import { frameIndexAt, interpolateFrame } from "../data/interpolate.js";
+import { GRID_CAR_SIZE, gridPose } from "./race/raceData.js";
+import { broadcastFit, drawMiniMap, drawRain, drawTrackArtwork, makeMiniMap, makeTrackArtwork, makeView } from "./race/trackArtwork.js";
 
 const CAR_LENGTH = 5.5; // m
-const KERB_CURVATURE = 1 / 90; // vibreurs dans les virages de rayon < 90 m
 const TRAIL_SECONDS = 2;
 const IMPACT_MS = 420;
 const FOLLOW_ZOOM = 4;
 const FOLLOW_SMOOTHING_MS = 120;
-
-function curvatures(points) {
-  const n = points.length;
-  return points.map((_, i) => {
-    const [ax, ay] = points[(i - 1 + n) % n];
-    const [bx, by] = points[i];
-    const [cx, cy] = points[(i + 1) % n];
-    const h1 = Math.atan2(by - ay, bx - ax);
-    const h2 = Math.atan2(cy - by, cx - bx);
-    const turn = Math.atan2(Math.sin(h2 - h1), Math.cos(h2 - h1));
-    return turn / (0.5 * (Math.hypot(bx - ax, by - ay) + Math.hypot(cx - bx, cy - by)));
-  });
-}
 
 // Couleur d'une vitesse : bleu (lent) → jaune → rouge (rapide)
 export function speedColor(v, vmax = 60) {
@@ -35,17 +23,8 @@ export function speedColor(v, vmax = 60) {
   return `rgb(${a.map((c, k) => Math.round(c + (b[k] - c) * u)).join(",")})`;
 }
 
-function makeView(width, height, cx, cy, scale) {
-  return {
-    scale,
-    center: [cx, cy],
-    toScreen: ([x, y]) => [width / 2 + (x - cx) * scale, height / 2 - (y - cy) * scale],
-    toWorld: ([sx, sy]) => [cx + (sx - width / 2) / scale, cy - (sy - height / 2) / scale],
-  };
-}
-
-function path(ctx, pts, view, close, append = false) {
-  if (!append) ctx.beginPath();
+function path(ctx, pts, view, close) {
+  ctx.beginPath();
   pts.forEach((p, i) => {
     const [x, y] = view.toScreen(p);
     if (i === 0) ctx.moveTo(x, y);
@@ -54,13 +33,14 @@ function path(ctx, pts, view, close, append = false) {
   if (close) ctx.closePath();
 }
 
-export function drawCar(ctx, view, { x, y, psi, color, label }) {
+export function drawCar(ctx, view, { x, y, psi, color, label, alpha = 1, minSize = 16 }) {
   const [sx, sy] = view.toScreen([x, y]);
-  const len = Math.max(16, CAR_LENGTH * view.scale);
+  const len = Math.max(minSize, CAR_LENGTH * view.scale);
   const w = len * 0.42;
   ctx.save();
   ctx.translate(sx, sy);
-  ctx.rotate(-psi); // y écran vers le bas : angle inversé
+  ctx.rotate(-psi - (view.angle ?? 0)); // y écran vers le bas : angle inversé
+  ctx.globalAlpha = alpha;
 
   // Les pneus débordent du châssis et restent lisibles même en vue d'ensemble.
   ctx.fillStyle = "#090b0e";
@@ -99,12 +79,20 @@ export function drawCar(ctx, view, { x, y, psi, color, label }) {
   ctx.fill();
   ctx.restore();
   if (label) {
-    ctx.font = "600 11px system-ui, sans-serif";
-    ctx.fillStyle = "#f1f2f4";
-    ctx.strokeStyle = "#0b0c0e";
-    ctx.lineWidth = 3;
-    ctx.strokeText(label, sx + len * 0.6, sy - len * 0.6);
-    ctx.fillText(label, sx + len * 0.6, sy - len * 0.6);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `700 ${minSize > 16 ? 12 : 11}px system-ui, sans-serif`;
+    const textWidth = ctx.measureText(label).width;
+    const left = sx + len * 0.48 + textWidth + 14 > (view.width ?? Infinity)
+      ? sx - len * 0.48 - textWidth - 12 : sx + len * 0.48;
+    const top = Math.max(3, sy - len * 0.75 - 7);
+    ctx.fillStyle = "#091115e8";
+    ctx.fillRect(left, top, textWidth + 11, 18);
+    ctx.fillStyle = color;
+    ctx.fillRect(left, top, 2, 18);
+    ctx.fillStyle = "#f8fafb";
+    ctx.fillText(label, left + 6, top + 13);
+    ctx.restore();
   }
 }
 
@@ -118,16 +106,23 @@ function drawWake(ctx, view, car) {
   ctx.strokeStyle = color;
   ctx.lineWidth = 3.5;
   ctx.lineCap = "round";
+  let bucket = -1;
   for (let i = first + 1; i <= last + 1; i++) {
     const next = i <= last ? frames[i] : car;
     if (next.t <= previous.t) continue;
-    ctx.globalAlpha = 0.65 * (1 - (time - (next.t + previous.t) / 2) / TRAIL_SECONDS);
-    ctx.beginPath();
-    ctx.moveTo(...view.toScreen([previous.x, previous.y]));
+    const opacity = 1 - (time - (next.t + previous.t) / 2) / TRAIL_SECONDS;
+    const nextBucket = Math.min(5, Math.max(0, Math.floor(opacity * 6)));
+    if (nextBucket !== bucket) {
+      if (bucket >= 0) ctx.stroke();
+      bucket = nextBucket;
+      ctx.globalAlpha = 0.65 * (bucket + 0.5) / 6;
+      ctx.beginPath();
+      ctx.moveTo(...view.toScreen([previous.x, previous.y]));
+    }
     ctx.lineTo(...view.toScreen([next.x, next.y]));
-    ctx.stroke();
     previous = next;
   }
+  if (bucket >= 0) ctx.stroke();
   ctx.globalAlpha = 1;
 }
 
@@ -147,7 +142,7 @@ function drawImpact(ctx, view, frame, age) {
 
 function drawFollowMarker(ctx, view, car) {
   const [x, y] = view.toScreen([car.x, car.y]);
-  const top = y - Math.max(16, CAR_LENGTH * view.scale) * 0.55 - 10;
+  const top = y - Math.max(car.minSize ?? 16, CAR_LENGTH * view.scale) * 0.55 - 10;
   ctx.fillStyle = "#f1f2f4";
   ctx.strokeStyle = "#0b0c0e";
   ctx.lineWidth = 1.5;
@@ -163,7 +158,8 @@ function drawFollowMarker(ctx, view, car) {
 export default function TrackCanvas({ track, cars = [], trails = [], rays = null, draw = null, onPointer = null,
                                       height = 520, extraPoints, fixedView = null, label,
                                       followable = true, followedCarId, onFollowChange, tools = true,
-                                      getScene = null, animating = false, fullscreen = false, header, overlay, children }) {
+                                      getScene = null, animating = false, fullscreen = false, header, overlay, children,
+                                      broadcast = false, grip = 1, gridCount = 0, miniMap = false }) {
   const ref = useRef(null);
   const viewport = useRef(null);
   const requestedFullscreenExit = useRef(false);
@@ -186,13 +182,27 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
   const { width = 800, height: canvasHeight = height, dpr = 1 } = size ?? {};
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState("");
+  const [rain, setRain] = useState(true);
+  const [reducedMotion, setReducedMotion] = useState(() => Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches));
+  const wet = broadcast && Number(grip) < 1;
+
+  useEffect(() => {
+    if (!wet) return undefined;
+    const query = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!query) return undefined;
+    const update = () => setReducedMotion(query.matches);
+    query.addEventListener("change", update);
+    update();
+    return () => query.removeEventListener("change", update);
+  }, [wet]);
 
   const geom = useMemo(() => {
     if (!track) return null;
     const { left, right } = trackBorders(track);
-    const kappa = curvatures(track.centerline);
-    return { left, right, kerb: kappa.map((k) => Math.abs(k) > KERB_CURVATURE), box: bounds([...left, ...right], 12) };
-  }, [track]);
+    const points = [...left, ...right];
+    return { left, right, points, box: bounds(points, 12),
+      artwork: typeof Path2D === "function" ? makeTrackArtwork(track, left, right, broadcast) : null };
+  }, [track, broadcast]);
 
   // Nouveau circuit : on recadre
   useEffect(() => {
@@ -294,73 +304,25 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [fullscreen, geom, onFollowChange, resetCamera, toggleFullscreen]);
 
+  const overview = useMemo(() => {
+    if (!broadcast || !geom?.artwork) return null;
+    const points = extraPoints?.length ? [...geom.points, ...extraPoints] : geom.points;
+    return broadcastFit(points, width, canvasHeight, geom.artwork.start, gridCount);
+  }, [broadcast, geom, width, canvasHeight, extraPoints, gridCount]);
+  const inset = useMemo(() => miniMap && geom?.artwork ? makeMiniMap(geom, width) : null, [miniMap, geom, width]);
   const fitView = useMemo(() => {
     if (!geom) return null;
+    if (overview) return makeView(width, canvasHeight, ...(center ?? overview.center), overview.scale * activeZoom, overview.angle);
     const box = extraPoints?.length ? bounds([...geom.left, ...geom.right, ...extraPoints], 12) : geom.box;
     const fit = Math.min(Math.max(1, width - 32) / (box.maxX - box.minX),
                          Math.max(1, canvasHeight - 32) / (box.maxY - box.minY));
     const target = center ?? [(box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2];
     return makeView(width, canvasHeight, target[0], target[1], fit * activeZoom);
-  }, [activeZoom, canvasHeight, center, extraPoints, geom, width]);
-
-  function drawTrack(ctx, view) {
-    ctx.fillStyle = "#101418";
-    ctx.fillRect(0, 0, width, canvasHeight);
-    const px = Math.max(1, view.scale); // 1 m en pixels
-
-    // Asphalte : surface entre les deux bords (règle pair-impair)
-    ctx.fillStyle = "#2c3036";
-    path(ctx, geom.left, view, true);
-    path(ctx, geom.right, view, true, true);
-    ctx.fill("evenodd");
-    // Lignes blanches de bord
-    ctx.strokeStyle = "#d9dce1";
-    ctx.lineWidth = Math.max(1, 0.35 * px);
-    path(ctx, geom.left, view, true);
-    ctx.stroke();
-    path(ctx, geom.right, view, true);
-    ctx.stroke();
-    // Vibreurs rouge / blanc dans les virages serrés
-    ctx.lineWidth = Math.max(2, 1.0 * px);
-    const n = geom.left.length;
-    for (const border of [geom.left, geom.right]) {
-      for (let i = 0; i < n; i++) {
-        if (!geom.kerb[i]) continue;
-        ctx.strokeStyle = i % 2 ? "#e8402f" : "#f1f2f4";
-        ctx.beginPath();
-        ctx.moveTo(...view.toScreen(border[i]));
-        ctx.lineTo(...view.toScreen(border[(i + 1) % n]));
-        ctx.stroke();
-      }
-    }
-    // Checkpoints discrets, ligne d'arrivée en damier
-    track.checkpoints.forEach((ci, k) => {
-      const a = view.toScreen(geom.left[ci]);
-      const b = view.toScreen(geom.right[ci]);
-      if (k > 0) {
-        ctx.strokeStyle = "#ffffff22";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(...a);
-        ctx.lineTo(...b);
-        ctx.stroke();
-        return;
-      }
-      const squares = 8;
-      for (let s = 0; s < squares; s++) {
-        ctx.strokeStyle = s % 2 ? "#111" : "#fff";
-        ctx.lineWidth = Math.max(3, 1.2 * px);
-        ctx.beginPath();
-        ctx.moveTo(a[0] + ((b[0] - a[0]) * s) / squares, a[1] + ((b[1] - a[1]) * s) / squares);
-        ctx.lineTo(a[0] + ((b[0] - a[0]) * (s + 1)) / squares, a[1] + ((b[1] - a[1]) * (s + 1)) / squares);
-        ctx.stroke();
-      }
-    });
-  }
+  }, [activeZoom, canvasHeight, center, extraPoints, geom, overview, width]);
 
   function render(now) {
     const canvas = ref.current;
-    if (!canvas || !geom || !width || !canvasHeight) return false;
+    if (!canvas || !geom?.artwork || !width || !canvasHeight) return false;
     const pixelWidth = Math.round(width * dpr);
     const pixelHeight = Math.round(canvasHeight * dpr);
     if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
@@ -369,9 +331,12 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
     if (!ctx) return false;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const scene = getScene?.() ?? { cars, rays };
+    const field = scene.cars.map((car) => scene.gridActive && car.grid
+      ? gridPose(car, geom.artwork.start, car.grid, car.time, overview?.scale ?? fitView.scale)
+      : car);
     const followed = followingSelectedCar
-      ? scene.cars.find((car) => car.id === followedCarId)
-      : (followedCarId === undefined && follow ? scene.cars[0] : null);
+      ? field.find((car) => car.id === followedCarId)
+      : (followedCarId === undefined && follow ? (field.find((car) => car.id === scene.followId) ?? field[0]) : null);
     let view = fixedView ?? fitView;
     let settling = false;
     if (followed && !fixedView) {
@@ -388,30 +353,34 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
         if (!settling) ({ x, y } = followed);
         followCamera.current = { center: [x, y], now };
       }
-      view = makeView(width, canvasHeight, x, y, fitView.scale);
+      view = makeView(width, canvasHeight, x, y, fitView.scale, fitView.angle);
     } else {
       followCamera.current = null;
     }
     canvas._view = view;
 
     // On réutilise le fond tant que la caméra reste fixe.
+    const drawTrack = (target) => drawTrackArtwork(target, view, geom, track, width, canvasHeight, broadcast, wet);
     ctx.lineCap = "butt";
-    if (followed && !fixedView) drawTrack(ctx, view);
+    if (followed && !fixedView) drawTrack(ctx);
     else {
       const cached = background.current;
-      if (!cached || cached.view !== view || cached.geom !== geom || cached.width !== pixelWidth || cached.height !== pixelHeight || cached.dpr !== dpr) {
+      if (!cached || cached.view !== view || cached.geom !== geom || cached.width !== pixelWidth || cached.height !== pixelHeight || cached.dpr !== dpr || cached.wet !== wet) {
         const layer = cached?.layer ?? document.createElement("canvas");
         layer.width = pixelWidth;
         layer.height = pixelHeight;
         const layerCtx = layer.getContext("2d");
         layerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawTrack(layerCtx, view);
-        background.current = { layer, view, geom, width: pixelWidth, height: pixelHeight, dpr };
+        drawTrack(layerCtx);
+        background.current = { layer, view, geom, wet, width: pixelWidth, height: pixelHeight, dpr };
       }
       ctx.drawImage(background.current.layer, 0, 0, width, canvasHeight);
     }
 
-    // Trajectoires : une couleur, ou la vitesse segment par segment
+    if (draw) draw(ctx, view);
+
+    // Trajectoires colorées par vitesse ; l'historique peut être échantillonné en vue TV.
+
     for (const t of trails) {
       const count = t.count ?? t.points.length;
       if (count < 2) continue;
@@ -419,10 +388,12 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
       ctx.lineWidth = t.width ?? 2.5;
       ctx.lineCap = "round";
       if (t.speeds) {
-        for (let i = 1; i < count; i++) {
+        const step = Math.max(1, Math.ceil((count - 1) / (t.maxSegments ?? count)));
+        for (let j = 0; j < count - 1; j += step) {
+          const i = Math.min(j + step, count - 1);
           ctx.strokeStyle = speedColor(t.speeds[i], t.speedColorMax);
           ctx.beginPath();
-          ctx.moveTo(...view.toScreen(t.points[i - 1]));
+          ctx.moveTo(...view.toScreen(t.points[j]));
           ctx.lineTo(...view.toScreen(t.points[i]));
           ctx.stroke();
         }
@@ -433,7 +404,7 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
       }
       ctx.globalAlpha = 1;
     }
-    scene.cars.forEach((car) => drawWake(ctx, view, car));
+    if (!scene.gridActive) field.forEach((car) => drawWake(ctx, view, car));
     if (scene.rays) {
       const { rays } = scene;
       SENSOR_ANGLES_DEG.forEach((deg, k) => {
@@ -452,29 +423,50 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
         ctx.fill();
       });
     }
-    scene.cars.forEach((car) => {
-      if (car !== followed) drawCar(ctx, view, car);
-    });
-    if (followed) {
-      drawCar(ctx, view, followed);
-      drawFollowMarker(ctx, view, followed);
+    const drawnLabels = [];
+    if (followed) drawnLabels.push(view.toScreen([followed.x, followed.y]));
+    for (const car of field) {
+      if (car === followed) continue;
+      const [x, y] = view.toScreen([car.x, car.y]);
+      const crowded = field.length > 2 && drawnLabels.some(([lx, ly]) => Math.abs(lx - x) < 83 && Math.abs(ly - y) < 20);
+      if (!crowded && car.label) drawnLabels.push([x, y]);
+      drawCar(ctx, view, {
+        ...car, label: crowded ? null : car.label,
+        minSize: broadcast ? (car.grid ? GRID_CAR_SIZE : 26) : undefined,
+      });
     }
-    if (draw) draw(ctx, view);
+    if (followed) {
+      const focus = { ...followed, minSize: broadcast ? 30 : undefined };
+      drawCar(ctx, view, focus);
+      drawFollowMarker(ctx, view, focus);
+    }
+    if (followed && inset) drawMiniMap(ctx, inset, followed, canvasHeight);
+
+    const raining = wet && rain && !reducedMotion;
+    if (raining) drawRain(ctx, width, canvasHeight, now, Number(grip) <= 0.6);
 
     // Le flash continue à s'estomper même si la sortie de piste a arrêté le replay.
     const currentImpacts = new Map();
     let flashing = false;
-    for (const { impact } of scene.cars) {
+    for (const { impact } of field) {
       if (!impact) continue;
       const began = impacts.current.get(impact) ?? now;
       currentImpacts.set(impact, began);
       const age = (now - began) / IMPACT_MS;
-      if (age >= 1) continue;
+      if (broadcast) {
+        const [x, y] = view.toScreen([impact.x, impact.y]);
+        ctx.strokeStyle = "#ff736a";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, 14, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+      if (age >= 1 || reducedMotion) continue;
       drawImpact(ctx, view, impact, age);
       flashing = true;
     }
     impacts.current = currentImpacts;
-    return animating || flashing || settling;
+    return animating || flashing || settling || raining;
   }
 
   function queuePaint() {
@@ -501,8 +493,9 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
     const screen = [e.clientX - r.left, e.clientY - r.top];
     const panGesture = !onPointer || e.shiftKey || e.button === 1;
     if (type === "down" && panGesture && !fixedView) {
-      const { center, scale } = canvas._view;
-      drag.current = { screen, center, scale };
+      const view = canvas._view;
+      const { center } = view;
+      drag.current = { center, view, origin: view.toWorld(screen) };
       if (follow || followingSelectedCar) setCenter(center);
       if (followingSelectedCar) setZoom(activeZoom);
       stopFollowing();
@@ -511,9 +504,9 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
     }
     if (drag.current) {
       if (type === "move") {
-        const s = drag.current.scale;
-        const [cx, cy] = drag.current.center;
-        setCenter([cx - (screen[0] - drag.current.screen[0]) / s, cy + (screen[1] - drag.current.screen[1]) / s]);
+        const { view, origin, center: [cx, cy] } = drag.current;
+        const [x, y] = view.toWorld(screen);
+        setCenter([cx + origin[0] - x, cy + origin[1] - y]);
       } else if (type === "up" || type === "cancel") {
         drag.current = null;
       }
@@ -538,14 +531,14 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
       const ratio = z / nz;
       zoomRef.current = nz;
       setActiveZoom(nz);
-      if (!followingSelectedCar) {
+      if (!followingSelectedCar && !follow) {
         const [cx, cy] = view.center;
         setCenter([before[0] + (cx - before[0]) * ratio, before[1] + (cy - before[1]) * ratio]); // ignoré en suivi
       }
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", onWheel);
-  }, [fixedView, followingSelectedCar, geom, setActiveZoom]);
+  }, [fixedView, follow, followingSelectedCar, geom, setActiveZoom]);
 
   const compact = width < 560; // petit canvas : boutons réduits à des symboles
   const fullscreenLabel = isFullscreen ? "Quitter le plein écran" : "Plein écran";
@@ -577,6 +570,10 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
           )}
         </div>
       )}
+      {wet && <label className="canvas-rain">
+        <input type="checkbox" checked={rain && !reducedMotion} disabled={reducedMotion}
+               onChange={(event) => setRain(event.target.checked)} /> Pluie animée
+      </label>}
       {tools && !fixedView && !compact && (
         <div className="canvas-hint">Molette : zoom · glisser{onPointer ? " avec Maj" : ""} : déplacer</div>
       )}

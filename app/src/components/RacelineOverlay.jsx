@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { loadRaceline } from "../data/api.js";
 import { isF1Track } from "../data/f1.js";
+import { addPath, applyWorldTransform } from "./race/trackArtwork.js";
 
 export function useRacelineOverlay(trackId, mu, car, loadWhenHidden = false) {
   const [preference, setPreference] = useState(null);
@@ -21,18 +22,20 @@ export function useRacelineOverlay(trackId, mu, car, loadWhenHidden = false) {
 
   const current = result?.trackId === trackId && result?.mu === mu && result?.car === car ? result : null;
   const line = current?.line;
-  const points = line?.points;
-  const draw = checked && points?.length > 1 ? (ctx, view) => {
+  const path = useMemo(() => {
+    if (!(line?.points?.length > 1) || typeof Path2D !== "function") return null;
+    const result = new Path2D();
+    addPath(result, line.points, true);
+    return result;
+  }, [line]);
+  const draw = checked && path ? (ctx, view) => {
     ctx.save();
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 1.25;
+    applyWorldTransform(ctx, view);
+    ctx.strokeStyle = "#f4f9d9d4";
+    ctx.lineWidth = 1.35 / view.scale;
     ctx.lineCap = "butt";
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(...view.toScreen(points[0]));
-    for (let i = 1; i < points.length; i++) ctx.lineTo(...view.toScreen(points[i]));
-    ctx.closePath();
-    ctx.stroke();
+    ctx.setLineDash([5 / view.scale, 4 / view.scale]);
+    ctx.stroke(path);
     ctx.restore();
   } : null;
 

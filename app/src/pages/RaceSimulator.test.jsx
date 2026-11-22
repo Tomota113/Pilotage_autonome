@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import RaceSimulator from "./RaceSimulator.jsx";
+import { DriverInputs } from "../components/race/RaceUI.jsx";
 
 const data = vi.hoisted(() => ({ replays: [], playback: {} }));
 vi.mock("../components/CarSelector.jsx", async (importOriginal) => ({
@@ -38,4 +39,13 @@ it("affiche 345 km/h et une échelle F1 pour le replay de la voiture sélectionn
   const empty = renderToStaticMarkup(<RaceSimulator />);
   expect(empty).toContain("Aucun replay pour cette voiture.");
   expect(empty).not.toContain("345 <small>km/h</small>");
+});
+
+it("affiche le virage à gauche et la pédale vers le frein pour un agent à pédale unique", () => {
+  const html = renderToStaticMarkup(<DriverInputs mode="pedal" action={{ steer: 0.5, throttle: 0, brake: 0.6 }} />);
+  expect(html).toContain("50 % gauche");
+  expect(html).toContain("60 % frein");
+  expect(html).toContain("rotate(-57.5deg)");
+  expect(html).toContain("Gaz →");
+  expect(html).not.toContain("Accélérateur");
 });

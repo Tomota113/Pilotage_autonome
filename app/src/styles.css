@@ -452,3 +452,187 @@ canvas { display: block; width: 100%; background: var(--canvas-bg); border-radiu
   .analytics-plot :is(.analytics-axis, .analytics-plot-row) { column-gap: 5px; }
   .analytics-axis { font-size: .65rem; }
 }
+
+/* --- Retransmission du simulateur et du championnat --- */
+.broadcast-page { display: grid; gap: .65rem; }
+.broadcast-page-header { display: flex; align-items: center; gap: .65rem; margin: 0; }
+.broadcast-page-header::before { content: ""; width: .22rem; height: 1.65rem; border-radius: 2px; background: var(--accent); }
+.broadcast-page-header h2 { font-size: clamp(1.9rem, 3.15vw, 3rem); margin: 0; }
+.broadcast-page > .controls { margin: 0; gap: .6rem; align-items: flex-end; }
+.broadcast-page .field, .broadcast-page .module-field { font-size: .82rem; }
+.broadcast-page .field { gap: .18rem; }
+.broadcast-page .field select { padding-block: .29rem; }
+.broadcast-page .replay-fields .field { max-width: 24rem; }
+.broadcast-page .race-ghost-select { order: 1; }
+.race-load-notice { margin: 0; }
+
+.broadcast-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(15.3rem, 23%);
+  align-items: start; gap: .65rem; min-width: 0; }
+.broadcast-layout.championship-layout { grid-template-columns: minmax(0, 1fr) minmax(16rem, 24%); }
+.broadcast-sidebar { display: grid; gap: .55rem; min-width: 0; }
+.broadcast-stage { padding: .36rem; border-radius: 11px; min-width: 0; }
+.broadcast-page .broadcast-stage .canvas-wrap > canvas {
+  height: min(var(--canvas-height), max(330px, calc(100dvh - 310px))); border-radius: 0 0 7px 7px;
+}
+.broadcast-page .broadcast-stage .race-viewport:fullscreen > .canvas-wrap > canvas { height: 100%; }
+.broadcast-stage .canvas-hint { color: #d6e4e0; background: #0a1615d9; }
+.broadcast-stage .canvas-tools { top: 8px; right: 8px; gap: 4px; }
+.broadcast-stage .canvas-tools button { background: #111e238f; border-color: #aabfc775; font-size: .73rem; }
+.canvas-rain { position: absolute; right: 10px; bottom: 9px; display: flex; align-items: center; gap: .22rem;
+  padding: .1rem .4rem; background: #0a1615eb; color: #f3f7fa; border-radius: 5px; font-size: .74rem; }
+.canvas-rain input { margin: 0; }
+.broadcast-strip { display: flex; align-items: center; gap: .65rem; padding: .36rem .65rem;
+  min-height: 2.75rem; border-radius: 7px 7px 0 0; background: #101925; color: #f4f8ff; }
+.broadcast-venue { min-width: 0; line-height: 1.18; display: grid; margin-right: auto; gap: .16rem; }
+.broadcast-venue strong { font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.broadcast-venue small { color: #c0cedc; font-size: .73rem; }
+.broadcast-sectors { display: flex; gap: .25rem; font-size: .67rem; font-weight: 750; }
+.broadcast-sectors span { min-width: 1.5rem; text-align: center; padding: .09rem .16rem;
+  border-bottom: 2px solid var(--sector); color: var(--sector); background: #ffffff08; border-radius: 3px; }
+.broadcast-header-time { flex: none; padding-left: .58rem; border-left: 1px solid #647581;
+  font-size: 1.04rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.broadcast-stage .broadcast-playback, .broadcast-stage .broadcast-options { gap: .3rem .43rem; margin: .36rem .18rem 0; }
+.broadcast-playback button, .broadcast-options select { padding: .24rem .49rem; font-size: .78rem; }
+.broadcast-stage :is(.broadcast-options, .broadcast-playback) .note, .broadcast-options label { font-size: .75rem; }
+.broadcast-playback input[type="range"] { flex: 1; min-width: 6rem; }
+.broadcast-playback .playback-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.broadcast-options .camera-telemetry { margin-left: auto; padding: .15rem .34rem; font-size: .72rem; }
+.race-camera select { max-width: min(13rem, 56vw); text-overflow: ellipsis; }
+.broadcast-label { color: var(--muted); font-size: .72rem; font-weight: 750; letter-spacing: .045em; text-transform: uppercase; }
+.broadcast-dashboard, .race-inputs { padding: .55rem .65rem; border-radius: 10px; }
+.broadcast-dashboard { border-top: 3px solid var(--driver-color); }
+.dashboard-driver { display: flex; align-items: baseline; gap: .42rem; font-weight: 750; font-size: .9rem; line-height: 1.18; }
+.dashboard-driver > span { flex: none; width: .48rem; height: .48rem; border-radius: 2px; background: var(--driver-color); }
+.dashboard-speed { line-height: 1; margin: .15rem 0 .35rem; font: 800 clamp(2.9rem, 4.9vw, 4.6rem)/1 var(--heading-font);
+  letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+.dashboard-speed small, .fullscreen-replay-readout small { font: 650 .79rem/1 system-ui, sans-serif; letter-spacing: 0; color: var(--muted); }
+.dashboard-line { display: flex; align-items: baseline; justify-content: space-between; gap: .25rem;
+  font-size: .81rem; font-variant-numeric: tabular-nums; }
+.dashboard-line > span:first-child, .dashboard-gap > span { color: var(--muted); }
+.dashboard-line > strong { font-size: .95rem; }
+.dashboard-progress { margin-top: .28rem; }
+.dashboard-progress progress { display: block; width: 100%; height: .32rem; margin: .16rem 0 .45rem;
+  appearance: none; border: 0; border-radius: 5px; background: var(--panel-3); accent-color: var(--info); }
+.dashboard-progress progress::-webkit-progress-bar { border-radius: 5px; background: var(--panel-3); }
+.dashboard-progress progress::-webkit-progress-value { border-radius: 5px; background: var(--info); }
+.dashboard-progress progress::-moz-progress-bar { border-radius: 5px; background: var(--info); }
+.dashboard-status { display: flex; align-items: center; gap: .33rem; color: var(--good);
+  font-size: .78rem; font-weight: 750; }
+.dashboard-status > span { width: .43rem; height: .43rem; border-radius: 50%; background: currentColor; }
+.dashboard-status.incident { color: var(--bad); }
+.dashboard-status.complete { color: var(--chart-purple); }
+.dashboard-gap { display: flex; align-items: center; justify-content: space-between; gap: .2rem; margin-top: .42rem;
+  background: var(--panel-2); padding: .24rem .4rem; border-radius: 5px; font-size: .79rem; }
+.dashboard-gap strong { color: var(--chart-purple); font-variant-numeric: tabular-nums; }
+.dashboard-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: .55rem 0 0; gap: .28rem .5rem; }
+.dashboard-stats > div { border-top: 1px solid var(--line); padding-top: .24rem; }
+.dashboard-stats dt { font-size: .69rem; color: var(--muted); line-height: 1.2; }
+.dashboard-stats dd { margin: 0; font-size: .85rem; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dashboard-stats small { color: var(--muted); font-size: .62rem; font-weight: 550; }
+.wheel-input { display: grid; grid-template-columns: 2rem minmax(0, 1fr); align-items: center; gap: .55rem; }
+.steering-wheel { width: 2rem; height: 2rem; position: relative; border: .24rem solid var(--muted); border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--line), 0 0 0 1px var(--line); }
+.steering-wheel i { position: absolute; left: calc(50% - .075rem); bottom: 50%; width: .15rem; height: 49%;
+  background: var(--muted); transform-origin: bottom center; }
+.steering-wheel i:nth-child(1) { transform: rotate(-78deg); }
+.steering-wheel i:nth-child(2) { transform: rotate(78deg); }
+.steering-wheel i:nth-child(3) { transform: rotate(180deg); }
+.steering-wheel::after { content: ""; position: absolute; top: -.21rem; left: calc(50% - .1rem); width: .2rem; height: .17rem; background: var(--accent); }
+.action-meter { display: grid; min-width: 0; gap: .14rem; margin-top: .3rem; }
+.action-name, .action-ends { display: flex; align-items: baseline; justify-content: space-between; gap: .18rem; }
+.action-name { font-size: .78rem; }
+.action-name strong { font-size: .78rem; font-variant-numeric: tabular-nums; }
+.action-ends { font-size: .66rem; color: var(--muted); white-space: nowrap; }
+.action-bar { position: relative; height: .30rem; background: var(--panel-3); border-radius: 5px; }
+.action-bar > span { position: absolute; inset-block: 0; border-radius: 5px; }
+.action-bar.centered::after { content: ""; position: absolute; left: 50%; inset-block: -1px;
+  border-left: 1px solid var(--muted); }
+.broadcast-incident, .fullscreen-replay-readout { position: absolute; left: 10px; top: 8px; color: #fff;
+  background: #121c29ed; border-radius: 6px; font-weight: 750; padding: .28rem .55rem; }
+.broadcast-incident { border-left: 4px solid #ff776a; pointer-events: none; font-size: .78rem; z-index: 1; }
+.fullscreen-replay-readout { display: none; }
+.race-viewport:fullscreen .fullscreen-replay-readout { display: grid; gap: .12rem; top: 2.55rem; font-size: .78rem; }
+.fullscreen-replay-readout strong { font: 800 2rem/1 var(--heading-font); }
+.fullscreen-replay-readout small { color: #d2dce9; }
+
+.race-telemetry, .race-sensors { padding: .48rem .64rem; }
+.race-telemetry header, .timing-tower header { display: flex; align-items: baseline; justify-content: space-between; gap: .3rem .65rem; flex-wrap: wrap; }
+.broadcast-page :is(.race-telemetry, .timing-tower, .race-finish) h3 { font: 800 1.2rem/1.1 var(--heading-font); margin: 0; }
+.telemetry-keys { display: flex; gap: .3rem .75rem; align-items: center; flex-wrap: wrap; font-size: .72rem; color: var(--muted); }
+.telemetry-keys .ghost-key::before { content: ""; display: inline-block; width: .9rem; margin-right: .25rem;
+  border-top: 2px dashed var(--chart-purple); vertical-align: .2em; }
+.pedal-key i { display: inline-block; width: .43rem; height: .43rem; border-radius: 50%; background: var(--good); }
+.pedal-key i + i { background: var(--bad); margin-left: .2rem; }
+.telemetry-grid-layout { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .35rem; margin-top: .3rem; }
+.telemetry-trace { background: var(--panel-2); border-radius: 5px; padding: .18rem .28rem 0; min-width: 0; }
+.telemetry-trace h4 { margin: 0 0 0 .3rem; font-size: .78rem; }
+.telemetry-trace h4 span { font-size: .68rem; color: var(--muted); font-weight: 550; }
+.telemetry-trace svg { display: block; width: 100%; overflow: visible; cursor: crosshair; }
+.telemetry-trace text { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+[data-presentation="true"] .telemetry-trace text { font-size: 14px; }
+.telemetry-grid { stroke: var(--line-2); stroke-opacity: .48; }
+.telemetry-line, .telemetry-ghost, .telemetry-cursor { fill: none; stroke-width: 1.7; vector-effect: non-scaling-stroke; }
+.telemetry-ghost { stroke: var(--ghost-color, var(--chart-purple)); stroke-dasharray: 4 4; opacity: .72; }
+.telemetry-cursor { stroke: var(--accent); }
+.race-sensors summary { font-size: .8rem; font-weight: 700; cursor: pointer; }
+.race-provenance { margin: 0 .2rem; }
+
+.timing-tower { min-width: 0; overflow: hidden; padding: .38rem; border-radius: 9px; }
+.timing-tower header { padding: .35rem .35rem .44rem; }
+.timing-tower header > span { color: var(--muted); font-size: .7rem; }
+.timing-tower .standings { --row-height: clamp(27px, 3.55vh, 40px); font-size: .78rem; }
+.timing-tower .standings-row { grid-template-columns: 2ch 3ch minmax(0, 1fr) 6.1rem; gap: .25rem;
+  padding: .04rem .3rem; border-bottom-color: var(--line); }
+.timing-tower .standings-row > [role="cell"] { min-width: 0; }
+.timing-tower .headings { background: var(--panel-2); color: var(--muted); font-size: .67rem; min-height: 1.25rem;
+  border-radius: 4px 4px 0 0; }
+.timing-tower .racer { background: var(--panel); }
+.timing-tower .racer:nth-child(even) { background: var(--panel-2); }
+.timing-tower .racer:is(:hover, .selected) { background: var(--info-soft); }
+.timing-tower .racer.selected { box-shadow: inset 3px 0 var(--racer-color); }
+.timing-tower .standing-agent { font-weight: 720; }
+.timing-tower .standing-agent .swatch { width: .37rem; height: .62rem; border-radius: 2px; margin-right: .26rem; }
+.tower-position { font-weight: 800; font-variant-numeric: tabular-nums; }
+.tower-change { font-size: .64rem; color: var(--muted); white-space: nowrap; }
+.tower-change.up, .tower-leader { color: var(--good); }
+.tower-change.down, .tower-out { color: var(--bad); }
+.tower-best { color: var(--chart-purple); font-weight: 800; }
+.timing-tower :is(.tower-out, .tower-best) small, .timing-tower [role="cell"] > span > small { font-size: .58rem; font-weight: 800; }
+.timing-tower [role="cell"]:last-child { white-space: nowrap; }
+.race-viewport:fullscreen:has(.timing-tower.fullscreen-standings) { --fullscreen-tower: clamp(12.7rem, 23vw, 17rem); }
+.race-viewport:fullscreen > .canvas-wrap:has(.timing-tower.fullscreen-standings) {
+  margin-right: calc(var(--fullscreen-tower) + .45rem);
+}
+.race-viewport:fullscreen .timing-tower.fullscreen-standings { top: 0; bottom: auto; right: auto;
+  left: calc(100% + .45rem); width: var(--fullscreen-tower); max-height: 100%; }
+.fullscreen-race-finish { display: none; }
+.race-viewport:fullscreen .fullscreen-race-finish { display: block; flex: none; max-height: 13rem; overflow: auto; }
+.race-finish { padding: .55rem .65rem; }
+.race-finish h4 { margin: .5rem 0 .2rem; font-size: .81rem; }
+.race-finish p { margin: .22rem 0; }
+.race-podium, .race-unclassified { display: grid; list-style: none; margin: .36rem 0 0; padding: 0; gap: .36rem; }
+.race-podium { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.race-podium li { display: flex; align-items: center; gap: .45rem; padding: .25rem .43rem; background: var(--panel-2);
+  border: 1px solid var(--line); border-left: 3px solid var(--racer-color); border-radius: 5px; }
+.podium-place { font: 800 1.64rem/1 var(--heading-font); color: var(--muted); }
+.race-podium li:first-child .podium-place { color: var(--warn); }
+.race-podium strong, .race-podium small { display: block; font-size: .82rem; }
+.race-podium small { font-size: .73rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.race-unclassified { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.race-unclassified li { display: grid; padding: .18rem .3rem; background: var(--panel-2); border-radius: 4px; font-size: .72rem; }
+.race-unclassified li span { color: var(--muted); }
+.broadcast-page .participant-list { margin: 0; padding: .42rem .65rem; }
+
+@media (max-width: 950px) {
+  .broadcast-layout, .broadcast-layout.championship-layout { grid-template-columns: minmax(0, 1fr); }
+  .broadcast-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .broadcast-page .broadcast-stage .canvas-wrap > canvas { height: min(var(--canvas-height), max(295px, 54vh)); }
+}
+@media (max-width: 590px) {
+  .telemetry-grid-layout { grid-template-columns: 1fr; }
+  .broadcast-sidebar { grid-template-columns: 1fr; }
+  .broadcast-strip { gap: .32rem; padding-inline: .3rem; }
+  .broadcast-header-time { padding-left: .3rem; font-size: .85rem; }
+  .broadcast-sectors span { min-width: auto; }
+  .broadcast-stage .canvas-tools button { font-size: .64rem; padding: .18rem .25rem; }
+}

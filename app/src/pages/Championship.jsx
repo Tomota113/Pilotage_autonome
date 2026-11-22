@@ -3,10 +3,13 @@ import CarSelector, { useCarReplays } from "../components/CarSelector.jsx";
 import TrackCanvas from "../components/TrackCanvas.jsx";
 import TrackOptions from "../components/TrackOptions.jsx";
 import { RacelineToggle, useRacelineOverlay } from "../components/RacelineOverlay.jsx";
-import { CONDITIONS, OUTCOME_LABELS, conditionColor, conditionLabel } from "../data/algorithms.js";
+import { CONDITIONS, CONDITION_BY_ID, OUTCOME_LABELS, conditionColor, conditionLabel } from "../data/algorithms.js";
 import { loadReplay, loadTrack } from "../data/api.js";
 import { isF1Track } from "../data/f1.js";
-import { interpolateFrame } from "../data/interpolate.js";
+import { interpolateFrame, progressTimeline } from "../data/interpolate.js";
+import { TrackStrip } from "../components/race/RaceUI.jsx";
+import { RaceFinish, TimingTower } from "../components/race/TimingTower.jsx";
+import { clockLabel, GRID_RELEASE_SECONDS, gridSlot, raceProgress, rankRacers } from "../components/race/raceData.js";
 import { SPEEDS } from "../playback.jsx";
 
 const ORDER = Object.fromEntries(CONDITIONS.map((c, i) => [c.id, i]));
@@ -14,8 +17,10 @@ const MUS = [1, 0.8, 0.6];
 const LIGHT_COUNT = 5;
 const LIGHT_STEP_MS = 500;
 const STANDINGS_UPDATE_MS = 100;
+const EMPTY = [];
+const LEADER = "leader";
 
-// Pour un agent : sa meilleure course sur ce circuit et cette adhérence (tour bouclé le plus rapide, sinon la plus longue)
+// Le tour valide le plus rapide du catalogue ; à défaut, le premier replay disponible.
 function bestOf(list) {
   return [...list].sort((a, b) => {
     const la = a.outcome === "lap" ? a.lap_time : Infinity;
@@ -24,57 +29,11 @@ function bestOf(list) {
   })[0];
 }
 
-function frameAt(replay, t) {
-  return interpolateFrame(replay.frames, t);
-}
-
 export function adjacentRacer(standings, selectedId, step) {
   if (!standings.length) return null;
   const index = standings.findIndex((racer) => racer.condition === selectedId);
   if (index === -1) return standings[step > 0 ? 0 : standings.length - 1].condition;
   return standings[(index + step + standings.length) % standings.length].condition;
-}
-
-function lapProgress(racer) {
-  return racer.finished ? 100 : Math.max(0, Math.min(100, Math.round(100 * racer.frame.progress)));
-}
-
-function Standings({ racers, selectedId, onSelect, title, compact = false }) {
-  return (
-    <div className={compact ? "fullscreen-standings" : undefined}>
-      <div className="card-title">{title}</div>
-      <div className="standings" role="table" aria-label={title}>
-        <div className="standings-row headings" role="row">
-          <span role="columnheader">#</span><span role="columnheader">Agent</span><span role="columnheader">État</span>
-        </div>
-        <div className="standings-body" role="rowgroup" style={{ "--rows": racers.length }}>
-          {racers.map((racer, index) => {
-            const selected = racer.condition === selectedId;
-            const name = conditionLabel(racer.condition);
-            return (
-              <div key={racer.condition} className={`standings-row racer${selected ? " selected" : ""}`}
-                   role="row" style={{ "--rank": index, "--racer-color": racer.color }}>
-                <span role="cell">{index + 1}</span>
-                <span role="cell">
-                  <button type="button" className="standing-agent" aria-label={`Suivre ${name}`} aria-pressed={selected}
-                          title={name} onClick={() => onSelect(racer.condition)}>
-                    <span className="swatch" />{name}
-                  </button>
-                </span>
-                <span role="cell">
-                  {racer.finished ? <span className="chip good finish-chip">
-                      <span role="img" aria-label="Tour terminé">🏁</span> {racer.replay.summary.lap_time.toFixed(1)} s
-                    </span>
-                    : racer.done ? <span className="chip bad">{OUTCOME_LABELS[racer.replay.summary.outcome]}</span>
-                      : `${lapProgress(racer)} %`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function StartLights({ signal }) {
@@ -99,7 +58,7 @@ export default function Championship() {
   const [time, setTime] = useState(0);
   const [phase, setPhase] = useState("ready");
   const [signal, setSignal] = useState(null);
-  const [speed, setSpeed] = useState(2);
+  const [speed, setSpeed] = useState(1);
   const [showTrails, setShowTrails] = useState(true);
   const [followedId, setFollowedId] = useState(null);
   const raceTime = useRef(0);
@@ -137,6 +96,7 @@ export default function Championship() {
         const replay = await loadReplay(entry.path);
         return {
           condition, replay, color: conditionColor(condition), end: replay.frames.at(-1).t,
+          timeline: progressTimeline(replay.frames),
           impact: replay.frames.find((f) => f.off_track),
         };
       })),
@@ -149,8 +109,9 @@ export default function Championship() {
   }, [trackId, mu, car, replays]);
 
   const current = race?.trackId === trackId && race?.mu === mu && race?.car === car ? race : null;
-  const racers = current?.racers ?? [];
-  const visible = racers.filter((r) => !hidden.has(r.condition));
+  const racers = current?.racers ?? EMPTY;
+  const visible = useMemo(() => racers.filter((r) => !hidden.has(r.condition))
+    .map((racer, index) => ({ ...racer, slot: gridSlot(index) })), [racers, hidden]);
   const duration = Math.max(0, ...visible.map((r) => r.end));
 
   function start() {
@@ -222,19 +183,12 @@ export default function Championship() {
     setTime(next);
   }
 
-  // Classement en direct : tour fini d'abord (au temps), puis la plus grande progression à l'instant t
-  const live = visible.map((r) => {
-    const f = frameAt(r.replay, time);
-    const done = time >= r.end;
-    return { ...r, frame: f, done, finished: done && r.replay.summary.outcome === "lap" };
-  }).sort((a, b) => {
-    if (a.finished && b.finished) return a.replay.summary.lap_time - b.replay.summary.lap_time;
-    if (a.finished !== b.finished) return a.finished ? -1 : 1;
-    return b.frame.progress - a.frame.progress;
-  });
-  const followedRank = live.findIndex((racer) => racer.condition === followedId);
-  const followed = live[followedRank];
-  const selectedId = followed?.condition ?? null;
+  const live = useMemo(() => rankRacers(visible, time), [visible, time]);
+  const bestLap = Math.min(...live.filter((racer) => racer.finished).map((racer) => racer.replay.summary.lap_time));
+  const selectedId = followedId === LEADER ? live[0]?.condition : followedId;
+  const followed = live.find((racer) => racer.condition === selectedId);
+  const finished = duration > 0 && time >= duration;
+  const standingsTitle = finished ? "Classement final" : time > 0 || playing ? "Classement en direct" : "Grille de départ";
 
   useEffect(() => {
     if (!current?.track) return undefined;
@@ -244,7 +198,7 @@ export default function Championship() {
           || event.target.closest?.("input, textarea, select, [contenteditable]")) return;
       event.preventDefault();
       const step = event.key === "ArrowDown" ? 1 : -1;
-      setFollowedId((id) => adjacentRacer(live, id, step));
+      setFollowedId((id) => adjacentRacer(live, id === LEADER ? live[0].condition : id, step));
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -252,24 +206,21 @@ export default function Championship() {
 
   function getScene() {
     const t = raceTime.current;
+    const gridActive = t < GRID_RELEASE_SECONDS;
     return {
-      cars: live.map(({ condition, replay, color, impact }) => ({
-        ...frameAt(replay, t), id: condition, color, time: t, frames: showTrails ? replay.frames : null,
+      gridActive,
+      cars: visible.map(({ condition, replay, color, impact, slot }) => ({
+        ...interpolateFrame(replay.frames, t), id: condition, color, time: t, frames: showTrails ? replay.frames : null,
+        grid: slot, label: CONDITION_BY_ID[condition]?.short ?? condition,
         impact: t >= impact?.t ? impact : null,
       })),
     };
   }
 
-  const standingsTitle = playing || (time > 0 && time < duration) ? "Classement en direct"
-    : time >= duration && duration > 0 ? "Classement final" : "Classement";
-
   return (
-    <>
-      <div className="page-header">
-        <h2>AI Championship</h2>
-        <p>Les pilotes sur un même circuit, avec leur classement en direct.</p>
-      </div>
-      <div className="controls">
+    <div className="broadcast-page">
+      <div className="page-header broadcast-page-header"><h2>AI Championship</h2></div>
+      <div className="controls broadcast-setup">
         <CarSelector car={car} setCar={setCar} loading={replays === null} />
         {tracks.length > 0 && <>
             <label className="field">Circuit
@@ -291,80 +242,81 @@ export default function Championship() {
       {replays === null ? <p className="note" role="status">Chargement des replays…</p>
         : tracks.length === 0 ? <p className="empty">Aucun circuit avec plusieurs agents pour cette voiture.</p>
         : (
-          <div className="row">
-            <div className="grow card race-stage">
-              {current?.track ? (
-                <TrackCanvas track={current.track} getScene={getScene} followedCarId={selectedId}
-                             onFollowChange={setFollowedId} animating={playing} draw={ideal.draw} height={580}
-                             fullscreen header={
-                               <div className="controls camera-controls">
-                                 <label>Caméra{" "}
-                                   <select value={selectedId ?? ""} onChange={(e) => setFollowedId(e.target.value || null)}>
-                                     <option value="">Vue d’ensemble</option>
-                                     {visible.map((racer) => (
-                                       <option key={racer.condition} value={racer.condition}>Suivre {conditionLabel(racer.condition)}</option>
-                                     ))}
-                                   </select>
-                                 </label>
-                                 {followed && (
-                                   <div className="camera-telemetry" role="group" aria-label="Agent suivi">
-                                     <strong><span className="swatch" style={{ background: followed.color }} />{conditionLabel(selectedId)}</strong>
-                                     <span>{Math.round(followed.frame.v * 3.6)} km/h</span>
-                                     <span>Position {followedRank + 1}/{live.length}</span>
-                                     <span>Tour {lapProgress(followed)} %</span>
-                                   </div>
-                                 )}
-                               </div>
-                             } overlay={
-                               <>
-                                 {signal !== null && <StartLights signal={signal} />}
-                                 {live.length > 0 && <Standings racers={live} selectedId={selectedId} onSelect={setFollowedId}
-                                                               title={standingsTitle} compact />}
-                               </>
-                             }>
-                  <div className="controls">
-                    <button className="primary" onClick={togglePlayback} disabled={!visible.length || starting}>
-                      {starting ? "Départ en cours" : playing ? "Pause" : time > 0 && time < duration ? "Reprendre" : "Départ"}
-                    </button>
-                    <button onClick={start} disabled={!visible.length}>Rejouer le départ</button>
-                    <div className="segmented">
-                      {SPEEDS.map((s) => <button key={s} className={s === speed ? "on" : ""} onClick={() => setSpeed(s)}>×{s}</button>)}
+          <>
+            <div className="broadcast-layout championship-layout">
+              <div className="card race-stage broadcast-stage">
+                {current?.track ? (
+                  <TrackCanvas track={current.track} getScene={getScene} followedCarId={followed?.condition ?? null}
+                               onFollowChange={setFollowedId} animating={playing} draw={ideal.draw} height={710}
+                               fullscreen broadcast grip={mu} gridCount={visible.length} header={
+                                 <TrackStrip track={current.track} grip={mu}>
+                                   <span className="broadcast-header-time">{clockLabel(time)}</span>
+                                 </TrackStrip>
+                               } overlay={
+                                 <>
+                                   {signal !== null && <StartLights signal={signal} />}
+                                   {live.length > 0 && <TimingTower racers={live} selectedId={selectedId} onSelect={setFollowedId}
+                                                                    title={standingsTitle} bestLap={bestLap} compact />}
+                                 </>
+                               }>
+                    <div className="controls broadcast-playback">
+                      <button className="primary" onClick={togglePlayback} disabled={!visible.length || starting}>
+                        {starting ? "Départ en cours" : playing ? "Pause" : time > 0 && time < duration ? "Reprendre" : "Départ"}
+                      </button>
+                      <button onClick={start} disabled={!visible.length}>Rejouer le départ</button>
+                      <div className="segmented" role="group" aria-label="Vitesse de lecture">
+                        {SPEEDS.map((s) => <button key={s} className={s === speed ? "on" : ""} aria-pressed={s === speed}
+                                                   onClick={() => setSpeed(s)}>{s === 0.5 ? "Ralenti ×0,5" : `×${s}`}</button>)}
+                      </div>
+                      <input type="range" min={0} max={duration || 1} step={0.05} value={Math.min(time, duration)}
+                             disabled={!visible.length || starting} onChange={(e) => seek(Number(e.target.value))} aria-label="Curseur temporel" />
                     </div>
-                    <input type="range" min={0} max={duration || 1} step={0.05} value={time} style={{ flex: 1, minWidth: 160 }}
-                           disabled={!visible.length || starting} onChange={(e) => seek(Number(e.target.value))} aria-label="Curseur temporel" />
-                    <span className="note">{time.toFixed(1)} s</span>
-                    <label className="note"><input type="checkbox" checked={showTrails} onChange={(e) => setShowTrails(e.target.checked)} /> Traînées</label>
-                    <RacelineToggle {...ideal} />
-                  </div>
-                </TrackCanvas>
-              ) : current?.error ? <p className="warn" role="alert">Impossible de charger cette course.</p>
-                : <p role="status">Chargement de la course…</p>}
+                    <div className="controls broadcast-options">
+                      <label className="race-camera">Caméra{" "}
+                        <select value={followedId ?? ""} onChange={(e) => setFollowedId(e.target.value || null)}>
+                          <option value="">Vue d’ensemble</option>
+                          <option value={LEADER} disabled={!visible.length}>Suivre le leader</option>
+                          {visible.map((racer) => (
+                            <option key={racer.condition} value={racer.condition}>Suivre {conditionLabel(racer.condition)}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label><input type="checkbox" checked={showTrails} onChange={(e) => setShowTrails(e.target.checked)} /> Traînées</label>
+                      <RacelineToggle {...ideal} />
+                      {followed && <div className="camera-telemetry" role="group" aria-label="Agent suivi">
+                        <strong><span className="swatch" style={{ background: followed.color }} />{CONDITION_BY_ID[selectedId]?.short ?? selectedId}</strong>
+                        <span>{Math.round(followed.frame.v * 3.6)} km/h</span>
+                        <span>P{followed.position}/{live.length}</span>
+                        <span>Tour {followed.finished ? 100 : Math.round(raceProgress(followed.frame) * 100)} %</span>
+                      </div>}
+                    </div>
+                    {finished && <div className="fullscreen-race-finish"><RaceFinish racers={live} /></div>}
+                  </TrackCanvas>
+                ) : current?.error ? <p className="warn" role="alert">Impossible de charger cette course.</p>
+                  : <p role="status">Chargement de la course…</p>}
+              </div>
+              {current?.track && <TimingTower racers={live} selectedId={selectedId} onSelect={setFollowedId}
+                                             title={standingsTitle} bestLap={bestLap} />}
             </div>
-            <div className="card race-readings">
-              <Standings racers={live} selectedId={selectedId} onSelect={setFollowedId} title={standingsTitle} />
-              <details className="explanation participant-list">
-                <summary>Participants et résultats</summary>
-                {racers.map((r) => (
-                  <label key={r.condition}>
-                    <input type="checkbox" checked={!hidden.has(r.condition)} onChange={() => {
-                      const next = new Set(hidden);
-                      if (next.has(r.condition)) next.delete(r.condition); else next.add(r.condition);
-                      if (r.condition === selectedId) setFollowedId(null);
-                      setHidden(next);
-                    }} />{" "}
-                    <span className="swatch" style={{ background: r.color }} />{conditionLabel(r.condition)}
-                    <span className="note"> — {r.replay.summary.outcome === "lap" ? `${r.replay.summary.lap_time.toFixed(1)} s` : OUTCOME_LABELS[r.replay.summary.outcome]}</span>
-                  </label>
-                ))}
-              </details>
-              <details className="explanation">
-                <summary>En savoir plus</summary>
-                <p>Chaque voiture rejoue la meilleure course enregistrée de son algorithme sur ce circuit et à cette adhérence.
-                  Pendant l’évaluation, la politique est figée et l’agent n’explore plus.</p>
-              </details>
-            </div>
-          </div>
+            {finished && <RaceFinish racers={live} />}
+            {racers.length > 0 && <details className="card explanation participant-list">
+              <summary>Participants et résultats</summary>
+              <p>Chaque pilote rejoue un épisode enregistré sur ce circuit et à cette adhérence. Le meilleur tour valide est retenu s’il existe.</p>
+              {racers.map((racer) => (
+                <label key={racer.condition}>
+                  <input type="checkbox" checked={!hidden.has(racer.condition)} onChange={() => {
+                    const next = new Set(hidden);
+                    if (next.has(racer.condition)) next.delete(racer.condition); else next.add(racer.condition);
+                    if (racer.condition === followedId) setFollowedId(null);
+                    setHidden(next);
+                  }} />{" "}
+                  <span className="swatch" style={{ background: racer.color }} />{conditionLabel(racer.condition)}
+                  <span className="note"> — {racer.replay.summary.outcome === "lap" ? clockLabel(racer.replay.summary.lap_time) : OUTCOME_LABELS[racer.replay.summary.outcome]}</span>
+                </label>
+              ))}
+            </details>}
+          </>
       )}
-    </>
+    </div>
   );
 }

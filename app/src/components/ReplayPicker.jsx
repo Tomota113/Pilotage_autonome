@@ -9,11 +9,16 @@ export { replayTitle as replayLabel } from "../data/algorithms.js";
 
 const ORDER = Object.fromEntries(CONDITIONS.map((c, i) => [c.id, i]));
 
+// Par défaut : le meilleur agent de la série v2 (PPO adhérence variable) qui boucle un tour sur un circuit F1
+// de test, sinon un autre tour bouclé sur un circuit F1, sinon le premier replay.
 function pickDefault(list) {
-  return list.find((r) => ["sac_mufixe", "sac_f1"].includes(r.condition) && r.mu_factor === 1) ?? list[0];
+  const f1Lap = (r) => r.track_id?.startsWith("f1_") && r.outcome === "lap" && r.mu_factor === 1;
+  return list.find((r) => r.condition === "ppo_f1_mualea" && f1Lap(r))
+    ?? list.find(f1Lap)
+    ?? list.find((r) => ["sac_mufixe", "sac_f1"].includes(r.condition) && r.mu_factor === 1) ?? list[0];
 }
 
-export function ReplayFields({ replays, onlyWithActivations = false, autoSelect = true, children }) {
+export function ReplayFields({ replays, onlyWithActivations = false, autoSelect = true, showOutcome = true, children }) {
   const { entry, select, error } = usePlayback();
   const conditions = useMemo(() => [...new Set((replays ?? []).map((r) => r.condition ?? ""))]
     .sort((a, b) => (ORDER[a] ?? 99) - (ORDER[b] ?? 99)), [replays]);
@@ -64,7 +69,7 @@ export function ReplayFields({ replays, onlyWithActivations = false, autoSelect 
           {mus.map((m) => <option key={m} value={m}>{muLabel(m)}</option>)}
         </select>
       </label>
-      {current && (
+      {showOutcome && current && (
         <span className={`chip ${current.outcome === "lap" ? "good" : "bad"}`} style={{ alignSelf: "flex-end", marginBottom: 6 }}>
           {current.outcome === "lap" && current.lap_time != null
             ? `Tour bouclé en ${Number(current.lap_time).toFixed(1)} s`

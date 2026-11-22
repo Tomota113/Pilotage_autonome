@@ -3,12 +3,12 @@ import { conditionColor, conditionLabel, OUTCOME_LABELS } from "../../data/algor
 import { isReference, OUTCOMES, summarizeCircuits, summarizeLapRatios, summarizeShowcase, trialSeed } from "../../data/analytics.js";
 import LineChart, { formatNumber, formatPercent } from "./LineChart.jsx";
 import {
-  axisNumber, ChartPanel, Condition, conditionShort, countLabel, HorizontalPlot, MuPicker, muTick,
+  axisNumber, ChartPanel, Condition, conditionShort, countLabel, HorizontalPlot, leaderTitle, MuPicker, muTick,
   PlotRow, position, rateLabel, seedCount, Segments, shortPercent, trialLabel,
 } from "./AnalyticsChart.jsx";
 
-const MU_COLORS = { 1: "var(--info)", 0.8: "#62cbd3", 0.6: "#b9a6f8" };
-const OUTCOME_COLORS = { lap: "var(--good)", off_track: "var(--bad)", stalled: "var(--warn)", timeout: "#b9a6f8" };
+const MU_COLORS = { 1: "var(--info)", 0.8: "var(--chart-teal)", 0.6: "var(--chart-purple)" };
+const OUTCOME_COLORS = { lap: "var(--good)", off_track: "var(--bad)", stalled: "var(--warn)", timeout: "var(--chart-purple)" };
 const DASHES = [undefined, "7 3", "3 3", "7 3 2 3"];
 const secondaryColor = "var(--text)";
 const muColor = (mu) => MU_COLORS[mu] ?? "var(--muted)";
@@ -18,8 +18,8 @@ export function V2Laps({ entries, mus }) {
   const agents = entries.filter(({ condition }) => !isReference(condition)).sort((first, second) => second.laps - first.laps);
   const max = Math.max(...agents.map(({ attempts }) => attempts));
   const ticks = [...new Set([0, ...agents.map(({ attempts }) => attempts)])].sort((first, second) => first - second);
-  const title = "Qui boucle le plus de tours ?";
-  if (!agents.length) return null;
+  const title = leaderTitle(agents, ({ laps }) => laps, () => "boucle le plus de tours", "Tours bouclés par agent");
+  if (!agents.length) return <p className="card empty">Aucun agent appris n’est renseigné dans cette évaluation.</p>;
   return <ChartPanel title={title}
     guide="Chaque couleur compte les tours bouclés à une adhérence. Le total indique les tours réussis sur les essais réellement effectués. En dessous, chaque point montre le total d’une graine sur la même échelle ; des points éloignés signalent des résultats différents d’un entraînement à l’autre."
     legend={[...mus.map((mu) => ({ label: muTick(mu), color: muColor(mu) })), { label: "Une graine", color: secondaryColor, mark: "dot" }]}
@@ -28,14 +28,15 @@ export function V2Laps({ entries, mus }) {
       countLabel(entry), entry.seeds.length, entry.seeds.map((seed) => `${trialLabel(seed.seed)} : ${countLabel(seed)}`).join(" · "),
     ]) }}>
     <HorizontalPlot title={title} unit="Tours bouclés" max={max} ticks={ticks}>
-      {agents.map((entry) => <PlotRow key={entry.condition} condition={entry.condition} height={24 + entry.seeds.length * 9}
-          report={<><strong>{countLabel(entry)}</strong><small>{seedCount(entry.seeds.length)}</small></>}>
-        <Segments max={max} emptyTip={`${conditionLabel(entry.condition)} · Total : ${countLabel(entry)}`}
+      {agents.map((entry) => <PlotRow key={entry.condition} condition={entry.condition} height={30}
+          report={<strong>{countLabel(entry)}</strong>}>
+        <Segments max={max} y={2} height={15} emptyTip={`${conditionLabel(entry.condition)} · Total : ${countLabel(entry)}`}
           segments={mus.flatMap((mu) => {
             const result = entry.byMu.get(mu);
             return result ? [{ value: result.laps, color: muColor(mu), tip: `${conditionLabel(entry.condition)} · ${muTick(mu)} : ${countLabel(result)}` }] : [];
           })} />
-        {entry.seeds.map((seed, index) => <circle key={seed.seed} cx={position(seed.laps, max)} cy={26 + index * 9} r="4" fill={secondaryColor}>
+        {entry.seeds.map((seed, index) => <circle key={seed.seed} cx={position(seed.laps, max)}
+          cy={21 + index * 6 / Math.max(1, entry.seeds.length - 1)} r="3" fill={secondaryColor}>
           <title>{`${conditionLabel(entry.condition)} · ${trialLabel(seed.seed)} : ${countLabel(seed)} tours bouclés`}</title>
         </circle>)}
       </PlotRow>)}
@@ -49,7 +50,11 @@ export function V2Heatmap({ rows, entries, mus, trackName }) {
   const seed = seeds.find((value) => String(value) === chosenSeed) ?? seeds[0];
   const tracks = [...new Set(rows.map(({ track_id }) => track_id))].sort((first, second) => trackName(first).localeCompare(trackName(second), "fr"));
   const matrix = summarizeCircuits(rows.filter((row) => isReference(row.condition) || trialSeed(row) === seed));
-  const title = "Sur quels circuits les agents réussissent-ils ?";
+  const coveredCircuits = entries.filter(({ condition }) => !isReference(condition)).map(({ condition }) => ({
+    condition, circuits: [...(matrix.get(condition)?.values() ?? [])].filter(({ laps }) => laps > 0).length,
+  }));
+  const title = leaderTitle(coveredCircuits, ({ circuits }) => circuits,
+    (count) => `boucle un tour sur ${count} ${count === 1 ? "circuit" : "circuits"}`, "Tours bouclés par circuit");
   const columns = tracks.map(trackName);
   const heatColor = (count) => `color-mix(in srgb, var(--good) ${count / mus.length * 44}%, var(--panel-3))`;
   const cellTip = (id, track, cell) => `${conditionLabel(id)} · ${trackName(track)} · ${cell ? `${countLabel(cell)} tours bouclés` : "aucun essai"}`;
@@ -88,7 +93,12 @@ export function V2Heatmap({ rows, entries, mus, trackName }) {
 }
 
 export function V2Outcomes({ entries }) {
-  const title = "Comment se terminent les essais ?";
+  const failures = OUTCOMES.filter((outcome) => outcome !== "lap").map((outcome) => ({
+    outcome, count: entries.filter(({ condition }) => !isReference(condition)).reduce((sum, entry) => sum + entry.outcomes[outcome], 0),
+  })).sort((first, second) => second.count - first.count);
+  const [first, second] = failures;
+  const title = first.count > second.count
+    ? `Échec le plus fréquent chez les agents · ${OUTCOME_LABELS[first.outcome]}` : "Fins d’essai par pilote";
   return <ChartPanel title={title}
     guide="Chaque barre représente tous les essais d’un pilote. La part verte correspond aux tours bouclés ; les autres couleurs distinguent une sortie de piste, un arrêt faute de progrès et la fin du temps autorisé. La part dépend du nombre d’essais, indiqué à droite."
     legend={OUTCOMES.map((key) => ({ label: OUTCOME_LABELS[key], color: OUTCOME_COLORS[key] }))}
@@ -114,7 +124,8 @@ export function LapTimes({ rows, entries, trackName, reference = "classic" }) {
   const max = Math.max(1.5, Math.ceil(Math.max(1, ...values) * 2) / 2);
   const ticks = [...new Set([min, 1, ...[2, 3, 4].filter((tick) => tick < max), max])];
   const baseline = reference === "classic" ? "pilote classique" : "pilote suivant la trajectoire idéale";
-  const title = `Qui roule le plus vite ? Temps relatif au ${baseline}`;
+  const title = leaderTitle(ranked.filter(({ condition }) => !isReference(condition)),
+    ({ condition }) => ratios.get(condition).median, () => "a le meilleur temps relatif médian", "Temps au tour comparés à la référence", Math.min);
   const pointTip = (point) => `${trackName(point.track_id)} · ${muTick(point.mu_factor)} · ${isReference(point.condition) ? "Pilote programmé" : trialLabel(trialSeed(point))} · Épisode ${point.episode} · ${formatNumber(point.lap_time)} s / ${formatNumber(point.referenceTime)} s = ${formatNumber(point.ratio)}`;
   return <ChartPanel title={title}
     guide={`Chaque point est un tour terminé, comparé au ${baseline} sur le même circuit et à la même adhérence. À 1,0 le temps est identique ; plus à gauche, le tour est plus rapide. Le trait épais marque la médiane : la valeur du milieu quand on trie les résultats.`}
@@ -126,7 +137,6 @@ export function LapTimes({ rows, entries, trackName, reference = "classic" }) {
         return points.map((point) => [conditionLabel(condition), trackName(point.track_id), muTick(point.mu_factor),
           isReference(condition) ? "—" : point.seed, point.episode, formatNumber(point.lap_time), formatNumber(point.referenceTime), formatNumber(point.ratio), formatNumber(median)]);
       }) }}>
-    <p className="note">Un pilote sans tour comparable n’apparaît pas. Les échecs ne reçoivent pas de temps au tour.</p>
     {ranked.length ? <HorizontalPlot title={title} unit="Rapport des temps" min={min} max={max} ticks={ticks}
       tickFormat={(tick) => tick === 1 ? "1,0" : axisNumber(tick)}>
       {ranked.map(({ condition }) => {
@@ -150,8 +160,12 @@ export function LapTimes({ rows, entries, trackName, reference = "classic" }) {
 export function Robustness({ entries, mus }) {
   const [hidden, setHidden] = useState([]);
   const chartId = useId();
-  const title = "Les agents tiennent-ils quand la piste glisse ?";
   const selected = entries.filter(({ condition }) => !hidden.includes(condition));
+  const lowest = mus.at(-1);
+  const compared = selected.filter(({ condition, byMu }) => !isReference(condition) && byMu.has(lowest));
+  const title = leaderTitle(compared, ({ byMu }) => byMu.get(lowest).rate,
+    (rate) => `boucle ${shortPercent(rate)} des essais à ${muTick(lowest)}, le meilleur taux affiché`,
+    mus.length ? `Taux par pilote jusqu’à ${muTick(lowest)}` : "Taux par adhérence");
   const series = entries.flatMap(({ condition, byMu }, index) => hidden.includes(condition) ? [] : [{
     name: conditionLabel(condition), color: conditionColor(condition), dash: DASHES[index % DASHES.length],
     points: mus.flatMap((mu, x) => byMu.has(mu) ? [{ x, y: byMu.get(mu).rate }] : []),
@@ -185,11 +199,11 @@ export function V2Showcase({ rows }) {
   const demo = new Map(groups.get("demo").map((entry) => [entry.condition, entry]));
   const conditions = [...new Set([...train.keys(), ...demo.keys()])];
   const max = Math.max(...[...train.values(), ...demo.values()].map(({ attempts }) => attempts));
-  const title = "Démonstration : pistes connues ou pistes générées ?";
+  const title = "Les tours de démonstration sur pistes réelles et générées";
   if (!conditions.length) return <p className="card empty">Aucun résultat de démonstration disponible.</p>;
   const sets = [
     { label: "Circuits réels d’entraînement", color: "var(--info)", entries: train },
-    { label: "Circuits générés à l’échelle F1", color: "#62cbd3", entries: demo },
+    { label: "Circuits générés à l’échelle F1", color: "var(--chart-teal)", entries: demo },
   ];
   return <ChartPanel title={title}
     guide="Les deux barres comptent les tours bouclés sur deux groupes de circuits. Comparez aussi les fractions à droite : les groupes n’ont pas forcément le même nombre d’essais. Cette démonstration ne garde que la meilleure graine de chaque agent ; ce n’est pas son résultat moyen."
@@ -215,7 +229,8 @@ export function V2Showcase({ rows }) {
 
 export function V1Laps({ entries, mus, mu, setMu }) {
   const ranked = entries.filter((entry) => entry.mu === mu).sort((first, second) => second.rate - first.rate);
-  const title = "Tours bouclés sur les circuits générés de test";
+  const title = leaderTitle(ranked.filter(({ condition }) => !isReference(condition)), ({ rate }) => rate,
+    (rate) => `boucle ${shortPercent(rate)} des essais à ${muTick(mu)}, le meilleur taux des agents appris`, "Tours bouclés sur les circuits générés de test");
   return <ChartPanel title={title}
     guide="Une barre longue indique que le pilote boucle souvent son tour. Le taux donne le même poids à chaque graine. Le trait blanc va du taux de la graine la moins performante au taux de la meilleure."
     legend={[{ label: "Taux moyen (couleur du pilote)", color: "var(--info)" }, { label: "Écart entre graines", mark: "line", color: secondaryColor }]}

@@ -267,8 +267,15 @@ export default function TrackDesigner() {
 
   return (
     <>
-      <h2>Éditeur de circuit</h2>
-      <p className="subtitle">Glissez un point pour le déplacer, double-cliquez sur un segment pour l’ajouter et faites un clic droit sur un point pour le supprimer.</p>
+      <header className="page-header">
+        <h2>Éditeur de circuit</h2>
+        <p>Dessinez un tracé et faites-y rouler les agents.</p>
+        <details className="explanation">
+          <summary>En savoir plus sur les commandes</summary>
+          <p>Glissez un point pour le déplacer, double-cliquez sur un segment pour ajouter un point et faites un clic droit
+            sur un point pour le supprimer.</p>
+        </details>
+      </header>
       <div className="controls">
         <label className="module-field">Circuit source
           <select value={source} onChange={(event) => {
@@ -285,7 +292,7 @@ export default function TrackDesigner() {
         {sourceError && <span className="warn" role="alert">{sourceError}</span>}
       </div>
       <div className="row">
-        <div className="panel grow" onKeyDown={(event) => {
+        <div className="panel grow designer-stage" onKeyDown={(event) => {
           if (event.key === "Delete") {
             event.preventDefault();
             removePoint(selected);

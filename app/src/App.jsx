@@ -18,6 +18,11 @@ const ICONS = {
   network: "M5 6a2 2 0 1 0 0 .1M5 18a2 2 0 1 0 0 .1M19 12a2 2 0 1 0 0 .1M12 6a2 2 0 1 0 0 .1M12 18a2 2 0 1 0 0 .1M7 6h3M7 18h3M14 6l3 5M14 18l3-5",
   designer: "M4 20l4-1 11-11-3-3L5 16zM14 6l3 3",
   training: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6",
+  screen: "M3 4h18v13H3zM8 21h8m-4-4v4",
+  sun: "M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19m0-14-1.5 1.5m-11 11L5 19M16 12a4 4 0 1 1-8 0 4 4 0 1 1 8 0z",
+  moon: "M20.9 13.4A9 9 0 0 1 10.6 3.1 9 9 0 1 0 20.9 13.4z",
+  previous: "M14 6l-6 6 6 6",
+  next: "M10 6l6 6-6 6",
 };
 
 const SECTIONS = [
@@ -50,44 +55,116 @@ function Icon({ name }) {
   );
 }
 
+function readPreference(key) {
+  try { return window.localStorage.getItem(key) === "true"; }
+  catch { return false; }
+}
+
+function savePreference(key, enabled) {
+  try { window.localStorage.setItem(key, String(enabled)); }
+  catch { /* Le réglage reste actif pour la session. */ }
+}
+
 export default function App() {
   const [page, setPage] = useState(currentPage);
   const [mode, setMode] = useState(null);
+  const [presentation, setPresentation] = useState(() => readPreference("f1rl.presentation"));
+  const [light, setLight] = useState(() => readPreference("f1rl.light"));
+  const [key, label, Page] = page;
+  const pageIndex = PAGES.indexOf(page);
+  const adjacent = (direction) => PAGES[(pageIndex + direction + PAGES.length) % PAGES.length];
+  const themeLabel = light ? "Activer le thème sombre" : "Activer le thème clair";
+
   useEffect(() => {
     const onHash = () => { setPage(currentPage()); window.scrollTo(0, 0); };
     window.addEventListener("hashchange", onHash);
     getMode().then(setMode);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
-  const [key, , Page] = page;
+
+  useEffect(() => {
+    document.documentElement.dataset.presentation = String(presentation);
+    savePreference("f1rl.presentation", presentation);
+  }, [presentation]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = light ? "light" : "dark";
+    savePreference("f1rl.light", light);
+  }, [light]);
+
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (event.defaultPrevented || event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey
+        || event.target?.closest?.("input, select, textarea, [contenteditable], [role=slider]")) return;
+      if (event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setPresentation((enabled) => !enabled);
+      }
+      if (presentation && !document.fullscreenElement && !event.target?.closest?.("[role=tablist], [role=region][tabindex]")
+        && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        const step = event.key === "ArrowRight" ? 1 : -1;
+        event.preventDefault();
+        window.location.hash = `/${PAGES[(pageIndex + step + PAGES.length) % PAGES.length][0]}`;
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [pageIndex, presentation]);
+
   return (
     <PlaybackProvider>
       <div className="layout">
-        <nav className="sidebar" aria-label="Modules">
+        <aside className="sidebar">
           <div className="brand">
-            <div className="brand-mark">F1</div>
-            <h1>F1-RL Lab<small>Pilotage par apprentissage par renforcement</small></h1>
+            <span className="brand-mark" aria-hidden="true">F1</span>
+            <span className="brand-copy">F1-RL Lab<small>Pilotage par renforcement</small></span>
           </div>
-          {SECTIONS.map(([title, pages]) => (
-            <div key={title}>
-              <div className="nav-section">{title}</div>
-              {pages.map(([k, label]) => (
-                <a key={k} href={`#/${k}`} className={k === key ? "active" : ""}><Icon name={k} />{label}</a>
-              ))}
-            </div>
-          ))}
+          <nav className="module-nav" aria-label="Modules">
+            {SECTIONS.map(([title, pages]) => (
+              <div key={title}>
+                <div className="nav-section">{title}</div>
+                {pages.map(([k, name]) => (
+                  <a key={k} href={`#/${k}`} aria-label={name} title={name} aria-current={k === key ? "page" : undefined}>
+                    <Icon name={k} /><span>{name}</span>
+                  </a>
+                ))}
+              </div>
+            ))}
+          </nav>
+          <div className="display-settings">
+            <button type="button" aria-pressed={presentation} aria-label="Mode présentation" aria-keyshortcuts="P"
+                    title="Mode présentation (P)" onClick={() => setPresentation((enabled) => !enabled)}>
+              <Icon name="screen" /><span>Mode présentation</span><kbd>P</kbd>
+            </button>
+            <button type="button" aria-label={themeLabel} title={themeLabel} onClick={() => setLight((enabled) => !enabled)}>
+              <Icon name={light ? "moon" : "sun"} /><span>{light ? "Thème sombre" : "Thème clair"}</span>
+            </button>
+          </div>
           <div className="mode">
             {mode === "server" && <><span className="mode-dot" />Données réelles (serveur)</>}
             {mode === "fixtures" && <><span className="mode-dot fixture" />FIXTURE (serveur absent)</>}
           </div>
-        </nav>
+        </aside>
         <main>
+          {presentation && <nav className="presentation-nav" aria-label="Navigation de présentation">
+            <span aria-live="polite">{label}</span>
+            <div>
+              {[-1, 1].map((step) => {
+                const [destination, name] = adjacent(step);
+                return <a key={step} href={`#/${destination}`} aria-label={name}
+                          title={`${step < 0 ? "←" : "→"} ${name}`}
+                          aria-keyshortcuts={step < 0 ? "ArrowLeft" : "ArrowRight"}>
+                  <Icon name={step < 0 ? "previous" : "next"} />
+                </a>;
+              })}
+            </div>
+          </nav>}
           {mode === "fixtures" && (
             <div className="fixture-banner">
               FIXTURE — données factices de développement (serveur absent). Ne pas utiliser en démonstration.
             </div>
           )}
-          <Page mode={mode} />
+          <div className="page-content" key={key}><Page mode={mode} /></div>
         </main>
       </div>
     </PlaybackProvider>

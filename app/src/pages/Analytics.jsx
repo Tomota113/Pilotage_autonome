@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { aggregateEvaluation, evaluationRows, isF1Condition, isReference, summarizeTakeaways, summarizeTrials } from "../data/analytics.js";
 import { conditionLabel, OUTCOME_LABELS } from "../data/algorithms.js";
 import { getMode, listRuns, listTracks, loadAnalyticsEvalV1, loadF1EvalV2, loadProgress, loadShowcaseEvalV2 } from "../data/api.js";
@@ -38,8 +38,8 @@ function Takeaways({ entries }) {
   const { leaders, lowestMu, agentsLow, referencesLow, tabular, failures } = summarizeTakeaways(entries);
   const leading = leaders.map(({ condition }) => conditionLabel(condition)).join(" et ");
   const seedCounts = entries.filter(({ condition }) => !isReference(condition)).map(({ seeds }) => seeds.length);
-  return <section className="card analytics-takeaways">
-    <h3 className="card-title">Ce qu’il faut retenir</h3>
+  return <details className="card explanation analytics-takeaways">
+    <summary>En savoir plus sur les résultats de la série</summary>
     <ul>
       {leaders.length ? <li><strong>Meilleur taux observé.</strong> {leading}{leaders.length > 1 ? " (ex æquo)" : ""} : {shortPercent(leaders[0].rate)} de réussite
         ({leaders.map(countLabel).join(" et ")} essais réussis{leaders.length > 1 ? ", respectivement" : ""}).</li> : <li>Aucun agent appris n’est renseigné dans ces résultats.</li>}
@@ -52,7 +52,7 @@ function Takeaways({ entries }) {
         ? `Chaque méthode est représentée par ${seedCounts[0]} entraînement(s).`
         : `Selon la méthode, on dispose de ${Math.min(...seedCounts)} à ${Math.max(...seedCounts)} entraînements.`}</li>}
     </ul>
-  </section>;
+  </details>;
 }
 
 async function evaluationSource(request, runs, testOnly = false) {
@@ -72,7 +72,37 @@ function MissingEvaluation({ source, label }) {
   return <p className="card empty">Aucun résultat disponible pour {label}.</p>;
 }
 
-function V1Evaluation({ rows, entries, trackName, checkpoint }) {
+function ChartDeck({ tabs }) {
+  const [view, setView] = useState(tabs[0][0]);
+  const selected = Math.max(0, tabs.findIndex(([label]) => label === view));
+  const id = useId();
+  function navigate(event, index) {
+    let next;
+    switch (event.key) {
+      case "ArrowLeft": next = (index + tabs.length - 1) % tabs.length; break;
+      case "ArrowRight": next = (index + 1) % tabs.length; break;
+      case "Home": next = 0; break;
+      case "End": next = tabs.length - 1; break;
+      default: return;
+    }
+    event.preventDefault();
+    setView(tabs[next][0]);
+    document.getElementById(`${id}-tab-${next}`)?.focus();
+  }
+  return <div className="analytics-deck">
+    <div className="analytics-tabs" role="tablist" aria-label="Graphiques de performance">
+      {tabs.map(([label], index) => <button key={label} type="button" role="tab" id={`${id}-tab-${index}`}
+        aria-selected={index === selected} aria-controls={`${id}-panel-${index}`} tabIndex={index === selected ? 0 : -1}
+        onClick={() => setView(label)} onKeyDown={(event) => navigate(event, index)}>{label}</button>)}
+    </div>
+    {tabs.map(([label, content], index) => <div key={label} role="tabpanel" id={`${id}-panel-${index}`}
+      aria-labelledby={`${id}-tab-${index}`} tabIndex={index === selected ? 0 : -1} hidden={index !== selected}>
+      {index === selected && content}
+    </div>)}
+  </div>;
+}
+
+function V1Evaluation({ rows, entries, trackName, progress }) {
   const [chosenMu, setMu] = useState(null);
   const tests = useMemo(() => rows.filter(({ split }) => split === "test"), [rows]);
   const mus = muValues(tests);
@@ -81,23 +111,24 @@ function V1Evaluation({ rows, entries, trackName, checkpoint }) {
   const test = detailed.filter(({ split }) => split === "test");
   const robustness = entries.map((entry) => ({ ...entry, byMu: new Map(test.filter((item) => item.condition === entry.condition)
     .map(({ mu, rate, laps, episodes }) => [mu, { rate, laps, attempts: episodes }])) }));
+  const tabs = tests.length ? [
+    ["Tours bouclés", <V1Laps entries={test} mus={mus} mu={mu} setMu={setMu} />],
+    ["Adhérence", <Robustness entries={robustness} mus={mus} />],
+    ["Chronos", <LapTimes rows={tests.filter(({ mu_factor }) => mu_factor === mu)} entries={entries} trackName={trackName}
+      reference={entries.some(({ condition }) => condition === "raceline") ? "raceline" : "classic"} />],
+  ] : [];
+  tabs.push(["Apprentissage", <AnalyticsLearning progress={progress} />]);
   return <>
-    <p className="note">Résultats du {checkpoint === "best" ? "meilleur" : "dernier"} point de sauvegarde sur les circuits générés.
-      Le test utilise des circuits différents de ceux de l’entraînement.</p>
-    {tests.length ? <>
-      <V1Laps entries={test} mus={mus} mu={mu} setMu={setMu} />
-      <Robustness entries={robustness} mus={mus} />
-      <LapTimes rows={tests.filter(({ mu_factor }) => mu_factor === mu)} entries={entries} trackName={trackName}
-        reference={entries.some(({ condition }) => condition === "raceline") ? "raceline" : "classic"} />
-    </> : <p className="card empty">Aucun circuit de test dans ce fichier.</p>}
-    <section className="card">
-      <h3 className="card-title">Résultats détaillés de la série v1</h3>
+    {!tests.length && <p className="card empty">Aucun circuit de test dans ce fichier.</p>}
+    <ChartDeck tabs={tabs} />
+    <details className="card explanation">
+      <summary>Résultats détaillés de la série v1</summary>
       <p className="note">Chaque graine compte autant. Le temps moyen ne porte que sur les tours bouclés.</p>
       <ChartTable title="Évaluation par pilote, adhérence et groupe de circuits" columns={[
         "Agent ou référence", "Adhérence", "Circuits", "Taux moyen", "Temps moyen (s)", "Sorties par essai", "Essais",
       ]} rows={detailed.map((entry) => [conditionLabel(entry.condition), muTick(entry.mu), SPLITS[entry.split] ?? entry.split,
         formatPercent(entry.rate), formatNumber(entry.lapTime), formatNumber(entry.offtracks), entry.episodes])} />
-    </section>
+    </details>
   </>;
 }
 
@@ -164,49 +195,59 @@ export default function Analytics() {
   const testCount = new Set(tests.map(({ track_id }) => track_id)).size;
   const trainCount = new Set(showcase?.rows?.filter(({ split }) => split === "train").map(({ track_id }) => track_id)).size;
 
+  const showcaseTab = ["Démonstration", showcase?.rows?.length
+    ? <V2Showcase rows={showcase.rows} /> : <MissingEvaluation source={showcase} label="la démonstration" />];
+  const learningTab = ["Apprentissage", <AnalyticsLearning progress={progress} />];
+  const v2Tabs = [
+    ["Tours bouclés", <V2Laps entries={entries} mus={mus} />],
+    ["Circuits", <V2Heatmap rows={tests} entries={entries} mus={mus} trackName={trackName} />],
+    ["Fins d’essai", <V2Outcomes entries={entries} />],
+    ["Chronos", <LapTimes rows={tests} entries={entries} trackName={trackName} />],
+    ["Adhérence", <Robustness entries={entries} mus={mus} />],
+    showcaseTab, learningTab,
+  ];
+
   return <div className="stack analytics-page">
-    <header className="page-header">
-      <h2>Performance Analytics — Résultats des expériences</h2>
-      <p>Le premier défi est de finir un tour. Ensuite, on peut se demander quels pilotes restent fiables quand la piste glisse et lesquels roulent le plus vite.</p>
-    </header>
-    <section className="card analytics-intro" aria-label="Choisir les expériences à comparer">
-      <label className="field analytics-select">Série d’expériences
-        <select value={series} onChange={(event) => setSeries(event.target.value)} aria-describedby="analytics-series-guide">
-          {Object.entries(SERIES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-        </select>
-      </label>
-      <p id="analytics-series-guide">{series === "v2"
-        ? <>Les agents s’entraînent sur {trainCount ? `${trainCount} ` : "des "}circuits réels avec une voiture qui tient compte de l’aérodynamique.
-          On teste ensuite leur meilleure sauvegarde sur {testCount ? `${testCount} ` : "des "}circuits de F1 qu’ils n’ont jamais vus.</>
-        : <>La première série utilise une voiture simplifiée et des circuits générés. Elle sert à comparer les méthodes dans un environnement différent.</>}</p>
-      <p className="note">Ne comparez pas les deux séries comme si seule la méthode avait changé : voiture et circuits diffèrent aussi.</p>
-      {series === "v1" && <label className="field analytics-select">Point de sauvegarde évalué
-        <select value={checkpoint} onChange={(event) => setCheckpoint(event.target.value)}>
-          <option value="best">Meilleur pendant l’apprentissage</option><option value="last">Dernier, à la fin de l’apprentissage</option>
-        </select>
-      </label>}
-    </section>
+    <div className="analytics-heading">
+      <header className="page-header">
+        <h2>Performance Analytics</h2>
+        <p>Les tours bouclés, les chronos et la tenue sur piste glissante.</p>
+      </header>
+      <section className="analytics-intro" aria-label="Choisir les expériences à comparer">
+        <label className="field analytics-select">Série d’expériences
+          <select value={series} onChange={(event) => setSeries(event.target.value)} aria-describedby="analytics-series-guide">
+            {Object.entries(SERIES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>
+        </label>
+        {series === "v1" && <label className="field analytics-select">Point de sauvegarde évalué
+          <select value={checkpoint} onChange={(event) => setCheckpoint(event.target.value)}>
+            <option value="best">Meilleur pendant l’apprentissage</option><option value="last">Dernier, à la fin de l’apprentissage</option>
+          </select>
+        </label>}
+      </section>
+    </div>
     {!metadata ? <p role="status">Connexion au serveur…</p>
       : metadata.offline ? <p className="card warn">Le serveur est absent. Les graphiques ne présentent que les résultats réels du projet.</p>
       : metadata.error ? <p className="card warn" role="alert">Impossible de charger la liste des entraînements.</p>
       : <div className="stack" key={evalKey}>
-        {entries.length > 0 && <Takeaways entries={entries} />}
         {current?.unclassified > 0 && <p className="warn" role="status">{current.unclassified} épisodes ignorés : leur méthode n’est pas identifiée par le serveur.</p>}
-        {!rows.length ? <MissingEvaluation source={current} label="l’évaluation de cette série" />
-          : series === "v1" ? <V1Evaluation rows={rows} entries={entries} checkpoint={checkpoint} trackName={trackName} />
-          : <>
-            <V2Laps entries={entries} mus={mus} />
-            <V2Heatmap rows={tests} entries={entries} mus={mus} trackName={trackName} />
-            <V2Outcomes entries={entries} />
-            <LapTimes rows={tests} entries={entries} trackName={trackName} />
-            <Robustness entries={entries} mus={mus} />
-          </>}
-        {series === "v2" && <>
-          {showcase?.unclassified > 0 && <p className="warn" role="status">{showcase.unclassified} épisodes de démonstration sans méthode identifiée.</p>}
-          {showcase?.rows?.length ? <V2Showcase rows={showcase.rows} /> : <MissingEvaluation source={showcase} label="la démonstration" />}
-        </>}
-        <AnalyticsLearning progress={progress} />
+        {series === "v2" && showcase?.unclassified > 0 && <p className="warn" role="status">{showcase.unclassified} épisodes de démonstration sans méthode identifiée.</p>}
+        {series === "v1" && rows.length
+          ? <V1Evaluation rows={rows} entries={entries} trackName={trackName} progress={progress} />
+          : <ChartDeck tabs={series === "v2" && entries.length ? v2Tabs : [
+            ["Tours bouclés", <MissingEvaluation source={current} label="l’évaluation de cette série" />],
+            ...(series === "v2" ? [showcaseTab] : []),
+            learningTab,
+          ]} />}
+        {entries.length > 0 && <Takeaways entries={entries} />}
       </div>}
+    <details className="card explanation">
+      <summary>En savoir plus sur le protocole</summary>
+      <p id="analytics-series-guide">{series === "v2"
+        ? <>Les agents s’entraînent sur {trainCount ? `${trainCount} ` : "des "}circuits réels avec une voiture qui tient compte de l’aérodynamique.
+          On teste ensuite leur meilleure sauvegarde sur {testCount ? `${testCount} ` : "des "}circuits de F1 qu’ils n’ont jamais vus.</>
+        : <>La première série utilise une voiture simplifiée et des circuits générés. Ses circuits de test diffèrent de ceux de l’entraînement.</>}</p>
+    </details>
     <details className="card analytics-glossary">
       <summary>Glossaire : les mots utiles pour lire cette page</summary>
       <dl>{Object.entries(GLOSSARY).map(([term, definition]) => <div key={term}><dt>{term}</dt><dd>{definition}</dd></div>)}</dl>

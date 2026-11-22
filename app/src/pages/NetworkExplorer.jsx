@@ -1,12 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import TrackCanvas from "../components/TrackCanvas.jsx";
 import ReplayPicker from "../components/ReplayPicker.jsx";
 import EpisodeCharts from "../components/network/EpisodeCharts.jsx";
 import NetworkDiagram from "../components/network/NetworkDiagram.jsx";
+import NetworkPlayback from "../components/network/NetworkPlayback.jsx";
 import { ActivationBars, ObservationBars } from "../components/network/NetworkReadings.jsx";
-import { conditionColor } from "../data/algorithms.js";
-import { getActionMode, getAgentKind, getPerception } from "../data/network.js";
-import { PlaybackControls, usePlayback } from "../playback.jsx";
+import { conditionColor, replayTitle } from "../data/algorithms.js";
+import { getActionMode, getAgentKind, getPerception, pickNetworkReplay } from "../data/network.js";
+import { listReplays } from "../data/api.js";
+import { usePlayback } from "../playback.jsx";
 import "../components/network/network.css";
 
 const CURVE_THRESHOLD = 0.1;
@@ -16,6 +18,7 @@ const GLOSSARY = [
   ["Activation", "Nombre produit par un neurone pour les entrées de cet instant."],
   ["Poids", "Nombre appris qui règle l’influence d’une entrée dans le calcul d’un neurone."],
   ["Normalisation", "Conversion d’une mesure vers une échelle commune, ici de −1 à +1."],
+  ["Valeur Q", "Estimation des récompenses futures pondérées si l’agent choisit une action dans cette situation."],
 ];
 
 export function describeFrame({ obs, action }, car) {
@@ -45,68 +48,97 @@ function NoNetwork({ kind, car }) {
 }
 
 function LearningGuide() {
-  return <div className="network-guide">
-    <section className="card">
-      <h3 className="card-title">Comment le réseau a appris</h3>
-      <p>À l’entraînement, la voiture a fait des essais et des erreurs en répétant des épisodes.
-        La récompense lui donnait des points pour avancer et terminer un tour, et lui en retirait si elle sortait de la piste.
-        L’algorithme utilisait ces retours pour calculer une erreur, puis la rétropropagation indiquait comment ajuster les poids du réseau.</p>
-    </section>
-    <section className="card">
-      <h3 className="card-title">Mini glossaire</h3>
-      <dl>{GLOSSARY.map(([term, definition]) => <div key={term}><dt>{term}</dt><dd>{definition}</dd></div>)}</dl>
-    </section>
-  </div>;
+  return <details className="card network-details">
+    <summary>En savoir plus sur l’apprentissage et le vocabulaire</summary>
+    <div className="network-guide">
+      <section>
+        <h3 className="card-title">Comment le réseau a appris</h3>
+        <p>À l’entraînement, la voiture a fait des essais et des erreurs en répétant des épisodes.
+          La récompense lui donnait des points pour avancer et terminer un tour, et lui en retirait si elle sortait de la piste.
+          L’algorithme utilisait ces retours pour calculer une erreur, puis la rétropropagation indiquait comment ajuster les poids du réseau.</p>
+      </section>
+      <section>
+        <h3 className="card-title">Mini glossaire</h3>
+        <dl>{GLOSSARY.map(([term, definition]) => <div key={term}><dt>{term}</dt><dd>{definition}</dd></div>)}</dl>
+      </section>
+    </div>
+  </details>;
 }
 
 export default function NetworkExplorer() {
-  const { entry, replay, track, index, error } = usePlayback();
-  const [onlyWithActivations, setOnlyWithActivations] = useState(() => Boolean(entry?.has_activations));
+  const { entry, replay, track, index, error, select, playing, speed } = usePlayback();
+  const [showCar, setShowCar] = useState(false);
+  const [catalog, setCatalog] = useState(null);
+  const [automatic, setAutomatic] = useState(null);
+  const [excluded, setExcluded] = useState(() => new Set());
   const frame = replay?.frames[index];
   const car = replay?.car ?? entry?.car ?? "v1";
   const algo = replay?.agent.algo;
   const kind = getAgentKind(algo);
-  const isNetwork = kind === "network";
-  const mode = replay && getActionMode(replay);
-  const layers = replay?.network?.layers;
-  const recordedLayers = useMemo(() => replay?.frames.find(
-    ({ activations }) => activations?.some((values) => values.length),
-  )?.activations, [replay]);
-  const layerSizes = layers?.slice(1, -1) ?? recordedLayers?.map((values) => values.length);
+  const mode = replay && (getActionMode(replay) ?? (car === "f1_2024" && kind === "network" ? "pedal" : null));
+  const layerSizes = useMemo(() => {
+    const recorded = replay?.frames.find(({ activations }) => activations?.some((values) => values.length))?.activations;
+    return recorded?.map((values) => values.length);
+  }, [replay]);
+  const needsReplay = !entry || (replay ? !layerSizes : !entry.has_activations || Boolean(error && automatic?.path === entry.path));
+  const fallback = useMemo(() => {
+    if (!needsReplay || !catalog) return null;
+    const unavailable = new Set(excluded);
+    if (entry) unavailable.add(entry.path);
+    return pickNetworkReplay(catalog, unavailable);
+  }, [needsReplay, catalog, excluded, entry]);
+
+  useEffect(() => {
+    if (!needsReplay || catalog !== null) return undefined;
+    let active = true;
+    listReplays().then((replays) => { if (active) setCatalog(replays); })
+      .catch(() => { if (active) setCatalog([]); });
+    return () => { active = false; };
+  }, [needsReplay, catalog]);
+
+  useEffect(() => {
+    if (!fallback) return;
+    // Le catalogue détecte la clé « activations ». Le replay chargé confirme qu’elle contient des valeurs.
+    if (entry) setExcluded((previous) => new Set(previous).add(entry.path));
+    setAutomatic({ path: fallback.path, replaced: Boolean(entry) });
+    select(fallback);
+  }, [fallback, select, entry]);
+
+  const choosing = needsReplay && (catalog === null || fallback);
+  const pulseDuration = playing ? Math.max(20, Math.min(200, ((replay?.dt ?? 0.05) * 1000) / speed - 6)) : 220;
 
   return <div className="stack network-explorer">
     <header className="page-header">
-      <h2>Comprendre le réseau de neurones</h2>
-      <p>Choisis un replay et avance image par image pour relier ce que voit la voiture aux commandes qu’elle reçoit.</p>
+      <h2>Neural Network Explorer</h2>
+      <p>Suivez une décision, des capteurs aux commandes de la voiture.</p>
     </header>
-    <div>
-      <label className="network-filter">
-        <input type="checkbox" checked={onlyWithActivations} onChange={(event) => setOnlyWithActivations(event.target.checked)} />
-        Afficher uniquement les replays avec activations
-      </label>
-      <ReplayPicker onlyWithActivations={onlyWithActivations} />
+    <div className="network-replay">
+      {choosing ? <p role="status">Recherche d’un replay avec activations…</p>
+        : <ReplayPicker onlyWithActivations={Boolean(entry?.has_activations && (!replay || layerSizes))} />}
+      {entry && automatic && automatic.path === entry.path && !error && <p className="network-replay-note" role="status">
+        {automatic.replaced ? "Le replay précédent ne permettait pas de voir les activations. " : ""}
+        Replay choisi pour le schéma · {replayTitle(entry)}
+      </p>}
+      {entry && !frame && !error && !choosing && <p role="status">Chargement du replay…</p>}
     </div>
-    {entry && !frame && !error && <p role="status">Chargement du replay…</p>}
-    {frame && <>
-      {isNetwork
-        ? <NetworkDiagram inputCount={layers?.[0] ?? frame.obs.length} layerSizes={layerSizes} mode={mode}
-                          algo={algo} sensorRange={getPerception(car).sensorRange} />
-        : <NoNetwork kind={kind} car={car} />}
-      <section className="card">
-        <h3 className="card-title">La voiture sur le circuit</h3>
-        {track && <TrackCanvas track={track} height={270} cars={[{ ...frame, color: conditionColor(entry?.condition) }]}
-          rays={{ x: frame.x, y: frame.y, psi: frame.psi, distances: frame.sensors_m }} />}
-        <PlaybackControls />
-        <p>{describeFrame(frame, car)}</p>
-      </section>
+    {frame && !choosing && <>
+      <NetworkPlayback />
+      {layerSizes ? <NetworkDiagram key={entry?.path ?? replay.run_id} frames={replay.frames} index={index} car={car} track={track}
+        layerSizes={layerSizes} mode={mode} algo={algo} pulseDuration={pulseDuration} />
+        : kind !== "network" ? <NoNetwork kind={kind} car={car} /> : <p className="card warn">Aucune activation enregistrée pour ce replay.</p>}
       {Number.isFinite(frame.t) && Number.isFinite(frame.v) &&
         <EpisodeCharts frames={replay.frames} index={index} mode={mode} />}
-      <div className="network-guide">
-        <ObservationBars frame={frame} previousFrame={replay.frames[index - 1]} car={car} track={track} isNetwork={isNetwork} />
-        {isNetwork && <ActivationBars frame={frame} car={car} mode={mode} layerSizes={layerSizes}
-                                     hasActivations={Boolean(recordedLayers)} />}
-      </div>
+      {layerSizes && <ActivationBars frame={frame} layerSizes={layerSizes} />}
+      <details className="card network-details" open={showCar} onToggle={(event) => setShowCar(event.currentTarget.open)}>
+        <summary>En savoir plus sur la voiture et ses mesures</summary>
+        {showCar && <>
+          <p>{describeFrame(frame, car)}</p>
+          {track && <TrackCanvas track={track} height={270} cars={[{ ...frame, color: conditionColor(entry?.condition) }]}
+            rays={{ x: frame.x, y: frame.y, psi: frame.psi, distances: frame.sensors_m }} />}
+          <ObservationBars frame={frame} previousFrame={replay.frames[index - 1]} car={car} track={track} isNetwork={kind === "network"} />
+        </>}
+      </details>
     </>}
-    {(!frame || isNetwork) && <LearningGuide />}
+    <LearningGuide />
   </div>;
 }

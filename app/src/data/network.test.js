@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   denormalizeObservation, getActionMode, getObservationLabels, getPerception, getTrackHalfWidth,
-  pedalValue, topActivations,
+  getDiscreteOutput, neuronGrid, pedalValue, pickNetworkReplay, topActivationLinks, topActivations,
 } from "./network.js";
 
 describe("perception de la voiture", () => {
@@ -62,4 +62,53 @@ it("reconnaît la pédale, les commandes continues et les actions discrètes", (
   expect(getActionMode({ agent: { algo: "classic" } })).toBeNull();
   expect(pedalValue({ throttle: 0, brake: 0.65 })).toBe(-0.65);
   expect(pedalValue({ throttle: 0.4, brake: 0 })).toBe(0.4);
+});
+
+describe("schéma d’activation", () => {
+  it("place chaque neurone selon son numéro et conserve les rangées incomplètes", () => {
+    const grid = neuronGrid(256);
+    expect(grid).toHaveLength(256);
+    expect(grid[15]).toEqual({ column: 15, row: 0 });
+    expect(grid[16]).toEqual({ column: 0, row: 1 });
+    expect(grid.at(-1)).toEqual({ column: 15, row: 15 });
+    expect(neuronGrid(5).at(-1)).toEqual({ column: 1, row: 1 });
+    expect(neuronGrid(64).at(-1)).toEqual({ column: 7, row: 7 });
+    expect(neuronGrid(0)).toEqual([]);
+  });
+
+  it("relie les k valeurs les plus fortes par rang, avec un poids proportionnel à leur amplitude", () => {
+    expect(topActivationLinks([0, -0.8, 0.2, 0.05], [0.25, -1, 0], 2)).toEqual([
+      { from: 1, to: 1, strength: 1 },
+      { from: 2, to: 0, strength: 0.25 },
+    ]);
+    expect(topActivationLinks([1, -1], [0, 0.4, 0.4], 1)).toEqual([{ from: 0, to: 1, strength: 1 }]);
+    expect(topActivationLinks([1, 0], [0, 0.4, 0.4])).toHaveLength(1);
+    expect(topActivationLinks([1, 0], [0, 0])).toEqual([]);
+    expect(topActivationLinks([], [1])).toEqual([]);
+    expect(topActivationLinks([1], [1], 0)).toEqual([]);
+  });
+});
+
+it("retrouve l’action discrète sans inventer ses scores", () => {
+  const action = { steer: -1, throttle: 0, brake: 1 };
+  const scores = [-1, 4, 1, 0, 0, 2, -2, 0, 3];
+  expect(getDiscreteOutput({ action })).toEqual({ chosen: 8, scores: null });
+  expect(getDiscreteOutput({ action, q_values: scores })).toEqual({ chosen: 8, scores });
+  expect(getDiscreteOutput({ action, q_values: [1] })).toEqual({ chosen: 8, scores: null });
+  expect(getDiscreteOutput({ action: { ...action, steer: 0.3 } }).chosen).toBe(-1);
+});
+
+it("sélectionne un tour v2 avec activations en comparant les agents dans les mêmes conditions", () => {
+  const base = { track_id: "f1_spa", mu_factor: 1, has_activations: true, car: "f1_2024", outcome: "lap" };
+  const winner = { ...base, path: "spa-a", condition: "ppo", lap_time: 104 };
+  const runnerUp = { ...base, path: "spa-b", condition: "sac", lap_time: 110 };
+  const replays = [
+    { ...base, path: "spa-no-acts", has_activations: false, lap_time: 99 },
+    { ...base, path: "monza-a", track_id: "f1_monza", condition: "ppo", lap_time: 93 },
+    { ...base, path: "v1", car: "v1", lap_time: 40 },
+    runnerUp, winner,
+  ];
+  expect(pickNetworkReplay(replays)).toBe(winner);
+  expect(pickNetworkReplay([winner, runnerUp], new Set([winner.path]))).toBe(runnerUp);
+  expect(pickNetworkReplay([replays[0]])).toBeUndefined();
 });

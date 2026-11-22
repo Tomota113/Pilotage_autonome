@@ -18,6 +18,14 @@ export function conditionShort(id) {
   return CONDITION_BY_ID[id]?.short ?? conditionLabel(id);
 }
 
+export function leaderTitle(entries, value, conclusion, fallback, compare = Math.max) {
+  if (!entries.length) return fallback;
+  const best = compare(...entries.map(value));
+  const leaders = entries.filter((entry) => value(entry) === best);
+  if (leaders.length !== 1 || best <= 0) return fallback;
+  return `${conditionLabel(leaders[0].condition).split(" (")[0]} ${conclusion(best)}`;
+}
+
 export function Condition({ id, short = false }) {
   return <span title={short ? conditionLabel(id) : undefined}>
     <span aria-hidden="true" className="swatch" style={{ background: conditionColor(id) }} />
@@ -55,10 +63,15 @@ export function ChartPanel({ title, guide, legend, table, children }) {
   const id = useId();
   return <section className="card analytics-chart" aria-labelledby={`${id}-title`} aria-describedby={`${id}-guide`}>
     <h3 id={`${id}-title`} className="card-title">{title}</h3>
-    <p id={`${id}-guide`} className="analytics-guide"><strong>Comment lire ce graphique.</strong> {guide}</p>
     {legend && <Legend items={legend} />}
     {children}
-    {table && <ChartTable title={title} {...table} />}
+    <div className="analytics-chart-footer">
+      {table && <ChartTable title={title} {...table} />}
+      <details className="explanation">
+        <summary>En savoir plus</summary>
+        <p id={`${id}-guide`}>{guide}</p>
+      </details>
+    </div>
   </section>;
 }
 

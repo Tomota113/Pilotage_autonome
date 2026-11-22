@@ -1,0 +1,1341 @@
+<title>Guide F1-RL Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Mise en page : tour de chronométrage (chapitres) à gauche, texte à 70 caractères à droite ;
+   bande de vibreur rouge et blanc en haut, barre de progression « tour » pendant la lecture. */
+:root {
+  --bg: #f4f6f8; --surface: #ffffff; --fg: #14181d; --muted: #59626d; --line: #dce1e7;
+  --accent: #c8281f; --accent-soft: #fbe9e7; --flag: #b98a00; --code-bg: #eef1f4;
+  --font-display: "Titillium Web", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101317; --surface: #171b20; --fg: #e8ebee; --muted: #9ba4ae; --line: #29303a;
+    --accent: #ff5d52; --accent-soft: #3a1d1b; --flag: #f2c230; --code-bg: #1d232a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101317; --surface: #171b20; --fg: #e8ebee; --muted: #9ba4ae; --line: #29303a;
+  --accent: #ff5d52; --accent-soft: #3a1d1b; --flag: #f2c230; --code-bg: #1d232a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { background: var(--bg); color: var(--fg); font: 400 17px/1.65 var(--font-body); }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--flag); outline-offset: 2px; border-radius: 3px; }
+
+.kerb { height: 6px; background: repeating-linear-gradient(90deg, var(--accent) 0 28px, var(--surface) 28px 56px);
+  border-bottom: 1px solid var(--line); }
+.lap { position: fixed; top: 0; left: 0; height: calc(3px + env(safe-area-inset-top, 0px)); width: 0;
+  background: var(--flag); z-index: 20; transition: width .1s linear; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 0 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+header.cover { padding-block: 48px 32px; display: grid; gap: 14px; max-width: 760px; }
+.cover .eyebrow { margin: 0; }
+.cover h1 { font: 700 clamp(2.1rem, 5vw, 3.2rem)/1.08 var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.cover p.lede { margin: 0; color: var(--muted); font-size: 1.1rem; max-width: 62ch; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; padding: 0; list-style: none; }
+.facts li { font: 500 .8rem/1 var(--font-mono); padding: 7px 10px; border: 1px solid var(--line);
+  border-radius: 4px; background: var(--surface); color: var(--muted); }
+.facts b { color: var(--fg); font-weight: 500; }
+
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 48px; align-items: start; }
+
+/* Tour de chronométrage : la liste des chapitres, ordre de lecture conseillé */
+nav.tower { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); }
+.tower h2 { font: 600 .72rem/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+.tower ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.tower li + li { border-top: 1px solid var(--line); }
+.tower a { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 10px; padding: 9px 12px;
+  color: var(--fg); text-decoration: none; font-size: .9rem; line-height: 1.3; }
+.tower a:hover { background: var(--code-bg); }
+.tower .pos { font: 500 .8rem/1 var(--font-mono); color: var(--muted); text-align: center; padding: 5px 0; border-radius: 3px; background: var(--code-bg); font-variant-numeric: tabular-nums; }
+.tower a.active { background: var(--accent-soft); }
+.tower a.active .pos { background: var(--accent); color: #fff; }
+.tower .tools { display: flex; gap: 8px; margin-top: 12px; }
+.tower button { font: 500 .82rem var(--font-body); color: var(--fg); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 5px; padding: 7px 10px; cursor: pointer; }
+.tower button:hover { border-color: var(--muted); }
+
+main { min-width: 0; }
+.chapter { max-width: 72ch; padding-block: 8px 40px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+.chapter:last-child { border-bottom: 0; }
+.eyebrow { font: 600 .74rem/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.chapter > h2 { font: 700 clamp(1.6rem, 3.4vw, 2.15rem)/1.15 var(--font-display); margin: 0 0 18px; text-wrap: balance; }
+.chapter h2:not(:first-of-type), .chapter h3 { font-family: var(--font-display); text-wrap: balance; }
+.chapter h2 + p, .chapter h3 + p { margin-top: 6px; }
+.chapter section h2, .chapter > h2 ~ h2 { font-size: 1.35rem; margin: 34px 0 8px; }
+.chapter h3 { font-size: 1.15rem; margin: 28px 0 6px; }
+.chapter p, .chapter li { text-wrap: pretty; }
+.chapter ul, .chapter ol { padding-left: 1.3em; }
+.chapter li + li { margin-top: 4px; }
+strong { font-weight: 600; }
+code { font: 500 .86em var(--font-mono); background: var(--code-bg); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; line-height: 1.45; }
+pre code { background: none; padding: 0; font-size: .82rem; overflow-wrap: normal; white-space: pre; }
+blockquote { margin: 18px 0; padding: 10px 16px; border-left: 3px solid var(--flag); background: var(--surface); border-radius: 0 6px 6px 0; color: var(--fg); }
+.table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; background: var(--code-bg); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.math.display { display: block; overflow-x: auto; margin: 14px 0; text-align: center; }
+mjx-container { color: var(--fg); }
+footer { color: var(--muted); font-size: .85rem; max-width: 72ch; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  nav.tower { position: static; }
+  .tower ol { display: flex; overflow-x: auto; border-radius: 6px; }
+  .tower li { flex: 0 0 auto; }
+  .tower li + li { border-top: 0; border-left: 1px solid var(--line); }
+  .tower a { grid-template-columns: auto auto; padding: 8px 10px; white-space: nowrap; }
+  body { font-size: 16px; }
+}
+</style>
+
+<div class="lap" id="lap" aria-hidden="true"></div>
+<div class="kerb" aria-hidden="true"></div>
+<div class="wrap">
+  <header class="cover">
+    <p class="eyebrow">L3 Intelligence Artificielle · projet en binôme</p>
+    <h1>Comprendre F1-RL Lab</h1>
+    <p class="lede">Des agents d'apprentissage par renforcement apprennent seuls à piloter une monoplace sur des circuits 2D.
+      Ce guide explique le projet de zéro, dans l'ordre : les bases, la physique, l'environnement, les algorithmes,
+      les résultats, le code, puis les questions probables du professeur.</p>
+    <ul class="facts" aria-label="Le projet en chiffres">
+      <li><b>13</b> algorithmes ou variantes</li>
+      <li><b>8</b> circuits F1 jamais vus en test</li>
+      <li><b>3</b> niveaux d'adhérence : μ 1,0 · 0,8 · 0,6</li>
+      <li>voiture F1 à <b>343</b> km/h</li>
+    </ul>
+  </header>
+
+  <div class="layout">
+    <nav class="tower" aria-label="Chapitres">
+      <h2>Ordre de lecture</h2>
+      <ol id="toc">
+<li><a href="#ch00"><span class="pos">00</span><span class="name">F1-RL Lab — lire d’abord</span></a></li>
+<li><a href="#ch01"><span class="pos">01</span><span class="name">Apprentissage par renforcement</span></a></li>
+<li><a href="#ch02"><span class="pos">02</span><span class="name">Simulateur et voiture</span></a></li>
+<li><a href="#ch03"><span class="pos">03</span><span class="name">L’environnement et le MDP</span></a></li>
+<li><a href="#ch04"><span class="pos">04</span><span class="name">Les algorithmes</span></a></li>
+<li><a href="#ch05"><span class="pos">05</span><span class="name">Protocole et résultats</span></a></li>
+<li><a href="#ch06"><span class="pos">06</span><span class="name">Du code à l’écran</span></a></li>
+<li><a href="#ch07"><span class="pos">07</span><span class="name">25 questions du professeur</span></a></li>
+      </ol>
+      <div class="tools">
+        <button type="button" id="theme">Thème clair / sombre</button>
+      </div>
+    </nav>
+    <main>
+<section class="chapter" id="ch00" aria-labelledby="ch00-t"><p class="eyebrow">Chapitre 00</p><h2 id="ch00-t">F1-RL Lab — lire d’abord</h2><h2>Le projet en dix lignes</h2>
+<ol>
+<li>F1-RL Lab est un projet de L3 sur le pilotage d’une monoplace en simulation 2D.</li>
+<li>Le simulateur calcule le mouvement de la voiture et la géométrie de la piste.</li>
+<li>L’agent reçoit des observations, par exemple la distance aux bords et sa vitesse.</li>
+<li>Il choisit une commande de volant et une façon d’accélérer ou de freiner.</li>
+<li>L’environnement attribue une récompense à chaque décision et vérifie si le tour est terminé.</li>
+<li>À force d’essais, les agents d’apprentissage par renforcement ajustent leur façon de piloter.</li>
+<li>Deux pilotes programmés à la main servent de références.</li>
+<li>La série v1 utilise une voiture simplifiée et apprend sur des circuits générés.</li>
+<li>La série v2 ajoute la puissance limitée et l’aérodynamique d’une F1. Elle apprend sur des circuits réels.</li>
+<li>On mesure les tours bouclés sur des circuits réservés au test et à plusieurs niveaux d’adhérence.</li>
+</ol>
+<h2>Ordre de lecture</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Chapitre</th>
+<th>Ce que tu dois pouvoir expliquer en une phrase</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#ch01">01 — Apprentissage par renforcement</a></td>
+<td>Comment un agent apprend à freiner avant un virage.</td>
+</tr>
+<tr>
+<td><a href="#ch02">02 — Simulateur et voiture</a></td>
+<td>Pourquoi une voiture peut élargir sa trajectoire malgré le braquage.</td>
+</tr>
+<tr>
+<td><a href="#ch03">03 — Environnement et MDP</a></td>
+<td>Ce que fait exactement un appel à <code>step()</code>.</td>
+</tr>
+<tr>
+<td><a href="#ch04">04 — Algorithmes</a></td>
+<td>Ce que prédit chaque famille et comment elle se corrige.</td>
+</tr>
+<tr>
+<td><a href="#ch05">05 — Protocole et résultats</a></td>
+<td>D’où vient un score et jusqu’où on peut l’interpréter.</td>
+</tr>
+<tr>
+<td><a href="#ch06">06 — Code et application</a></td>
+<td>Comment une expérience devient un résultat et un replay.</td>
+</tr>
+<tr>
+<td><a href="#ch07">07 — Questions du professeur</a></td>
+<td>Comment répondre à l’oral avec un exemple ou une source.</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Vocabulaire minimal</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Mot</th>
+<th>Sens dans le projet</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent</td>
+<td>Programme qui décide comment piloter.</td>
+</tr>
+<tr>
+<td>Observation</td>
+<td>Informations que l’environnement donne à l’agent.</td>
+</tr>
+<tr>
+<td>Action</td>
+<td>Commande que l’agent choisit.</td>
+</tr>
+<tr>
+<td>Récompense</td>
+<td>Score produit après une décision.</td>
+</tr>
+<tr>
+<td>Épisode</td>
+<td>Un essai, du départ à la fin ou à l’interruption.</td>
+</tr>
+<tr>
+<td>Politique</td>
+<td>Règle qui choisit les actions.</td>
+</tr>
+<tr>
+<td>μ, « mu »</td>
+<td>Dans les tableaux, facteur qui règle l’adhérence de la piste pour l’essai.</td>
+</tr>
+<tr>
+<td>Graine</td>
+<td>Valeur qui initialise les tirages pseudo-aléatoires.</td>
+</tr>
+<tr>
+<td>Run</td>
+<td>Un entraînement identifié par un <code>run_id</code>.</td>
+</tr>
+<tr>
+<td>Checkpoint</td>
+<td>Soit un point de passage sur la piste, soit une sauvegarde de l’agent. Le contexte indique lequel.</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Ouvrir l’application</h2>
+<p>Depuis la racine du dépôt, active l’environnement Python du projet. Si <code>app/dist/index.html</code> manque, compile d’abord l’interface avec <code>npm --prefix app run build</code>, après installation des dépendances Node. Les étapes d’installation sont dans le <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/README.md" target="_blank" rel="noopener">README.md</a>.</p>
+<pre><code class="language-bash">source .venv/bin/activate
+uvicorn server.app:app --port 8000
+</code></pre>
+<p>Ouvre ensuite <a href="http://localhost:8000" target="_blank" rel="noopener">http://localhost:8000</a>. Dans <strong>Race Simulator</strong>, choisis une voiture, un circuit et un replay disponible. Fais pause à l’approche d’un virage et regarde les capteurs, la vitesse et le frein. Le bandeau <strong>FIXTURE</strong> signale les données synthétiques de développement. Pour la soutenance, utilise des replays expérimentaux chargés depuis le serveur. <a href="#ch06">Documentation du fonctionnement</a></p></section>
+<section class="chapter" id="ch01" aria-labelledby="ch01-t"><p class="eyebrow">Chapitre 01</p><h2 id="ch01-t">Apprentissage par renforcement</h2><h2>D’abord, imagine un virage</h2>
+<p>La monoplace roule vite. La piste se resserre et tourne. Si l’agent continue d’accélérer, il avance vite pendant quelques instants et risque une sortie. S’il freine maintenant, il avance moins vite tout de suite et peut continuer après le virage.</p>
+<p>Pendant l’entraînement, l’agent essaie des commandes, observe leurs effets et reçoit des récompenses. Il cherche une suite de décisions qui rapporte sur la durée. Aucune commande de pilotage à imiter ne lui est fournie. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/env/f1_env.py" target="_blank" rel="noopener"><code>env/f1_env.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/train.py" target="_blank" rel="noopener"><code>agents/train.py</code></a></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Notion</th>
+<th>Exemple</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Agent</strong></td>
+<td>Le programme qui décide du freinage.</td>
+</tr>
+<tr>
+<td><strong>Environnement</strong></td>
+<td>La voiture, la piste et les règles qui répondent à la commande.</td>
+</tr>
+<tr>
+<td><strong>État</strong></td>
+<td>La situation complète dans le simulateur. Elle comprend par exemple la position, le cap, le braquage et l’adhérence locale.</td>
+</tr>
+<tr>
+<td><strong>Observation</strong></td>
+<td>Ce que l’agent reçoit. Par exemple, les rayons mesurant les bords et la vitesse. Deux situations différentes peuvent produire des observations proches.</td>
+</tr>
+<tr>
+<td><strong>Action</strong></td>
+<td>Freiner et braquer dans le même pas.</td>
+</tr>
+<tr>
+<td><strong>Récompense</strong></td>
+<td>Une note immédiate qui dépend notamment de l’avance et de la sortie éventuelle.</td>
+</tr>
+<tr>
+<td><strong>Épisode</strong></td>
+<td>Un essai qui s’arrête après un tour, une sortie, une limite de durée ou un manque de progression.</td>
+</tr>
+<tr>
+<td><strong>Politique</strong></td>
+<td>La règle qui associe une décision, ou une distribution de décisions, à une observation.</td>
+</tr>
+<tr>
+<td><strong>Valeur</strong></td>
+<td>Une estimation de ce que les décisions vont rapporter à partir de maintenant.</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Explorer et exploiter</h2>
+<p><strong>Exploiter</strong>, c’est préférer l’action qui semble la meilleure d’après l’expérience actuelle. <strong>Explorer</strong>, c’est essayer une autre action et recueillir de l’information. Si l’agent essaie uniquement d’accélérer, il ne découvre jamais à quel moment un freinage l’aiderait.</p>
+<p>Avec la règle <strong>ε-greedy</strong>, l’agent tire une action au hasard avec la probabilité ε. Sinon, il prend une action qui maximise sa valeur estimée. Dans la table du projet, ε diminue pendant l’apprentissage et les égalités sont tirées au sort à l’entraînement. L’évaluation gloutonne prend un maximum avec un départage déterministe. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/tabular.py" target="_blank" rel="noopener"><code>agents/tabular.py</code></a></p>
+<h2>Sur politique et hors politique</h2>
+<ul>
+<li><strong>Sur politique</strong> (<em>on-policy</em>). L’agent apprend à partir de la politique qu’il est en train de suivre. SARSA utilise l’action suivante choisie par cette politique. Si cette action est exploratoire, sa valeur entre dans le calcul.</li>
+<li><strong>Hors politique</strong> (<em>off-policy</em>). La politique qui fournit les expériences peut différer de celle visée par l’apprentissage. Q-Learning peut explorer dans un virage et calculer sa cible comme si, au pas suivant, il choisissait toujours l’action qui a la meilleure valeur estimée. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/sarsa.py" target="_blank" rel="noopener"><code>agents/sarsa.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/qlearning.py" target="_blank" rel="noopener"><code>agents/qlearning.py</code></a></li>
+</ul>
+<h2>Avec les formules</h2>
+<p>À l’instant <span class="math">\(t\)</span>, l’agent choisit <span class="math">\(a_t\)</span>. Il reçoit <span class="math">\(r_t\)</span> sur la transition suivante. Une politique stochastique se note <span class="math">\(\pi(a\mid o)\)</span>, la probabilité de choisir <span class="math">\(a\)</span> quand l’agent observe <span class="math">\(o\)</span>.</p>
+<p>Le <strong>retour</strong> <span class="math">\(G_t\)</span> est le cumul pondéré des récompenses jusqu’au dernier pas de l’épisode.</p>
+<p><span class="math display">\[
+G_t = r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots
+\]</span></p>
+<p><strong>γ</strong> est le facteur d’actualisation. Plus γ est proche de 1, plus les récompenses lointaines pèsent dans la décision. Pour un freinage, cela change le poids de la sortie que l’on pourrait éviter ou du tour que l’on pourrait finir. En v2, γ vaut <strong>0,995</strong> dans les configurations expérimentales. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/make_configs.py" target="_blank" rel="noopener"><code>tools/make_configs.py</code></a></p>
+<p>En notation d’état complète, <span class="math">\(V^\pi(s)\)</span> est le retour moyen attendu si l’on part de <span class="math">\(s\)</span> et suit <span class="math">\(\pi\)</span>. <span class="math">\(Q^\pi(s,a)\)</span> est le retour moyen attendu si l’on joue d’abord <span class="math">\(a\)</span> depuis <span class="math">\(s\)</span>, puis suit <span class="math">\(\pi\)</span>.</p>
+<p><span class="math display">\[
+V^\pi(s) = \mathbb{E}_{\pi}[G_t \mid s_t=s],
+\qquad
+Q^\pi(s,a) = \mathbb{E}_{\pi}[G_t \mid s_t=s, a_t=a].
+\]</span></p>
+<p>Dans le projet, la table indexe une observation discrétisée et un réseau Q utilise un vecteur d’observation. Le symbole <span class="math">\(s\)</span> dans les mises à jour du <a href="#ch04">chapitre 04</a> désigne l’entrée que l’agent utilise en pratique. Le <a href="#ch03">chapitre 03</a> détaille les informations qui lui manquent.</p></section>
+<section class="chapter" id="ch02" aria-labelledby="ch02-t"><p class="eyebrow">Chapitre 02</p><h2 id="ch02-t">Simulateur et voiture</h2><h2>La voiture comme une bicyclette</h2>
+<p>Vu du dessus, on remplace les deux roues avant par une roue directrice au milieu de l’essieu. On fait pareil à l’arrière avec une roue fixe. L’état de la voiture contient la position <span class="math">\((x,y)\)</span>, le cap <span class="math">\(\psi\)</span>, la vitesse <span class="math">\(v\)</span> et le braquage réel <span class="math">\(\delta\)</span>. Le volant de l’agent fixe une cible. Le braquage réel s’en rapproche à vitesse limitée.</p>
+<p>Sans limitation d’adhérence, la géométrie donne</p>
+<p><span class="math display">\[
+\beta=\arctan\!\left(\frac{l_r}{L}\tan\delta\right),
+\qquad \kappa=\frac{\sin\beta}{l_r}.
+\]</span></p>
+<p><span class="math">\(L\)</span> est la distance entre les essieux. <span class="math">\(l_r\)</span> est la distance entre le centre de gravité et l’essieu arrière. La voiture se déplace dans la direction <span class="math">\(\psi+\beta\)</span> et son cap tourne à la vitesse <span class="math">\(v\kappa\)</span>. Le rayon du virage demandé vaut <span class="math">\(1/|\kappa|\)</span> lorsque <span class="math">\(\kappa\)</span> est non nulle.</p>
+<p>Une décision dure <strong>0,05 s</strong> par défaut. La même commande est appliquée pendant <strong>5 sous-pas de 0,01 s</strong>. À chaque sous-pas, le simulateur met à jour la vitesse, puis la position et le cap avec cette nouvelle vitesse. C’est l’intégration d’Euler semi-implicite. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/car.py" target="_blank" rel="noopener"><code>sim/car.py</code></a></p>
+<h2>Tourner et freiner avec une adhérence limitée</h2>
+<p>Pour suivre un virage de rayon <span class="math">\(R\)</span>, la voiture demande une accélération latérale <span class="math">\(v^2/R\)</span>. Une vitesse plus élevée augmente vite cette demande. Quand elle dépasse l’adhérence, le simulateur réduit la courbure effective et la voiture prend un rayon plus large. C’est le sous-virage signalé par <code>slip</code>.</p>
+<p>Avec le <strong>cercle de friction combiné</strong>, la F1 partage le budget d’adhérence <span class="math">\(A(v)\)</span> entre le virage et l’effort longitudinal transmis par les pneus.</p>
+<p><span class="math display">\[
+a_{\mathrm{long}}^2+a_{\mathrm{lat}}^2 \le A(v)^2,
+\qquad
+A(v)=\mu_{\mathrm{route}}\,\mu_{\mathrm{pneu}}\,(g+k_Lv^2).
+\]</span></p>
+<p>Imagine un pilote qui freine en entrant dans une chicane. Plus les pneus sont occupés à faire tourner la voiture, moins il reste de marge pour freiner. Le code calcule ce budget longitudinal au début du sous-pas, puis borne la courbure avec la vitesse mise à jour. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/car.py" target="_blank" rel="noopener"><code>sim/car.py</code></a></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Propriété</th>
+<th>Modèle v1</th>
+<th>Modèle <code>F1_2024</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Moteur</td>
+<td>Accélération maximale constante multipliée par le gaz.</td>
+<td>Limite de motricité et de puissance. À vitesse <span class="math">\(v&gt;0\)</span>, la limite moteur est <span class="math">\(\min(a_{\max},P/(mv))\)</span>, avant le budget des pneus.</td>
+</tr>
+<tr>
+<td>Résistances</td>
+<td>Traînée proportionnelle à <span class="math">\(v^2\)</span>.</td>
+<td>Traînée proportionnelle à <span class="math">\(v^2\)</span> et résistance au roulement.</td>
+</tr>
+<tr>
+<td>Adhérence</td>
+<td><span class="math">\(\mu_{\mathrm{route}}g\)</span>. Le frein et la courbure sont limités séparément.</td>
+<td>Pneus slicks et appui aérodynamique proportionnel à <span class="math">\(v^2\)</span>. Un budget commun limite le virage et l’effort longitudinal.</td>
+</tr>
+<tr>
+<td>Réglage</td>
+<td><code>env.car: v1</code>.</td>
+<td><code>env.car: f1_2024</code>, masse de 800 kg et environ 700 kW aux roues dans le modèle.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Le contexte donne une vitesse de pointe d’environ <strong>228 km/h</strong> en v1 et <strong>343 km/h</strong> avec la F1. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#4-la-physique" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 4</a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/car.py" target="_blank" rel="noopener"><code>sim/car.py</code></a></p>
+<h2>Calibrage sur les poles 2024</h2>
+<p>Le projet compare un temps simulé sur la trajectoire idéale aux temps de pole des classements FIA 2024. Les paramètres ont été choisis dans des plages plausibles. Ce contrôle vérifie l’ordre de grandeur des temps. Il porte sur un profil théorique en tour lancé, distinct des essais des agents depuis l’arrêt. Le contexte rapporte un écart moyen d’environ <strong>3 %</strong>. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#42-modèle-f1_2024-série-v2-simcarpy" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 4.2</a></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Circuit</th>
+<th style="text-align: right;">Temps simulé (s)</th>
+<th style="text-align: right;">Pole 2024</th>
+<th style="text-align: right;">Écart</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Monza</td>
+<td style="text-align: right;">81,9</td>
+<td style="text-align: right;">1:19.327</td>
+<td style="text-align: right;">+3,2 %</td>
+</tr>
+<tr>
+<td>Silverstone</td>
+<td style="text-align: right;">86,8</td>
+<td style="text-align: right;">1:25.819</td>
+<td style="text-align: right;">+1,2 %</td>
+</tr>
+<tr>
+<td>Suzuka</td>
+<td style="text-align: right;">88,9</td>
+<td style="text-align: right;">1:28.197</td>
+<td style="text-align: right;">+0,8 %</td>
+</tr>
+<tr>
+<td>Hungaroring</td>
+<td style="text-align: right;">80,0</td>
+<td style="text-align: right;">1:15.227</td>
+<td style="text-align: right;">+6,3 %</td>
+</tr>
+<tr>
+<td>Red Bull Ring</td>
+<td style="text-align: right;">67,9</td>
+<td style="text-align: right;">1:04.314</td>
+<td style="text-align: right;">+5,5 %</td>
+</tr>
+</tbody>
+</table></div>
+<p>Source du tableau. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#4-la-physique" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, section « La physique »</a></p>
+<h2>Circuits et capteurs</h2>
+<ul>
+<li><strong>Circuits générés.</strong> On fait varier le rayon autour d’un point avec une somme de sinusoïdes, puis on lisse et on rééchantillonne la boucle. Le générateur rejette les tracés trop courts, trop longs, trop serrés ou dont des portions éloignées le long du tour passent trop près. Les <code>gen_00</code> à <code>gen_09</code> servent à apprendre en v1, les <code>gen_10</code> à <code>gen_14</code> à tester. Les <code>gen_f1_*</code> du lot de démonstration ont des dimensions adaptées à la F1. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/generate_tracks.py" target="_blank" rel="noopener"><code>tools/generate_tracks.py</code></a></li>
+<li><strong>Circuits réels.</strong> Les données viennent de la base publique <strong>racetrack-database</strong> de l’Université technique de Munich (TUM FTM, licence LGPL-3.0). L’import utilise les largeurs gauche et droite issues d’images satellite pour reconstruire le milieu de la piste et sa largeur totale. La boucle est rééchantillonnée à environ 5 m. En v2, les <code>real_*</code> servent à apprendre et les <code>f1_*</code> sont réservés au test. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/data/f1_tracks_tum/SOURCE.md" target="_blank" rel="noopener">Source TUM</a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/import_f1_tracks.py" target="_blank" rel="noopener"><code>tools/import_f1_tracks.py</code></a></li>
+<li><strong>Géométrie et capteurs.</strong> La piste stocke une ligne centrale fermée, des largeurs et une adhérence locale. La projection fournit <span class="math">\(s\)</span>, la distance parcourue le long de cette ligne depuis son origine. Elle donne aussi la distance au centre. Les capteurs cherchent, pour chaque rayon, la première intersection avec un bord, dans la limite de leur portée. Le calcul des intersections se fait en bloc avec NumPy. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/track.py" target="_blank" rel="noopener"><code>sim/track.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/sensors.py" target="_blank" rel="noopener"><code>sim/sensors.py</code></a></li>
+</ul>
+<h2>La trajectoire idéale</h2>
+<ol>
+<li>On part de la ligne centrale et on autorise un décalage latéral de chaque point, avec des bornes liées aux bords et une marge.</li>
+<li>On minimise une approximation de la somme des courbures au carré. Le solveur quadratique fixe ou libère des points sur les bornes. Le rééchantillonnage rend de nouveau les points régulièrement espacés entre les optimisations.</li>
+<li>Sur cette ligne, on calcule la vitesse limite des virages. Une passe vers l’avant impose ce que le moteur permet d’atteindre. Une passe vers l’arrière réduit les vitesses qui empêcheraient de freiner à temps.</li>
+<li>Le pilote de référence vise un point en avant sur la ligne et lit le profil de vitesse pour corriger ses commandes. Il vise <strong>99 %</strong> de la vitesse du profil retenue localement.</li>
+</ol>
+<p>La courbure minimale fournit une trajectoire de référence. La recherche conjointe de la ligne et du temps minimal serait un autre problème d’optimisation. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/raceline.py" target="_blank" rel="noopener"><code>sim/raceline.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/raceline_driver.py" target="_blank" rel="noopener"><code>agents/raceline_driver.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#14-limites-à-dire-honnêtement" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 14</a></p></section>
+<section class="chapter" id="ch03" aria-labelledby="ch03-t"><p class="eyebrow">Chapitre 03</p><h2 id="ch03-t">L’environnement et le MDP</h2><p>Un <strong>processus de décision de Markov</strong> (MDP) décrit des états, des actions, une loi de transition et une récompense. Avec l’état interne complet, on peut appliquer une action et calculer la suite à partir de la situation présente. L’agent de F1-RL Lab ne reçoit qu’une partie de cet état. Par exemple, l’adhérence de l’épisode et le braquage déjà appliqué peuvent influencer le prochain déplacement sans figurer dans le vecteur standard. Du point de vue de l’agent, le problème est donc <strong>partiellement observable</strong>. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/env/f1_env.py" target="_blank" rel="noopener"><code>env/f1_env.py</code></a></p>
+<h2>Les 12 observations</h2>
+<p>Le vecteur est toujours dans le même ordre. Ses composantes sont bornées à <span class="math">\([-1,1]\)</span>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Position(s) dans le vecteur</th>
+<th>Observation</th>
+<th>Normalisation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 à 7</td>
+<td>Distances aux bords selon les angles −90°, −60°, −30°, 0°, +30°, +60°, +90° par rapport au cap.</td>
+<td>On divise par la portée. Elle vaut 100 m en v1 et 200 m avec la F1. Une valeur de 1 signifie qu’aucun bord plus proche n’a été trouvé.</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Vitesse.</td>
+<td>On divise par 63 m/s en v1 et 96 m/s avec la F1.</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Écart entre le cap de la voiture et celui du segment de piste.</td>
+<td>Angle ramené à <span class="math">\([-\pi,\pi[\)</span>, puis divisé par <span class="math">\(\pi\)</span>.</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Écart latéral à la ligne centrale.</td>
+<td>On divise par la demi-largeur locale. Le signe positif désigne la gauche.</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Courbure proche, à 30 m en v1 et 50 m avec la F1.</td>
+<td>Courbure signée multipliée par 10, puis bornée.</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Courbure plus loin, à 80 m en v1 et 150 m avec la F1.</td>
+<td>Même calcul. Les distances se mesurent le long de la ligne centrale.</td>
+</tr>
+</tbody>
+</table></div>
+<p>L’adhérence utilisée par la physique est le <strong>facteur μ de l’épisode × l’adhérence locale du circuit</strong>. Les pneus du modèle F1 ont leur propre coefficient, appliqué ensuite dans la physique. L’option <code>observe_mu</code> ajoute une 13e observation, l’adhérence route effective divisée par 1,5 puis bornée. Elle est désactivée par défaut. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/env/f1_env.py" target="_blank" rel="noopener"><code>env/f1_env.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/car.py" target="_blank" rel="noopener"><code>sim/car.py</code></a></p>
+<h2>Les actions</h2>
+<p>Le simulateur reçoit toujours un triplet <strong>volant, gaz, frein</strong>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Commande choisie par l’agent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>continuous</code></td>
+<td>Volant dans <span class="math">\([-1,1]\)</span>, gaz et frein séparés dans <span class="math">\([0,1]\)</span>.</td>
+</tr>
+<tr>
+<td><code>pedal</code></td>
+<td>Volant et pédale dans <span class="math">\([-1,1]\)</span>. Pédale positive pour accélérer, négative pour freiner, zéro pour laisser rouler. Les deux efforts sont exclusifs.</td>
+</tr>
+<tr>
+<td><code>discrete9</code></td>
+<td>Un entier de 0 à 8. C’est une combinaison parmi trois directions (gauche, tout droit, droite) et trois commandes longitudinales (gaz, roue libre, frein).</td>
+</tr>
+</tbody>
+</table></div>
+<p>Le volant positif commande la gauche. Par exemple, l’action discrète <strong>5</strong> signifie <strong>tout droit + frein</strong>. En v2, les agents à actions continues utilisent <code>pedal</code> et les agents à actions discrètes conservent <code>discrete9</code>. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/env/f1_env.py" target="_blank" rel="noopener"><code>env/f1_env.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/make_configs.py" target="_blank" rel="noopener"><code>tools/make_configs.py</code></a></p>
+<h2>La récompense, terme par terme</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Terme</th>
+<th>Effet</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="math">\(+0{,}1\,\Delta s\)</span></td>
+<td>Récompense l’avance signée en mètres sur la ligne centrale. Un recul donne une contribution négative.</td>
+</tr>
+<tr>
+<td><span class="math">\(-0{,}01\)</span></td>
+<td>Coût de chaque décision, même à l’arrêt.</td>
+</tr>
+<tr>
+<td><span class="math">\(-(10+k_v v^2)\,[\mathrm{sortie}]\)</span></td>
+<td>Si la voiture sort, pénalité fixe en v1 (<span class="math">\(k_v=0\)</span>). En v2, <span class="math">\(k_v=0{,}01\)</span> et la pénalité augmente avec la vitesse <span class="math">\(v\)</span> en m/s.</td>
+</tr>
+<tr>
+<td><span class="math">\(+50\,[\mathrm{tour}]\)</span></td>
+<td>Bonus lorsque les points de passage valident le tour.</td>
+</tr>
+<tr>
+<td><span class="math">\(-0{,}05\,\lvert\Delta\delta\rvert\)</span></td>
+<td>Pénalise les variations du braquage réel, mesurées en radians. Ce coefficient est mis à zéro dans l’ablation v1.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Les crochets valent 1 si l’événement a lieu, 0 sinon. <span class="math">\(\Delta s\)</span> est la différence de position projetée, corrigée au passage de l’origine de la boucle. Le code la borne à <span class="math">\(\pm(v\,dt+1\,\mathrm{m})\)</span>. Un grand saut de projection reçoit donc au plus le crédit d’avance plafonné. Les checkpoints ont un contrôle séparé. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/env/f1_env.py" target="_blank" rel="noopener"><code>env/f1_env.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#6-le-mdp-envf1_envpy" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 6</a></p>
+<p><strong>Exemple de calcul.</strong> Suppose une avance projetée égale à la marge de <strong>1 m</strong> du code, avec un volant stable, sans sortie ni tour validé. L’avance passe le plafonnement. La récompense vaut <span class="math">\(0{,}1\times1 - 0{,}01 = 0{,}09\)</span>. Si ce même pas valide le tour, on ajoute 50 et on obtient <span class="math">\(50{,}09\)</span>. Ce calcul applique les coefficients du code à un exemple pédagogique. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/env/f1_env.py" target="_blank" rel="noopener"><code>env/f1_env.py</code></a></p>
+<h2>Un épisode, du départ à la fin</h2>
+<p><strong><code>reset()</code></strong> choisit un circuit et un facteur μ, place la voiture à l’arrêt dans l’axe de la piste, prépare les checkpoints et remet les compteurs à zéro. Il renvoie la première observation et <code>info</code>. En v2, l’entraînement tire un point de la ligne centrale. Cela permet de découvrir les virages situés après celui où l’agent échoue souvent. Si le point tiré diffère de la ligne, les cibles sont réparties le long de la boucle à partir de ce point. En évaluation, le départ se fait sur la ligne.</p>
+<p><strong><code>step(action)</code></strong> décode la commande, avance la voiture, reprojette sa position, vérifie l’avance et les checkpoints, calcule la récompense, met à jour les compteurs puis renvoie <code>observation, reward, terminated, truncated, info</code>.</p>
+<p>Les <strong>20 checkpoints</strong> doivent être franchis vers l’avant, dans l’ordre, au plus un par décision. Le dernier passage attendu est le retour au point de départ de l’épisode. Un franchissement pendant un saut de projection trop grand ne compte pas. La validation tolère jusqu’à <strong>4 m</strong> de dépassement du plafond et un petit écart d’arrondi. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/env/f1_env.py" target="_blank" rel="noopener"><code>env/f1_env.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#12-défauts-trouvés-et-corrigés-à-savoir-expliquer" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 12</a></p>
+<ul>
+<li><strong><code>terminated</code></strong>. Sortie de piste ou tour validé. La sortie est détectée quand la distance au centre dépasse la demi-largeur locale.</li>
+<li><strong><code>truncated</code></strong>. Limite de <strong>3 000 décisions</strong> par défaut (<strong>6 000</strong> pour l’évaluation sur les circuits F1), ou <strong>100 décisions</strong> sans dépasser le meilleur avancement de l’épisode. Osciller autour du même point ne remet donc pas le compteur à zéro. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/env/f1_env.py" target="_blank" rel="noopener"><code>env/f1_env.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/evaluate_f1.py" target="_blank" rel="noopener"><code>tools/evaluate_f1.py</code></a></li>
+</ul></section>
+<section class="chapter" id="ch04" aria-labelledby="ch04-t"><p class="eyebrow">Chapitre 04</p><h2 id="ch04-t">Les algorithmes</h2><p>Une <strong>méthode de valeur</strong> apprend à noter les actions. Un <strong>acteur-critique</strong> apprend une politique (l’acteur) avec une estimation de valeur (le critique). Les <strong>pilotes de référence</strong> calculent leurs commandes à partir de la piste et de la physique. Le tableau rassemble les familles, puis les sections expliquent leurs mises à jour.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Méthode</th>
+<th>Actions</th>
+<th>Apprentissage</th>
+<th>Atout</th>
+<th>Limite dans ce problème</th>
+<th>Code</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q-Learning</td>
+<td><code>discrete9</code></td>
+<td>Table, hors politique</td>
+<td>Mise à jour simple à chaque pas</td>
+<td>La même case peut regrouper des virages différents</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/qlearning.py" target="_blank" rel="noopener"><code>agents/qlearning.py</code></a></td>
+</tr>
+<tr>
+<td>SARSA</td>
+<td><code>discrete9</code></td>
+<td>Table, sur politique</td>
+<td>La cible tient compte de l’exploration réellement suivie</td>
+<td>Même perte d’information avec les tranches</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/sarsa.py" target="_blank" rel="noopener"><code>agents/sarsa.py</code></a></td>
+</tr>
+<tr>
+<td>Monte-Carlo</td>
+<td><code>discrete9</code></td>
+<td>Table, retour de la politique suivie</td>
+<td>Utilise les récompenses de la suite effectivement jouée</td>
+<td>Retour variable et mise à jour en fin d’épisode</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/monte_carlo.py" target="_blank" rel="noopener"><code>agents/monte_carlo.py</code></a></td>
+</tr>
+<tr>
+<td>DQN</td>
+<td><code>discrete9</code></td>
+<td>Réseau Q, hors politique</td>
+<td>Partage ce qu’il apprend entre observations proches</td>
+<td>Commandes discrètes et risque de surestimation</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/algorithms.py" target="_blank" rel="noopener"><code>agents/algorithms.py</code></a> · SB3, <code>dqn/dqn.py</code></td>
+</tr>
+<tr>
+<td>QR-DQN</td>
+<td><code>discrete9</code></td>
+<td>Réseau de quantiles, hors politique</td>
+<td>Représente la distribution des retours</td>
+<td>Plus de calcul et sélection par la moyenne estimée</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/algorithms.py" target="_blank" rel="noopener"><code>agents/algorithms.py</code></a> · sb3-contrib, <code>qrdqn/qrdqn.py</code></td>
+</tr>
+<tr>
+<td>Deep SARSA</td>
+<td><code>discrete9</code></td>
+<td>Réseau Q, cible SARSA</td>
+<td>Garde les observations fines et l’action suivante choisie</td>
+<td>La mémoire peut contenir des actions d’une politique déjà modifiée</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/deep_value.py" target="_blank" rel="noopener"><code>agents/deep_value.py</code></a></td>
+</tr>
+<tr>
+<td>Deep Monte-Carlo</td>
+<td><code>discrete9</code></td>
+<td>Réseau Q, retour observé</td>
+<td>Partage entre observations sans estimer la suite avec Q</td>
+<td>Dépend d’épisodes complets ou tronqués et de retours variables</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/deep_value.py" target="_blank" rel="noopener"><code>agents/deep_value.py</code></a></td>
+</tr>
+<tr>
+<td>PPO</td>
+<td>Continues</td>
+<td>Acteur-critique, sur politique</td>
+<td>Limite l’incitation à changer brutalement la politique</td>
+<td>Renouvelle régulièrement les données</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/algorithms.py" target="_blank" rel="noopener"><code>agents/algorithms.py</code></a> · SB3, <code>ppo/ppo.py</code></td>
+</tr>
+<tr>
+<td>SAC</td>
+<td>Continues</td>
+<td>Acteur-critique stochastique, hors politique</td>
+<td>Réutilise les expériences et encourage la diversité des actions</td>
+<td>Plusieurs réseaux à entraîner</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/algorithms.py" target="_blank" rel="noopener"><code>agents/algorithms.py</code></a> · SB3, <code>sac/sac.py</code></td>
+</tr>
+<tr>
+<td>TD3</td>
+<td>Continues</td>
+<td>Acteur-critique déterministe, hors politique</td>
+<td>Cible prudente et politique mise à jour moins souvent</td>
+<td>Requiert un bruit d’exploration ajouté à la collecte</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/algorithms.py" target="_blank" rel="noopener"><code>agents/algorithms.py</code></a> · SB3, <code>td3/td3.py</code></td>
+</tr>
+<tr>
+<td>TQC</td>
+<td>Continues</td>
+<td>Acteur-critique distributionnel, hors politique</td>
+<td>Réduit l’optimisme dans la cible du critique</td>
+<td>Plus de quantiles à calculer et possibilité de pessimisme</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/algorithms.py" target="_blank" rel="noopener"><code>agents/algorithms.py</code></a> · sb3-contrib, <code>tqc/tqc.py</code></td>
+</tr>
+<tr>
+<td>Pilote classique</td>
+<td>Continues</td>
+<td>Règles de direction et de vitesse</td>
+<td>Référence lisible et déterministe</td>
+<td>Suit la ligne centrale et utilise l’adhérence effective</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/classic_driver.py" target="_blank" rel="noopener"><code>agents/classic_driver.py</code></a></td>
+</tr>
+<tr>
+<td>Pilote trajectoire idéale</td>
+<td>Continues</td>
+<td>Calcul de ligne, profil et suivi</td>
+<td>Anticipe les virages à partir d’un profil physique</td>
+<td>Dépend du modèle, du profil et de la qualité du suivi</td>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/raceline.py" target="_blank" rel="noopener"><code>sim/raceline.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/raceline_driver.py" target="_blank" rel="noopener"><code>agents/raceline_driver.py</code></a></td>
+</tr>
+</tbody>
+</table></div>
+<p>Le code local choisit les classes SB3 et sb3-contrib et leur passe les réglages. Les algorithmes tabulaires et les deux réseaux Q marqués Deep SARSA et Deep Monte-Carlo ont leurs boucles dans le dépôt. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/algorithms.py" target="_blank" rel="noopener"><code>agents/algorithms.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/train.py" target="_blank" rel="noopener"><code>agents/train.py</code></a></p>
+<h2>Les tables et leurs trois cibles</h2>
+<p>Une ligne correspond à un état discrétisé et contient <strong>9 valeurs Q</strong>, une par commande. Pour trouver la ligne, le code recalcule trois distances aux angles −45°, 0°, +45° et les place dans des tranches. Il ajoute la tranche de vitesse et celle de l’écart de cap, puis encode le tout en un entier.</p>
+<ul>
+<li><strong>v1</strong>. Quatre tranches par distance, quatre pour la vitesse et trois pour le cap. <span class="math">\(4^3\times4\times3=768\)</span> états.</li>
+<li><strong>v2</strong>. Quatre tranches par distance avec une portée de 200 m, six pour la vitesse, trois pour le cap et cinq pour la courbure à 150 m. <span class="math">\(4^3\times6\times3\times5=5\,760\)</span> états. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/discretize.py" target="_blank" rel="noopener"><code>agents/discretize.py</code></a></li>
+</ul>
+<p>Pour <span class="math">\(s\)</span> et <span class="math">\(a\)</span>, la case est corrigée d’une fraction <span class="math">\(\alpha\)</span> de l’écart entre sa valeur et la cible <span class="math">\(y\)</span>.</p>
+<p><span class="math display">\[
+Q(s,a)\gets Q(s,a)+\alpha\bigl(y-Q(s,a)\bigr).
+\]</span></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Méthode</th>
+<th>Cible <span class="math">\(y\)</span></th>
+<th>Le choix à expliquer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q-Learning</td>
+<td><span class="math">\(r+\gamma\max_b Q(s',b)\)</span></td>
+<td>Suppose la meilleure action au pas suivant, même si la collecte explore.</td>
+</tr>
+<tr>
+<td>SARSA</td>
+<td><span class="math">\(r+\gamma Q(s',a')\)</span></td>
+<td>Utilise l’action <span class="math">\(a'\)</span> déjà choisie par la politique qui explore. En cours d’épisode, cette action est bien jouée au prochain pas.</td>
+</tr>
+<tr>
+<td>Monte-Carlo</td>
+<td><span class="math">\(G_t=r_t+\gamma G_{t+1}\)</span></td>
+<td>Calcule le retour à rebours en fin d’épisode et corrige la première visite de chaque couple état-action.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Pour Q-Learning et SARSA, une vraie terminaison donne <span class="math">\(y=r\)</span>. Une troncature conserve l’estimation de la suite. Monte-Carlo, lui, s’arrête au dernier pas observé et n’ajoute aucune valeur finale. La table applique ensuite les mêmes choix ε-greedy décrits au <a href="#ch01">chapitre 01</a>. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/tabular.py" target="_blank" rel="noopener"><code>agents/tabular.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/qlearning.py" target="_blank" rel="noopener"><code>agents/qlearning.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/sarsa.py" target="_blank" rel="noopener"><code>agents/sarsa.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/monte_carlo.py" target="_blank" rel="noopener"><code>agents/monte_carlo.py</code></a></p>
+<h2>Les réseaux qui apprennent la valeur des actions</h2>
+<p>Un réseau reçoit le vecteur d’observation et permet de noter les neuf commandes. Dans les formules, <span class="math">\(Q^-\)</span> désigne un <strong>réseau cible</strong>, copie actualisée moins souvent pour fournir une cible plus stable. Les réseaux sont ajustés par descente de gradient. Une perte de Huber réduit l’influence des grandes erreurs par rapport à une erreur purement quadratique.</p>
+<ul>
+<li><strong>DQN</strong>. Prend des transitions dans une mémoire d’expériences et minimise la perte de Huber entre <span class="math">\(Q(s,a)\)</span> et <span class="math">\(y=r+\gamma\max_b Q^-(s',b)\)</span>, hors transition terminale.</li>
+<li><strong>QR-DQN</strong>. Apprend plusieurs quantiles <span class="math">\(z_j(s,a)\)</span>. Un quantile est un seuil de retour associé à une proportion de résultats situés en dessous de ce seuil. Il choisit <span class="math">\(a^*\)</span> par la plus grande moyenne des quantiles cibles en <span class="math">\(s'\)</span>, puis ajuste les quantiles de l’action jouée vers les cibles <span class="math">\(y_j=r+\gamma z^-_j(s',a^*)\)</span> via une perte de Huber pondérée par quantile. La politique choisit donc une action par sa moyenne estimée.</li>
+<li><strong>Deep SARSA</strong>. Dans une mémoire récente, garde aussi l’action suivante choisie <span class="math">\(a'\)</span>. Le réseau apprend avec la cible <span class="math">\(y=r+\gamma Q^-(s',a')\)</span> et une perte de Huber. Le terme futur disparaît si <code>terminated</code> vaut vrai. À une troncature l’action suivante est calculée pour la cible.</li>
+<li><strong>Deep Monte-Carlo</strong>. À la fin de l’épisode ou à sa troncature, calcule les <span class="math">\(G_t\)</span> observés, puis ajuste par perte de Huber chaque transition vers <span class="math">\(y_t=G_t\)</span>. Chaque visite est utilisée dans ce code. Le réseau Q, Adam et l’exploration ε-greedy sont partagés avec Deep SARSA. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/deep_value.py" target="_blank" rel="noopener"><code>agents/deep_value.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/algorithms.py" target="_blank" rel="noopener"><code>agents/algorithms.py</code></a></li>
+</ul>
+<p>Dans QR-DQN, sur une transition terminale, tous les quantiles cibles valent <span class="math">\(r\)</span>. Dans DQN, la cible vaut <span class="math">\(r\)</span>.</p>
+<h2>Les mises à jour des acteurs-critiques</h2>
+<p>Les formules ci-dessous donnent le cœur de la mise à jour. Pour SAC, TD3 et TQC, les termes après <span class="math">\(r\)</span> disparaissent en cas de vraie terminaison. La politique de v1 utilise les commandes continues à trois composantes. En v2, les commandes sont le volant et la pédale.</p>
+<p><strong>PPO.</strong> La politique collecte des trajectoires récentes. Le critique prédit la valeur de l’état et aide à calculer l’avantage estimé <span class="math">\(\hat A\)</span>, qui indique si l’action a fait mieux que prévu. L’acteur maximise l’objectif borné ci-dessous, où <span class="math">\(\rho=\pi_{\theta}(a\mid s)/\pi_{\rm collecte}(a\mid s)\)</span> est le rapport des probabilités ou densités. Le critique ajuste <span class="math">\(V(s)\)</span> vers une cible de retour estimée.</p>
+<p><span class="math display">\[
+\mathbb{E}\left[\min\left(\rho\hat A,\,
+\operatorname{clip}(\rho,1-\epsilon,1+\epsilon)\hat A\right)\right]
+\]</span></p>
+<p><strong>SAC.</strong> L’acteur tire <span class="math">\(a'\)</span> de sa politique et les critiques apprennent la cible</p>
+<p><span class="math display">\[
+y=r+\gamma\left[\min_i Q^-_i(s',a')-\alpha_{\rm ent}\log\pi(a'\mid s')\right].
+\]</span></p>
+<p>L’acteur maximise en moyenne <span class="math">\(\min_i Q_i(s,a)-\alpha_{\rm ent}\log\pi(a\mid s)\)</span> pour des actions tirées de sa politique. L’entropie favorise une politique qui garde de la diversité. <span class="math">\(\alpha_{\rm ent}\)</span> règle son poids.</p>
+<p><strong>TD3.</strong> Une politique cible déterministe donne <span class="math">\(a'\)</span>, à laquelle on ajoute un petit bruit borné et on applique les bornes de l’action. Les deux critiques sont ajustés vers <span class="math">\(y=r+\gamma\min_i Q^-_i(s',a')\)</span>. L’acteur est optimisé moins souvent et maximise en moyenne <span class="math">\(Q_1(s,\pi(s))\)</span>. À la collecte, <code>train.py</code> ajoute aussi un bruit d’exploration.</p>
+<p><strong>TQC.</strong> Les critiques cibles renvoient des quantiles pour une action <span class="math">\(a'\)</span> tirée de la politique. Le code rassemble et trie ces valeurs, écarte les plus hautes, puis forme <span class="math">\(y_j=r+\gamma[z^-_j-\alpha_{\rm ent}\log\pi(a'\mid s')]\)</span> pour chaque valeur retenue. Les critiques apprennent par perte de Huber pondérée par quantile. Pour l’acteur, on maximise la moyenne des quantiles prédits par les critiques courants, avec le terme d’entropie comme dans SAC. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/algorithms.py" target="_blank" rel="noopener"><code>agents/algorithms.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/train.py" target="_blank" rel="noopener"><code>agents/train.py</code></a></p>
+<h2>Les pilotes de référence appliquent une formule de commande</h2>
+<p>Les deux pilotes visent un point en avant. Si <span class="math">\(d_{\rm visée}\)</span> est la distance de visée et <span class="math">\(\phi\)</span> l’angle entre le cap et la direction du point, la formule de poursuite est <span class="math">\(\delta_{\rm cible}=\arctan(2L\sin\phi/d_{\rm visée})\)</span>. Du gaz est ajouté si la voiture roule sous sa vitesse cible, du frein si elle roule au-dessus. Ils lisent l’adhérence effective dans l’environnement.</p>
+<ul>
+<li><strong>Classique</strong>. Vise la ligne centrale. Pour chaque courbe de l’horizon, calcule une vitesse de passage avec marge <span class="math">\(v_{\rm virage}\)</span>. La vitesse compatible avec le freinage à distance <span class="math">\(d\)</span> vaut environ <span class="math">\(\sqrt{v_{\rm virage}^2+2a_{\rm frein}d}\)</span>. Le pilote retient le minimum de l’horizon. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/classic_driver.py" target="_blank" rel="noopener"><code>agents/classic_driver.py</code></a></li>
+<li><strong>Trajectoire idéale</strong>. Cherche une ligne de faible courbure et calcule un profil avec une passe d’accélération et une passe de freinage. La vitesse cible est <span class="math">\(0{,}99\)</span> fois le minimum du profil sur une courte fenêtre devant la voiture. Il n’y a pas de mise à jour de poids pour ces deux pilotes. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/raceline.py" target="_blank" rel="noopener"><code>sim/raceline.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/raceline_driver.py" target="_blank" rel="noopener"><code>agents/raceline_driver.py</code></a></li>
+</ul></section>
+<section class="chapter" id="ch05" aria-labelledby="ch05-t"><p class="eyebrow">Chapitre 05</p><h2 id="ch05-t">Protocole et résultats</h2><h2>Comment on construit une comparaison</h2>
+<ol>
+<li><strong>Entraîner une condition avec des graines différentes.</strong> Une condition fixe l’algorithme, les circuits et les réglages étudiés. Une graine initialise des tirages comme la sélection du circuit, l’exploration ou les poids du réseau. Les graines usuelles sont <strong>0, 1 et 2</strong>. En v2, SAC, TD3, QR-DQN et Deep SARSA n’ont qu’une graine. TQC a <strong>1 M de pas</strong> en graine 0 et <strong>500 000</strong> en graines 1 et 2. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#série-v2--fin-des-entraînements-et-évaluation-sur-les-8-circuits-f1-22112026" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, bilan de l’entraînement v2</a></li>
+<li><strong>Choisir une sauvegarde par run.</strong> On trie les évaluations de <code>progress.csv</code> par taux de tours, puis par récompense moyenne, puis par pas le plus récent. On prend le premier checkpoint correspondant qui existe. À défaut, on prend le dernier. Les tabulaires ne sauvegardent que la table finale. Les évaluations de <code>progress.csv</code> utilisent les circuits d’entraînement. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/evaluate_all.py" target="_blank" rel="noopener"><code>tools/evaluate_all.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/train.py" target="_blank" rel="noopener"><code>agents/train.py</code></a></li>
+<li><strong>Figer la politique et tester.</strong> On impose le circuit, le facteur μ et le départ arrêté sur la ligne. La politique choisit ses actions de façon déterministe, sans exploration. On joue un épisode par couple (circuit, μ) pour chaque graine disponible. Les facteurs <strong>1,0</strong>, <strong>0,8</strong>, <strong>0,6</strong> représentent l’adhérence nominale, réduite et fortement réduite. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/evaluate.py" target="_blank" rel="noopener"><code>agents/evaluate.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#9-protocole-dévaluation" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 9</a></li>
+<li><strong>Réserver les circuits de test.</strong> En v1, on apprend sur <code>gen_00</code> à <code>gen_09</code> et on teste sur <code>gen_10</code> à <code>gen_14</code>, puis sur les circuits réels F1. En v2, l’apprentissage utilise <strong>17</strong> autres tracés réels. Les <strong>8</strong> circuits <code>f1_*</code> restent réservés au test. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/make_configs.py" target="_blank" rel="noopener"><code>tools/make_configs.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/evaluate_f1.py" target="_blank" rel="noopener"><code>tools/evaluate_f1.py</code></a></li>
+</ol>
+<p><strong>Robustesse</strong> signifie ici continuer à boucler des tours quand l’adhérence baisse. <strong>Généralisation</strong> signifie boucler sur des tracés réservés au test. L’adhérence variable tire un facteur par épisode d’entraînement. La plage est <strong>[0,5 ; 1,1]</strong> pour le PPO variable v1 et <strong>[0,6 ; 1,1]</strong> en v2. Le test applique les mêmes facteurs imposés aux différentes conditions. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/make_configs.py" target="_blank" rel="noopener"><code>tools/make_configs.py</code></a></p>
+<h2>Série v1 — voiture simplifiée</h2>
+<h3>Circuits générés</h3>
+<p>Les triplets sont dans l’ordre <strong>μ 1,0 / 0,8 / 0,6</strong>. Le taux sur les <strong>5 circuits de test</strong> est moyenné sur les graines pour les agents. La dernière colonne inclut les circuits d’entraînement et de test. Les références déterministes sont évaluées une fois par couple et ont chacune <strong>45</strong> essais. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#réévaluation-de-la-série-v1-après-les-deux-corrections-des-checkpoints-21112026" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Réévaluation de la série v1 après les deux corrections des checkpoints »</a></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Dernier checkpoint, taux de test</th>
+<th>Meilleur checkpoint, taux de test</th>
+<th>Tours /135 (dernier / meilleur)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pilote classique</td>
+<td>1,00 / 1,00 / 1,00</td>
+<td>—</td>
+<td>45</td>
+</tr>
+<tr>
+<td>Pilote trajectoire idéale</td>
+<td>1,00 / 1,00 / 1,00</td>
+<td>—</td>
+<td>45</td>
+</tr>
+<tr>
+<td>SAC</td>
+<td>0,67 / 0,67 / 0,00</td>
+<td>0,87 / 0,60 / 0,00</td>
+<td>66 / 67</td>
+</tr>
+<tr>
+<td>PPO μ fixe</td>
+<td>0,47 / 0,20 / 0,00</td>
+<td>0,60 / 0,13 / 0,00</td>
+<td>26 / 27</td>
+</tr>
+<tr>
+<td>PPO sans pénalité (λ = 0)</td>
+<td>0,40 / 0,20 / 0,00</td>
+<td>0,60 / 0,27 / 0,00</td>
+<td>28 / 37</td>
+</tr>
+<tr>
+<td>PPO μ aléatoire</td>
+<td>0,20 / 0,40 / 0,20</td>
+<td>0,20 / 0,67 / 0,33</td>
+<td>34 / 59</td>
+</tr>
+<tr>
+<td>DQN</td>
+<td>0,13 / 0,07 / 0,00</td>
+<td>0,33 / 0,27 / 0,20</td>
+<td>15 / 34</td>
+</tr>
+<tr>
+<td>Q-Learning / SARSA / Monte-Carlo</td>
+<td>0 / 0 / 0</td>
+<td>0 / 0 / 0</td>
+<td>2 / 6 / 0</td>
+</tr>
+</tbody>
+</table></div>
+<p>Au meilleur checkpoint, SAC a le meilleur taux des agents à μ 1,0. PPO à μ aléatoire a le meilleur taux à μ 0,8 et μ 0,6, avec un taux nominal plus faible que PPO à μ fixe. La comparaison de PPO fixe avec et sans pénalité de braquage ne donne pas d’effet net sur ce petit échantillon. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#réévaluation-de-la-série-v1-après-les-deux-corrections-des-checkpoints-21112026" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, réévaluation v1</a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#10-résultats-réels-obtenus-série-v1-modèle-simplifié" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 10</a></p>
+<h3>Circuits F1 jamais vus avec la voiture v1</h3>
+<p>La distance moyenne se rapporte à la meilleure graine. Le nombre de tours regroupe toutes les graines de la condition. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Circuits de F1 réels », après correction des checkpoints</a></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Tours bouclés</th>
+<th>Distance moyenne avant l’arrêt (meilleure graine, 24 épisodes)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pilote trajectoire idéale</td>
+<td>24 / 24</td>
+<td>99,9 %</td>
+</tr>
+<tr>
+<td>Pilote classique</td>
+<td>23 / 24 (sortie à Monza, μ 0,6)</td>
+<td>96,5 %</td>
+</tr>
+<tr>
+<td>PPO μ aléatoire</td>
+<td>0 / 72</td>
+<td>27,9 %</td>
+</tr>
+<tr>
+<td>SAC</td>
+<td>1 / 72</td>
+<td>25,5 %</td>
+</tr>
+<tr>
+<td>Q-Learning</td>
+<td>1 / 72 (Red Bull Ring, μ 1,0)</td>
+<td>21,0 %</td>
+</tr>
+<tr>
+<td>DQN</td>
+<td>0 / 72</td>
+<td>18,6 %</td>
+</tr>
+<tr>
+<td>SARSA</td>
+<td>0 / 72</td>
+<td>16,6 %</td>
+</tr>
+<tr>
+<td>PPO sans pénalité (λ = 0)</td>
+<td>0 / 72</td>
+<td>15,6 %</td>
+</tr>
+<tr>
+<td>PPO μ fixe</td>
+<td>0 / 72</td>
+<td>15,5 %</td>
+</tr>
+<tr>
+<td>Monte-Carlo</td>
+<td>0 / 72</td>
+<td>3,2 %</td>
+</tr>
+</tbody>
+</table></div>
+<p>Les agents bouclent <strong>2 tours sur 576 essais</strong>. Le journal pointe des changements de largeur, des virages plus serrés et des chicanes après de longues lignes droites. Ce sont des explications plausibles de la difficulté à transférer ce qui a été appris sur les circuits générés. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Circuits de F1 réels »</a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#10-résultats-réels-obtenus-série-v1-modèle-simplifié" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 10</a></p>
+<h2>Série v2 — voiture F1 sur les circuits F1 jamais vus</h2>
+<p>Ce tableau reproduit la réévaluation <strong>depuis la ligne de départ</strong>, après correction. Les nombres entre parenthèses sont les totaux de la première évaluation v2, avec départ aléatoire. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#correction--évaluation-v2-refaite-depuis-la-ligne-de-départ-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Correction : évaluation v2 refaite depuis la ligne de départ »</a></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>μ 1,0</th>
+<th>μ 0,8</th>
+<th>μ 0,6</th>
+<th>Total (avant correction)</th>
+<th>Par graine</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pilote classique</td>
+<td>8/8</td>
+<td>8/8</td>
+<td>8/8</td>
+<td>24/24</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Pilote trajectoire idéale</td>
+<td>8/8</td>
+<td>8/8</td>
+<td>7/8</td>
+<td>23/24</td>
+<td>—</td>
+</tr>
+<tr>
+<td>PPO μ variable</td>
+<td>13/24</td>
+<td>9/24</td>
+<td>0/24</td>
+<td><strong>22/72</strong> (23)</td>
+<td>9 / 5 / 8</td>
+</tr>
+<tr>
+<td>PPO 2 × 64</td>
+<td>10/24</td>
+<td>5/24</td>
+<td>0/24</td>
+<td>15/72 (15)</td>
+<td>10 / 3 / 2</td>
+</tr>
+<tr>
+<td>TQC</td>
+<td>6/24</td>
+<td>5/24</td>
+<td>0/24</td>
+<td>11/72 (11)</td>
+<td>10 / 1 / 0</td>
+</tr>
+<tr>
+<td>PPO 2 × 256</td>
+<td>7/24</td>
+<td>4/24</td>
+<td>0/24</td>
+<td>11/72 (11)</td>
+<td>0 / 11 / 0</td>
+</tr>
+<tr>
+<td>Deep Monte-Carlo</td>
+<td>3/24</td>
+<td>4/24</td>
+<td>0/24</td>
+<td>7/72 (5)</td>
+<td>4 / 3 / 0</td>
+</tr>
+<tr>
+<td>Autres (DQN, QR-DQN, SAC, TD3, Deep SARSA, tabulaires)</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<p>Par exemple, <strong>9/24</strong> à μ 0,8 pour PPO μ variable signifie neuf tours sur huit circuits essayés par chacune des trois graines. La colonne « Par graine » additionne les circuits et les facteurs μ pour chaque run, de la graine 0 à la graine 2.</p>
+<p>Voici les rapports moyens <strong>temps de l’agent / temps du pilote classique</strong>, sur les tours bouclés et pour le même circuit et le même μ. Un rapport supérieur à 1 indique un temps au tour plus long. <strong>Aucun des 66 tours</strong> bouclés par les agents n’est plus rapide que la référence classique. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#correction--évaluation-v2-refaite-depuis-la-ligne-de-départ-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, correction de l’évaluation v2</a></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Agent</th>
+<th style="text-align: right;">Rapport moyen</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PPO 2 × 64</td>
+<td style="text-align: right;">× 1,43</td>
+</tr>
+<tr>
+<td>PPO μ variable</td>
+<td style="text-align: right;">× 1,48</td>
+</tr>
+<tr>
+<td>PPO 2 × 256</td>
+<td style="text-align: right;">× 1,52</td>
+</tr>
+<tr>
+<td>TQC</td>
+<td style="text-align: right;">× 1,85</td>
+</tr>
+<tr>
+<td>Deep Monte-Carlo</td>
+<td style="text-align: right;">× 2,81</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>Cinq conditions v2 bouclent des tours sur les circuits réservés au test. Plusieurs changements séparent les séries, dont la voiture, les circuits d’entraînement, les départs et la récompense. La comparaison ne permet pas d’isoler l’effet de chacun.</li>
+<li>PPO μ variable a le plus de tours et ses trois graines en bouclent. À μ 0,6, seuls les pilotes de référence réussissent des tours. Ces pilotes connaissent l’adhérence effective.</li>
+<li>À μ fixe, le petit PPO boucle plus de tours que le grand sur ces essais. Avec trois graines et de fortes variations entre runs, ce résultat vaut pour cette expérience. Un bon score d’entraînement peut aussi mal se transférer. TQC graine 2, meilleur TQC à l’entraînement, boucle <strong>0/24</strong>, et la graine 0 boucle <strong>10/24</strong>. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#13-série-v2--résultats-réels-voiture-f1-circuits-réels" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 13</a></li>
+</ul>
+<h2>Replays de démonstration v2</h2>
+<p>Chaque condition est représentée par la graine ayant bouclé le plus de tours sur les circuits F1 de test, au meilleur checkpoint de cette graine. À <strong>μ 1,0</strong>, les replays sont joués sur les <strong>6</strong> tracés générés à l’échelle F1 du lot <code>demo</code> et sur les <strong>17</strong> tracés réels d’entraînement. La sélection d’une graine et les circuits utilisés donnent un autre sens aux chiffres que dans le tableau de test. Le journal donne les comptes suivants pour <code>results/eval_showcase_v2.csv</code>. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#replays-de-démonstration-série-v2-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Replays de démonstration série v2 »</a></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Condition</th>
+<th style="text-align: right;">Générés F1 (/6)</th>
+<th style="text-align: right;">Réels d’entraînement (/17)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pilote classique</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">17</td>
+</tr>
+<tr>
+<td>Pilote trajectoire idéale</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td>PPO 2 × 64</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">14</td>
+</tr>
+<tr>
+<td>PPO 2 × 256</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">12</td>
+</tr>
+<tr>
+<td>PPO μ variable</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">11</td>
+</tr>
+<tr>
+<td>TQC</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">11</td>
+</tr>
+<tr>
+<td>QR-DQN</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td>Deep Monte-Carlo</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr>
+<td>SAC</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td>SARSA</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td>DQN</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td>TD3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td>Deep SARSA, Monte-Carlo tabulaire, Q-Learning</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table></div>
+<p>QR-DQN, par exemple, boucle des tours dans cette démonstration. Son résultat sur les huit circuits F1 réservés au test reste celui du tableau précédent. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, correction v2 et replays de démonstration</a></p>
+<h2>Défauts repérés et corrigés</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Défaut</th>
+<th>Ce qui se passait</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Saut de projection dans un virage serré</td>
+<td>La projection sur la ligne centrale pouvait sauter au sommet de deux segments pendant une conduite normale. Un checkpoint sur le saut était ignoré.</td>
+<td>La validation du checkpoint accepte un dépassement du plafond de <strong>4 m</strong>. Le plafond utilisé pour la récompense reste le même.</td>
+</tr>
+<tr>
+<td>Projection exactement sur un checkpoint</td>
+<td>La projection pouvait rester sur un sommet et le test strict excluait une distance nulle.</td>
+<td>Le franchissement accepte une tolérance d’arrondi, y compris au bouclage.</td>
+</tr>
+<tr>
+<td>Départs différents en évaluation v2</td>
+<td>AI Championship a révélé que les agents ne partaient pas ensemble. L’évaluation héritait de <code>random_start: true</code>, alors que les références partaient de la ligne.</td>
+<td>Le départ sur la ligne est forcé et l’évaluation finale a été refaite. Les courbes <code>progress.csv</code> des anciens runs tabulaires v2 gardent leurs départs aléatoires.</td>
+</tr>
+<tr>
+<td>Premier essai v2, stratégie plein gaz</td>
+<td>La pénalité de sortie était fixe et les commandes de gaz et de frein étaient séparées. Le projet a aussi identifié un horizon d’actualisation trop court.</td>
+<td>Pédale unique, pénalité de sortie dépendante de la vitesse et γ porté à <strong>0,995</strong>. Les trois changements ont été appliqués ensemble.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Sources des corrections. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#12-défauts-trouvés-et-corrigés-à-savoir-expliquer" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 12</a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Série v2 — préparation » et correction v2</a></p>
+<h2>Limites à dire à l’oral</h2>
+<ul>
+<li>Peu de graines et des budgets différents en v2. Les résultats donnent des tendances pour les configurations essayées. Une condition à une seule graine ne renseigne pas sur sa variabilité.</li>
+<li>Un épisode déterministe par circuit et par μ. Cela standardise la comparaison, avec une couverture limitée des conditions de départ et de l’adhérence.</li>
+<li>Le chronomètre ne porte que sur les tours terminés. La récompense d’entraînement, le taux de tours et le temps au tour répondent à des questions différentes.</li>
+<li>Les références connaissent μ et la géométrie que les agents perçoivent par leurs observations. La voiture modélise l’aéro de façon simplifiée et omet notamment le transfert de charge et l’usure. Les tracés TUM datent d’environ 2019 et certains ont évolué. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#14-limites-à-dire-honnêtement" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 14</a></li>
+</ul></section>
+<section class="chapter" id="ch06" aria-labelledby="ch06-t"><p class="eyebrow">Chapitre 06</p><h2 id="ch06-t">Du code à l’écran</h2><h2>Où trouver quoi</h2>
+<pre><code class="language-text">sim/                     Physique et géométrie
+env/                     Interface Gymnasium
+agents/                  Politiques, entraînement et évaluation
+tools/                   Configurations, circuits, évaluations groupées
+tracks/                  Circuits JSON
+configs/                 Réglages YAML
+runs/&lt;run_id&gt;/           Configuration effective et fichiers d’un run
+results/                 Résultats agrégés et figures
+server/                  API FastAPI et connexion WebSocket
+app/src/                 Pages React et dessins Canvas 2D
+tests/                   Vérifications automatisées côté Python
+experiments/JOURNAL.md   Historique des expériences
+</code></pre>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Fichier</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/car.py" target="_blank" rel="noopener"><code>sim/car.py</code></a></td>
+<td>Intègre le mouvement de la monoplace et définit les deux jeux de paramètres.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/track.py" target="_blank" rel="noopener"><code>sim/track.py</code></a></td>
+<td>Charge les circuits, prépare leurs bords, projette la voiture et mesure la courbure.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/sensors.py" target="_blank" rel="noopener"><code>sim/sensors.py</code></a></td>
+<td>Calcule les distances aux bords par lancer de rayons.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/sim/raceline.py" target="_blank" rel="noopener"><code>sim/raceline.py</code></a></td>
+<td>Calcule une trajectoire de faible courbure et son profil de vitesse.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/env/f1_env.py" target="_blank" rel="noopener"><code>env/f1_env.py</code></a></td>
+<td>Fournit <code>reset()</code> et <code>step()</code>, observations, récompenses et fins d’épisode.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/train.py" target="_blank" rel="noopener"><code>agents/train.py</code></a></td>
+<td>Valide et copie la configuration, lance l’entraînement choisi, journalise les évaluations périodiques et organise les sauvegardes.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/tabular.py" target="_blank" rel="noopener"><code>agents/tabular.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/discretize.py" target="_blank" rel="noopener"><code>agents/discretize.py</code></a></td>
+<td>Table Q, exploration et évaluation partagées d’un côté. Transformation de l’observation en indice de table de l’autre.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/qlearning.py" target="_blank" rel="noopener"><code>agents/qlearning.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/sarsa.py" target="_blank" rel="noopener"><code>agents/sarsa.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/monte_carlo.py" target="_blank" rel="noopener"><code>agents/monte_carlo.py</code></a></td>
+<td>Trois boucles et trois cibles pour mettre à jour la table.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/deep_value.py" target="_blank" rel="noopener"><code>agents/deep_value.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/algorithms.py" target="_blank" rel="noopener"><code>agents/algorithms.py</code></a></td>
+<td>Réseaux et boucles Deep SARSA et Deep MC. Sélection des classes de Stable-Baselines3 et sb3-contrib.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/classic_driver.py" target="_blank" rel="noopener"><code>agents/classic_driver.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/raceline_driver.py" target="_blank" rel="noopener"><code>agents/raceline_driver.py</code></a></td>
+<td>Pilotes programmés suivant, respectivement, la ligne centrale et la trajectoire idéale.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/evaluate.py" target="_blank" rel="noopener"><code>agents/evaluate.py</code></a></td>
+<td>Recharge une politique, joue les épisodes déterministes, écrit les lignes CSV et peut enregistrer les replays.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/make_configs.py" target="_blank" rel="noopener"><code>tools/make_configs.py</code></a></td>
+<td>Génère les configurations par condition et par graine.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/generate_tracks.py" target="_blank" rel="noopener"><code>tools/generate_tracks.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/import_f1_tracks.py" target="_blank" rel="noopener"><code>tools/import_f1_tracks.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/validate.py" target="_blank" rel="noopener"><code>tools/validate.py</code></a></td>
+<td>Produit les tracés synthétiques, convertit les tracés TUM et vérifie les formats des fichiers.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/evaluate_all.py" target="_blank" rel="noopener"><code>tools/evaluate_all.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/evaluate_f1.py" target="_blank" rel="noopener"><code>tools/evaluate_f1.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/make_showcase.py" target="_blank" rel="noopener"><code>tools/make_showcase.py</code></a></td>
+<td>Évalue des lots de runs, choisit les checkpoints disponibles, organise le test F1 et prépare les replays de démonstration.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/server/app.py" target="_blank" rel="noopener"><code>server/app.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/app/src/data/api.js" target="_blank" rel="noopener"><code>app/src/data/api.js</code></a></td>
+<td>Expose les fichiers et les routes côté Python. Le client JavaScript les charge pour les pages.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/app/src/App.jsx" target="_blank" rel="noopener"><code>app/src/App.jsx</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/app/src/playback.jsx" target="_blank" rel="noopener"><code>app/src/playback.jsx</code></a></td>
+<td>Définit le menu, sélectionne la page et installe l’état de lecture partagé entre les pages concernées.</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Suivre un entraînement</h2>
+<pre><code class="language-text">configs/&lt;condition&gt;_s&lt;graine&gt;.yaml
+              |
+              v
+        agents.train ----&gt; runs/&lt;run_id&gt;/config.yaml
+              |
+              +----------&gt; progress.csv (évaluations périodiques)
+              +----------&gt; checkpoints/ (sauvegardes)
+                                |
+                                v
+                         agents.evaluate
+                                |
+              +-----------------+-------------------+
+              v                                     v
+   results/eval*.csv                   runs/&lt;run_id&gt;/replays/*.json
+              +-----------------+-------------------+
+                                v
+                  FastAPI puis interface React
+</code></pre>
+<ol>
+<li><strong>Configurer.</strong> Le YAML précise l’algorithme, la graine, les circuits, la voiture, les actions, μ, la récompense et le budget en pas. Le point d’entrée est <code>python -m agents.train configs/ppo_mufixe_s0.yaml</code>. La copie dans le dossier du run conserve les réglages effectivement utilisés, y compris un budget remplacé en ligne de commande. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/train.py" target="_blank" rel="noopener"><code>agents/train.py</code></a></li>
+<li><strong>Entraîner.</strong> La boucle interagit avec <code>F1Env</code>. Une autre instance sert à évaluer périodiquement la politique sur les circuits d’entraînement. Chaque ligne de <code>progress.csv</code> résume une évaluation et indique son pas. Les sauvegardes sont en <code>.zip</code> pour SB3 et sb3-contrib, en <code>.pt</code> pour Deep SARSA et Deep MC, et en <code>.npy</code> pour une table finale. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/train.py" target="_blank" rel="noopener"><code>agents/train.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/deep_value.py" target="_blank" rel="noopener"><code>agents/deep_value.py</code></a></li>
+<li><strong>Évaluer.</strong> <code>agents.evaluate</code> charge la sauvegarde et la config du run. Il rejoue les conditions imposées et écrit une ligne par épisode dans <code>results/eval.csv</code> par défaut. Les évaluations groupées produisent aussi <code>eval_best.csv</code>, <code>eval_f1.csv</code> et <code>eval_f1_v2.csv</code>. Chaque ligne relie le résultat à son run, son checkpoint, sa graine, son circuit et son facteur μ. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/evaluate.py" target="_blank" rel="noopener"><code>agents/evaluate.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/evaluate_all.py" target="_blank" rel="noopener"><code>tools/evaluate_all.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/evaluate_f1.py" target="_blank" rel="noopener"><code>tools/evaluate_f1.py</code></a></li>
+<li><strong>Rejouer et afficher.</strong> Une image du replay contient l’observation qui a servi à choisir l’action, la commande appliquée et l’état obtenu après ce pas. Elle peut contenir les activations du réseau enregistrées pendant la décision. FastAPI sert les fichiers sous <code>/files/</code> et liste les replays via <code>/replays</code>. React utilise le JSON pour dessiner la course et les CSV pour les graphiques. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/evaluate.py" target="_blank" rel="noopener"><code>agents/evaluate.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/server/app.py" target="_blank" rel="noopener"><code>server/app.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/app/src/data/api.js" target="_blank" rel="noopener"><code>app/src/data/api.js</code></a></li>
+</ol>
+<p>Les formats constituent un contrat entre Python et JavaScript. <code>track.json</code> décrit un circuit, <code>config.yaml</code> les réglages et <code>replay.json</code> un épisode enregistré. Le CSV de progression agrège plusieurs épisodes par point d’évaluation. Le CSV d’évaluation conserve une ligne par épisode. Les dossiers <code>runs/</code> et <code>results/</code> contiennent des fichiers générés. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#15-format-des-fichiers-contrat-de-données" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 15</a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/validate.py" target="_blank" rel="noopener"><code>tools/validate.py</code></a></p>
+<h2>Les sept pages</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Page</th>
+<th>Ce qu’elle permet de montrer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Accueil</strong></td>
+<td>La question du projet et les chiffres clés affichés.</td>
+</tr>
+<tr>
+<td><strong>Race Simulator</strong></td>
+<td>Un épisode enregistré. On peut l’arrêter à l’entrée d’un virage, lire la vitesse, les commandes et les capteurs, puis examiner la trajectoire.</td>
+</tr>
+<tr>
+<td><strong>AI Championship</strong></td>
+<td>Des replays superposés sur le même circuit. Le classement évolue pendant la lecture. Chaque voiture rejoue son propre épisode.</td>
+</tr>
+<tr>
+<td><strong>Performance Analytics</strong></td>
+<td>Des taux de tours, des comparaisons d’adhérence et des courbes d’apprentissage. La section F1 permet de lire les évaluations sur circuits réels.</td>
+</tr>
+<tr>
+<td><strong>Neural Network Explorer</strong></td>
+<td>Les entrées, les couches cachées et les commandes pour une image du replay. Les activations affichées demandent un replay qui les a enregistrées. Elles décrivent un calcul observé et ne suffisent pas à attribuer une cause à une décision.</td>
+</tr>
+<tr>
+<td><strong>Track Designer</strong></td>
+<td>L’édition d’une piste, la validation et le téléchargement du JSON. Avec le serveur, on peut enregistrer une piste personnalisée et y lancer des évaluations pour produire des replays.</td>
+</tr>
+<tr>
+<td><strong>Training Center</strong></td>
+<td>La préparation d’une configuration, le lancement d’un entraînement via le serveur, le suivi des métriques et le visionnage d’un checkpoint disponible.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Le Training Center envoie le YAML à <code>POST /runs</code>. FastAPI lance un processus d’entraînement, puis le WebSocket <code>/ws/runs/{run_id}</code> transmet les nouvelles métriques et les checkpoints. « Regarder en direct » rejoue un checkpoint dans un processus dédié. Le rendu de la page et son rafraîchissement sont indépendants de la boucle d’optimisation. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/server/app.py" target="_blank" rel="noopener"><code>server/app.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/app/src/App.jsx" target="_blank" rel="noopener"><code>app/src/App.jsx</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/EXPLICATIONS.md" target="_blank" rel="noopener"><code>docs/EXPLICATIONS.md</code>, missions 9 et 10</a></p></section>
+<section class="chapter" id="ch07" aria-labelledby="ch07-t"><p class="eyebrow">Chapitre 07</p><h2 id="ch07-t">25 questions du professeur</h2><h3>1. Quel problème votre projet étudie-t-il ?</h3>
+<p>Apprendre à piloter une monoplace en 2D, puis mesurer si la politique sait terminer un tour sur des circuits inédits et quand l’adhérence diminue. <a href="#ch00">Introduction au projet</a></p>
+<h3>2. Qu’est-ce qui distingue l’apprentissage par renforcement de l’apprentissage supervisé ici ?</h3>
+<p>Le simulateur renvoie les conséquences et le score des commandes essayées. Il ne fournit aucune commande correcte à imiter. <a href="#ch01">Chapitre 01</a></p>
+<h3>3. Où passe la frontière entre le simulateur et l’environnement ?</h3>
+<p>Le simulateur calcule le déplacement et la géométrie. <code>F1Env</code> assemble ces calculs, présente les observations à l’agent, attribue la récompense et décide quand l’épisode s’arrête. <a href="#ch03">Chapitre 03</a></p>
+<h3>4. Pourquoi l’agent ne voit-il qu’une partie de l’état ?</h3>
+<p>Il reçoit notamment sept distances, la vitesse, le cap relatif, l’écart latéral et deux courbures. Le braquage actuel et μ influencent le prochain pas et sont absents des entrées standard. <a href="#ch03">Chapitre 03</a></p>
+<h3>5. Pourquoi parlons-nous de modèle bicyclette ?</h3>
+<p>Les deux roues de chaque essieu sont représentées par une seule roue. La roue avant dirige la monoplace. Cette géométrie donne une courbure à partir du braquage. <a href="#ch02">Chapitre 02</a></p>
+<h3>6. Pourquoi la voiture élargit-elle dans un virage ?</h3>
+<p>L’accélération latérale demandée vaut <span class="math">\(v^2/R\)</span>. Si elle dépasse l’adhérence, le code limite la courbure et le rayon augmente. <a href="#ch02">Chapitre 02</a></p>
+<h3>7. Qu’ajoute la voiture F1 et comment l’avez-vous calibrée ?</h3>
+<p>Elle ajoute notamment la limite de puissance, l’appui, le roulement et le partage de l’adhérence entre freinage et virage. Le projet a comparé les temps théoriques sur la trajectoire idéale aux poles FIA 2024. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/docs/CONTEXTE_POUR_CLAUDE.md#4-la-physique" target="_blank" rel="noopener"><code>docs/CONTEXTE_POUR_CLAUDE.md</code>, § 4</a></p>
+<h3>8. Pourquoi une pédale unique en v2 ?</h3>
+<p>Son signe impose soit le gaz, soit le frein. Cela simplifie les commandes explorées et empêche d’appuyer simultanément sur les deux. <a href="#ch03">Chapitre 03</a></p>
+<h3>9. Quel est le rôle de γ ?</h3>
+<p>Il fixe le poids des récompenses futures. En v2, <strong>γ = 0,995</strong> rend les conséquences plus lointaines plus importantes, par exemple une sortie qu’un freinage précoce pourrait éviter. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Série v2 — préparation »</a></p>
+<h3>10. Pourquoi la récompense augmente-t-elle la pénalité avec la vitesse ?</h3>
+<p>Le premier essai v2 a appris à rouler plein gaz. Une sortie rapide coûte davantage avec le terme proportionnel à <span class="math">\(v^2\)</span>, ce qui donne plus d’intérêt à ralentir avant un virage. La pénalité, la pédale et γ ont changé ensemble. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Série v2 — préparation »</a></p>
+<h3>11. Comment validez-vous un tour ?</h3>
+<p>L’environnement exige le franchissement des checkpoints dans l’ordre, vers l’avant et avec une avance plausible. Le dernier passage ramène la voiture au point de départ de l’épisode. <a href="#ch03">Chapitre 03</a></p>
+<h3>12. Quelle différence entre <code>terminated</code> et <code>truncated</code> ?</h3>
+<p>Une sortie ou un tour valide termine l’épisode. Une limite de durée ou un manque de progrès le tronque. Pour Q-Learning et SARSA, la cible conserve une valeur future à la troncature. <a href="#ch03">Chapitres 03</a> et <a href="#ch04">04</a></p>
+<h3>13. Qu’est-ce qui change entre SARSA et Q-Learning ?</h3>
+<p>SARSA utilise la valeur de l’action suivante que sa politique a choisie. Q-Learning utilise la valeur de la meilleure action suivante estimée. C’est la différence entre leurs cibles sur politique et hors politique. <a href="#ch04">Chapitre 04</a></p>
+<h3>14. Que fait Monte-Carlo à la fin d’un épisode ?</h3>
+<p>Il reconstitue le retour de chaque pas à partir des récompenses observées. La table corrige la première visite de chaque couple état-action. La version profonde utilise toutes les transitions. <a href="#ch04">Chapitre 04</a></p>
+<h3>15. Pourquoi les méthodes tabulaires échouent-elles ici ?</h3>
+<p>Sur les tests finaux v2, elles ne bouclent aucun tour. Une explication plausible est la discrétisation. Les vitesses, distances et courbures regroupées peuvent masquer des situations qui demandent des freinages différents. Les commandes discrètes limitent aussi la finesse du pilotage. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#correction--évaluation-v2-refaite-depuis-la-ligne-de-départ-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, correction v2</a> · <a href="#ch04">Chapitre 04</a></p>
+<h3>16. Qu’est-ce que DQN change par rapport à Q-Learning ?</h3>
+<p>Il remplace la table par un réseau qui estime les valeurs des commandes à partir des observations. Il garde une cible qui utilise le maximum, calculé avec un réseau cible. <a href="#ch04">Chapitre 04</a></p>
+<h3>17. Comment résumer PPO, SAC, TD3 et TQC ?</h3>
+<p>PPO ajuste sa politique avec un objectif borné sur des trajectoires récentes. SAC réutilise les transitions et favorise l’entropie. TD3 utilise deux critiques et retarde la mise à jour de son acteur. TQC reprend l’idée de SAC avec des quantiles et retire les cibles les plus hautes. <a href="#ch04">Chapitre 04</a></p>
+<h3>18. Pourquoi imposer le départ sur la ligne au test, mais varier les départs à l’entraînement ?</h3>
+<p>À l’entraînement, varier les départs expose l’agent aux virages tardifs même s’il sort souvent au premier virage. Au test, la ligne impose le même point de départ aux agents et aux pilotes de référence. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#correction--évaluation-v2-refaite-depuis-la-ligne-de-départ-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, correction v2</a> · <a href="#ch03">Chapitre 03</a></p>
+<h3>19. Pourquoi utiliser trois graines ?</h3>
+<p>Elles donnent une première idée de la sensibilité au hasard de l’entraînement. Avec trois graines, une politique chanceuse peut encore peser lourd dans la moyenne. Certaines conditions v2 n’ont qu’une graine pour des raisons de budget. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, bilan v2</a></p>
+<h3>20. Comment choisissez-vous le meilleur checkpoint ?</h3>
+<p>Parmi les sauvegardes disponibles, on privilégie le taux de tours en évaluation d’entraînement, puis la récompense moyenne. Les circuits de test restent réservés à la mesure finale. <a href="#ch05">Chapitre 05</a></p>
+<h3>21. Pourquoi PPO à μ variable est-il plus robuste dans votre test ?</h3>
+<p>Il rencontre plusieurs niveaux d’adhérence à l’entraînement. Cela peut favoriser des commandes qui restent efficaces sur une piste plus glissante. À μ 0,8, il boucle <strong>9/24</strong> tours en v2, le meilleur score des agents. À μ 0,6, il n’en boucle aucun. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#correction--évaluation-v2-refaite-depuis-la-ligne-de-départ-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, correction v2</a></p>
+<h3>22. Pourquoi le grand réseau n’aide-t-il pas PPO ici ?</h3>
+<p>À μ fixe, <strong>2 × 64</strong> boucle <strong>15/72</strong> tours et <strong>2 × 256</strong> en boucle <strong>11/72</strong>. La capacité du réseau ne suffit donc pas à expliquer le succès. Les différences entre graines sont fortes et l’essai ne détermine pas la cause de l’écart. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#correction--évaluation-v2-refaite-depuis-la-ligne-de-départ-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, correction v2</a></p>
+<h3>23. Pourquoi garder deux pilotes de référence ?</h3>
+<p>Le classique suit le milieu de la piste avec des marges. Le second suit une trajectoire calculée et un profil de vitesse. Ils donnent deux repères déterministes et connaissent tous deux l’adhérence effective. <a href="#ch02">Chapitres 02</a> et <a href="#ch04">04</a></p>
+<h3>24. Quel défaut l’application vous a-t-elle permis de repérer ?</h3>
+<p>Dans AI Championship, les départs des agents v2 étaient décalés. L’évaluation héritait du départ aléatoire de l’entraînement. Le code force désormais le départ sur la ligne et les résultats v2 ont été recalculés. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#correction--évaluation-v2-refaite-depuis-la-ligne-de-départ-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, correction v2</a></p>
+<h3>25. Un beau replay suffit-il à prouver la généralisation ?</h3>
+<p>Pour la mesurer, je cite le tableau qui rassemble toutes les graines disponibles sur les circuits réservés. Un replay de démonstration v2 illustre la conduite d’une graine sélectionnée sur un épisode. Les tracés de démonstration comprennent aussi des circuits d’entraînement. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#replays-de-démonstration-série-v2-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Replays de démonstration série v2 »</a></p></section>
+      <footer>
+        <p>Chaque chiffre de ce guide vient d'un vrai entraînement, noté dans <code>experiments/JOURNAL.md</code> avec son
+          identifiant, sa configuration et sa graine. Les liens vers les fichiers ouvrent le dépôt du projet.</p>
+      </footer>
+    </main>
+  </div>
+</div>
+
+<script>
+window.MathJax = {
+  tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]] },
+  svg: { fontCache: "global" },
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js" async></script>
+<script>
+(function () {
+  // Barre de progression « tour » et chapitre courant dans la tour de chronométrage
+  const lap = document.getElementById("lap");
+  const links = [...document.querySelectorAll("#toc a")];
+  const chapters = links.map((a) => document.querySelector(a.getAttribute("href")));
+  function onScroll() {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    lap.style.width = (max > 0 ? (100 * scrollY) / max : 0) + "%";
+    let current = 0;
+    chapters.forEach((c, i) => { if (c && c.getBoundingClientRect().top < innerHeight * 0.35) current = i; });
+    links.forEach((a, i) => a.classList.toggle("active", i === current));
+  }
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  // Bascule de thème, mémorisée pour ce lecteur (sans conséquence si le stockage est refusé)
+  const root = document.documentElement;
+  try { const t = localStorage.getItem("guide-theme"); if (t) root.dataset.theme = t; } catch (e) {}
+  document.getElementById("theme").addEventListener("click", () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("guide-theme", root.dataset.theme); } catch (e) {}
+  });
+})();
+</script>

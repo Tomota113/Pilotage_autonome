@@ -23,9 +23,9 @@ export default function LineChart({ label, xLabel, xTicks, xFormat = formatNumbe
   const y = (value) => bottom - (value - minY) / (maxY - minY) * (bottom - top);
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} style={{ display: "block", width: "100%" }}
+    <svg className="line-chart" viewBox={`0 0 ${width} ${height}`} style={{ display: "block", width: "100%" }}
          role="img" aria-label={`${label} selon ${xLabel.toLowerCase()}`} aria-describedby={descriptionId}
-         fill="var(--muted)" fontSize="11">
+         fill="var(--muted)">
       {Array.from({ length: 5 }, (_, index) => {
         const yTick = minY + (maxY - minY) * index / 4;
         return <g key={index}>
@@ -41,7 +41,7 @@ export default function LineChart({ label, xLabel, xTicks, xFormat = formatNumbe
       {series.map(({ name, color, points, opacity = 1, strokeWidth = 2.5, dash }) => (
         <g key={name} fill={color}>
           <polyline points={points.map((point) => `${x(point.x)},${y(point.y)}`).join(" ")}
-                    fill="none" stroke={color} strokeWidth={strokeWidth} strokeDasharray={dash} opacity={opacity} />
+                    className="chart-stroke" fill="none" stroke={color} style={{ "--series-width": strokeWidth }} strokeDasharray={dash} opacity={opacity} />
           {points.map((point) => (
             <circle key={point.x} cx={x(point.x)} cy={y(point.y)} r={strokeWidth > 2 ? 3.5 : 2}
                     fillOpacity={opacity} stroke="transparent" strokeWidth="7">

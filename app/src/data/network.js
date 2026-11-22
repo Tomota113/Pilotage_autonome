@@ -1,4 +1,4 @@
-import { CAR_MODELS } from "./f1.js";
+import { CAR_MODELS, isF1Track } from "./f1.js";
 import { SENSOR_ANGLES_DEG } from "./geometry.js";
 
 const TABULAR = new Set(["qlearning", "sarsa", "montecarlo"]);
@@ -98,3 +98,64 @@ export function getActionMode(replay) {
 
 // Le replay stocke la commande décodée, y compris pour la pédale unique.
 export const pedalValue = ({ throttle, brake }) => throttle - brake;
+
+// Une grille carrée conserve le numéro du neurone d’une image à l’autre.
+export function neuronGrid(size) {
+  const columns = Math.ceil(Math.sqrt(size));
+  return Array.from({ length: size }, (_, index) => ({
+    column: index % columns,
+    row: Math.floor(index / columns),
+  }));
+}
+
+// On associe les rangs des deux colonnes. L’épaisseur suit l’amplitude relative
+// des deux extrémités. Le replay ne fournit pas les poids des connexions.
+export function topActivationLinks(source, target, limit = 4) {
+  const from = topActivations(source, limit).filter(({ value }) => value !== 0);
+  const to = topActivations(target, limit).filter(({ value }) => value !== 0);
+  return from.slice(0, to.length).map(({ neuron, value }, index) => ({
+    from: neuron - 1,
+    to: to[index].neuron - 1,
+    strength: Math.sqrt(Math.abs(value / from[0].value) * Math.abs(to[index].value / to[0].value)),
+  }));
+}
+
+// Même ordre que DISCRETE9 dans env/f1_env.py.
+export const ACTION_LABELS = ["Gauche", "Tout droit", "Droite"].flatMap(
+  (direction) => ["Gaz", "Roue libre", "Frein"].map((pedal) => `${direction} · ${pedal}`),
+);
+
+export function getDiscreteOutput(frame) {
+  const { steer, throttle, brake } = frame.action;
+  const direction = [1, 0, -1].indexOf(steer);
+  const pedal = [[1, 0], [0, 0], [0, 1]].findIndex(([gas, stop]) => gas === throttle && stop === brake);
+  const chosen = direction >= 0 && pedal >= 0 ? direction * 3 + pedal : -1;
+  const values = frame.q_values;
+  const scores = Array.isArray(values) && values.length === ACTION_LABELS.length && values.every(Number.isFinite)
+    ? values : null;
+  return { chosen, scores };
+}
+
+export function pickNetworkReplay(replays, excluded = new Set()) {
+  const candidates = replays.filter((replay) => replay.has_activations && !excluded.has(replay.path));
+  const f1 = candidates.filter(({ car, track_id }) => car === "f1_2024" && isF1Track(track_id));
+  const testTracks = f1.filter(({ track_id }) => track_id.startsWith("f1_"));
+  const circuits = [testTracks, f1, candidates].find((group) => group.length) ?? [];
+  const normal = circuits.filter(({ mu_factor }) => mu_factor === 1);
+  const pool = normal.length ? normal : circuits;
+  const laps = pool.filter(({ outcome, lap_time }) => outcome === "lap" && Number.isFinite(lap_time));
+  if (!laps.length) return pool[0];
+
+  // Choisir le circuit avec le plus de conditions ayant bouclé un tour,
+  // puis comparer les temps à circuit et adhérence identiques.
+  const groups = new Map();
+  for (const lap of laps) {
+    const key = `${lap.track_id}/${lap.mu_factor}`;
+    if (!groups.has(key)) groups.set(key, new Map());
+    const byCondition = groups.get(key);
+    const condition = lap.condition ?? lap.run_id;
+    if (!byCondition.has(condition) || lap.lap_time < byCondition.get(condition).lap_time) byCondition.set(condition, lap);
+  }
+  const [comparison] = [...groups.values()].sort((a, b) => b.size - a.size);
+  return [...comparison.values()].sort((a, b) => a.lap_time - b.lap_time)[0];
+}

@@ -267,8 +267,7 @@ export default function Championship() {
     <>
       <div className="page-header">
         <h2>AI Championship</h2>
-        <p>Tous les agents sur le même circuit de test, en même temps : chaque voiture rejoue la meilleure course de son
-          algorithme. Le classement se met à jour en direct pendant la lecture.</p>
+        <p>Les pilotes sur un même circuit, avec leur classement en direct.</p>
       </div>
       <div className="controls">
         <CarSelector car={car} setCar={setCar} loading={replays === null} />
@@ -278,7 +277,7 @@ export default function Championship() {
                 <TrackOptions ids={tracks} />
               </select>
             </label>
-            <div className="field" style={{ fontSize: 12.5, color: "var(--muted)" }}>Adhérence
+            <div className="module-field">Adhérence
               <div className="segmented">
                 {MUS.map((m) => (
                   <button key={m} className={m === mu ? "on" : ""} onClick={() => setMu(m)}>
@@ -293,7 +292,7 @@ export default function Championship() {
         : tracks.length === 0 ? <p className="empty">Aucun circuit avec plusieurs agents pour cette voiture.</p>
         : (
           <div className="row">
-            <div className="grow card" style={{ padding: 10 }}>
+            <div className="grow card race-stage">
               {current?.track ? (
                 <TrackCanvas track={current.track} getScene={getScene} followedCarId={selectedId}
                              onFollowChange={setFollowedId} animating={playing} draw={ideal.draw} height={580}
@@ -341,23 +340,28 @@ export default function Championship() {
               ) : current?.error ? <p className="warn" role="alert">Impossible de charger cette course.</p>
                 : <p role="status">Chargement de la course…</p>}
             </div>
-            <div className="card" style={{ width: "min(100%, 380px)" }}>
+            <div className="card race-readings">
               <Standings racers={live} selectedId={selectedId} onSelect={setFollowedId} title={standingsTitle} />
-              <div className="card-title" style={{ marginTop: 16 }}>Participants</div>
-              {racers.map((r) => (
-                <label key={r.condition} style={{ display: "block", fontSize: 13, margin: "4px 0" }}>
-                  <input type="checkbox" checked={!hidden.has(r.condition)} onChange={() => {
-                    const next = new Set(hidden);
-                    if (next.has(r.condition)) next.delete(r.condition); else next.add(r.condition);
-                    if (r.condition === selectedId) setFollowedId(null);
-                    setHidden(next);
-                  }} />{" "}
-                  <span className="swatch" style={{ background: r.color }} />{conditionLabel(r.condition)}
-                  <span className="note"> — {r.replay.summary.outcome === "lap" ? `${r.replay.summary.lap_time.toFixed(1)} s` : OUTCOME_LABELS[r.replay.summary.outcome]}</span>
-                </label>
-              ))}
-              <p className="note">Chaque voiture rejoue la meilleure course enregistrée de son algorithme sur ce circuit et cette
-                adhérence (évaluation réelle, politique figée, sans exploration).</p>
+              <details className="explanation participant-list">
+                <summary>Participants et résultats</summary>
+                {racers.map((r) => (
+                  <label key={r.condition}>
+                    <input type="checkbox" checked={!hidden.has(r.condition)} onChange={() => {
+                      const next = new Set(hidden);
+                      if (next.has(r.condition)) next.delete(r.condition); else next.add(r.condition);
+                      if (r.condition === selectedId) setFollowedId(null);
+                      setHidden(next);
+                    }} />{" "}
+                    <span className="swatch" style={{ background: r.color }} />{conditionLabel(r.condition)}
+                    <span className="note"> — {r.replay.summary.outcome === "lap" ? `${r.replay.summary.lap_time.toFixed(1)} s` : OUTCOME_LABELS[r.replay.summary.outcome]}</span>
+                  </label>
+                ))}
+              </details>
+              <details className="explanation">
+                <summary>En savoir plus</summary>
+                <p>Chaque voiture rejoue la meilleure course enregistrée de son algorithme sur ce circuit et à cette adhérence.
+                  Pendant l’évaluation, la politique est figée et l’agent n’explore plus.</p>
+              </details>
             </div>
           </div>
       )}

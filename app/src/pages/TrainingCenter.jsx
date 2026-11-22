@@ -178,14 +178,16 @@ function Progress({ rows, color }) {
     <>
       <h4 className="card-title">Tours bouclés pendant l’entraînement</h4>
       {points.length > 0 ? <>
-        <p className="note" id="training-progress-guide"><strong>Comment lire ce graphique.</strong> Chaque point indique la part des essais terminés par un tour complet
-          lors d’une évaluation de l’agent.</p>
         <div style={{ maxWidth: 510 }}>
           <LineChart label="Tours bouclés" xLabel="Pas d’entraînement" xTicks={xTicks} descriptionId="training-progress-guide"
                      xFormat={(value) => COMPACT_STEPS.format(value)} yDomain={[0, 1]} yFormat={formatPercent}
                      tooltipXFormat={(value) => `${formatNumber(value)} pas`}
                      series={[{ name: "Tours bouclés", color, points }]} height={155} />
         </div>
+        <details className="explanation">
+          <summary>En savoir plus</summary>
+          <p id="training-progress-guide">Chaque point indique la part des essais terminés par un tour complet lors d’une évaluation de l’agent.</p>
+        </details>
       </> : <p className="note">Aucun taux de tours disponible pour les dernières évaluations.</p>}
       <details style={{ margin: "8px 0 16px" }}>
         <summary style={{ cursor: "pointer" }}>Détail des dernières évaluations</summary>
@@ -522,7 +524,7 @@ export default function TrainingCenter({ mode }) {
 
   return (
     <div className="stack">
-      <header className="page-header card" style={{ marginBottom: 0 }}>
+      <header className="page-header training-header">
         <h2>Centre d’entraînement</h2>
         <p>Lancez un nouvel entraînement depuis le navigateur, suivez-le en direct, puis regardez l’agent conduire.</p>
       </header>
@@ -547,8 +549,10 @@ export default function TrainingCenter({ mode }) {
           {mode === "fixtures" && <span className="note">Le serveur d’entraînement est absent. Le lancement est désactivé avec les données d’exemple.</span>}
           {mode === "server" && tracks.length > 0 && !simpleForm && <span className="note">Les circuits de ce préréglage sont indisponibles.</span>}
         </div>
-        <p className="note" style={{ marginBottom: 0 }}>Un pas correspond à une décision de l’agent. La durée est estimée d’après le débit mesuré
-          et varie selon la machine et les évaluations.</p>
+        <details className="explanation">
+          <summary>En savoir plus sur la durée</summary>
+          <p>Un pas correspond à une décision de l’agent. La durée est estimée d’après le débit mesuré et varie selon la machine et les évaluations.</p>
+        </details>
       </section>
       <details className="card">
         <summary style={{ cursor: "pointer", fontWeight: 650 }}>Avancé</summary>

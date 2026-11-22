@@ -1,38 +1,49 @@
 import { useEffect, useState } from "react";
-import { CONDITIONS, conditionColor, conditionLabel } from "../data/algorithms.js";
-import { listRuns, loadBestEval, loadF1Eval } from "../data/api.js";
+import { evaluationRows, isReference, summarizeTakeaways, summarizeTrials } from "../data/analytics.js";
+import { conditionColor, conditionLabel } from "../data/algorithms.js";
+import { listRuns, loadF1EvalV2 } from "../data/api.js";
 import { identifyF1Rows } from "../data/f1.js";
+import { shortPercent } from "../components/charts/AnalyticsChart.jsx";
 
 const MODULES = [
-  ["race", "Race Simulator", "Regarder un agent faire un tour, avec ses capteurs, sa vitesse et ses commandes."],
-  ["championship", "AI Championship", "Faire courir tous les agents ensemble sur le même circuit."],
-  ["analytics", "Performance Analytics", "Comparer les algorithmes : tours bouclés, robustesse, apprentissage."],
-  ["network", "Neural Network Explorer", "Voir ce que reçoit le réseau de neurones et ce qu'il décide."],
-  ["designer", "Track Designer", "Dessiner un nouveau circuit et l'exporter."],
-  ["training", "Training Center", "Lancer un entraînement depuis le navigateur et le suivre en direct."],
+  ["race", "Race Simulator", "Suivre un tour et lire la vitesse, les capteurs et les commandes."],
+  ["championship", "AI Championship", "Rejouer les meilleurs tours et suivre le classement en direct."],
+  ["analytics", "Performance Analytics", "Comparer les tours bouclés, les chronos et la résistance à une piste glissante."],
+  ["network", "Neural Network Explorer", "Voir les informations qui entrent dans le réseau et les commandes qui en sortent."],
+  ["designer", "Track Designer", "Dessiner un circuit, l’exporter et y faire rouler les agents."],
+  ["training", "Training Center", "Lancer un entraînement et suivre la progression de l’agent."],
 ];
 
-const pct = (x) => `${Math.round(100 * x)} %`;
+const STEPS = [
+  ["La voiture perçoit", "Capteurs et vitesse", "M8 16h8v6H8zM5 11a11 11 0 0 1 14 0M2 7a16 16 0 0 1 20 0m-14 7a6 6 0 0 1 8 0"],
+  ["Le réseau décide", "Volant, accélérateur et frein", "M4 5h4v4H4zM4 15h4v4H4zM16 10h4v4h-4zM8 7l8 4m-8 6 8-4"],
+  ["Le simulateur avance", "La voiture se déplace", "M5 4h14l2 5-5 11H5l-2-5zM8 9h7l1 2-2 4H8l-1-2z"],
+  ["L’agent est récompensé", "Progression et tours validés", "M5 21V3m0 2c5-4 9 4 14 0v10c-5 4-9-4-14 0"],
+];
 
-// Taux de tours bouclés par condition sur les circuits de test, avec le même poids par graine.
-function lapRates(rows, conditionOf, mu) {
-  const perSeed = {};
-  for (const r of rows) {
-    const c = conditionOf(r);
-    if (!c || r.split !== "test" || (mu != null && Number(r.mu_factor) !== mu)) continue;
-    const key = `${c}|${r.seed}`;
-    perSeed[key] ??= { c, laps: 0, n: 0 };
-    perSeed[key].laps += r.outcome === "lap" ? 1 : 0;
-    perSeed[key].n += 1;
-  }
-  const byCondition = {};
-  for (const { c, laps, n } of Object.values(perSeed)) (byCondition[c] ??= []).push(laps / n);
-  return Object.fromEntries(Object.entries(byCondition).map(([c, v]) => [c, v.reduce((a, b) => a + b, 0) / v.length]));
+function CoverTrack() {
+  const track = "M97 220C65 216 49 191 61 166L111 76Q122 56 149 61L354 93C379 98 388 115 372 130L325 171Q313 182 295 176L239 153Q218 144 206 164L175 206Q163 225 141 225Z";
+  return <svg className="cover-track" viewBox="0 20 420 250" aria-hidden="true">
+    <defs>
+      <pattern id="cover-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+        <path d="M0 20V0H20" fill="none" stroke="currentColor" opacity=".32" />
+      </pattern>
+    </defs>
+    <path fill="url(#cover-grid)" d="M0 20h420v245H0z" />
+    <path d={track} fill="none" stroke="currentColor" strokeWidth="30" opacity=".55" />
+    <path d={track} fill="none" stroke="var(--hero-bg)" strokeWidth="23" />
+    <path d={track} fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 8" />
+    <path d="M97 220C65 216 49 191 61 166L111 76Q122 56 149 61L250 77" fill="none" stroke="var(--hero-accent)" strokeWidth="3" />
+    <g transform="translate(250 77) rotate(9)">
+      <path d="M-13-9h18v18h-18z" fill="var(--hero-bg)" />
+      <path d="M-13-9h6v6h-6zm12 0h6v6h-6zm-6 6h6v6h-6zm-6 6h6v6h-6zm12 0h6v6h-6z" fill="var(--hero-accent)" />
+    </g>
+  </svg>;
 }
 
-function Tile({ label, value, detail, color }) {
+function Tile({ label, value, detail, condition }) {
   return (
-    <div className="stat-tile" style={{ borderTop: `3px solid ${color ?? "var(--line)"}` }}>
+    <div className="stat-tile" style={condition ? { "--metric-color": conditionColor(condition) } : undefined}>
       <div className="label">{label}</div>
       <div className="value">{value}</div>
       <div className="detail">{detail}</div>
@@ -40,98 +51,86 @@ function Tile({ label, value, detail, color }) {
   );
 }
 
-export default function Home() {
-  const [stats, setStats] = useState(null);
+export default function Home({ mode }) {
+  const [results, setResults] = useState(null);
   useEffect(() => {
-    Promise.all([loadBestEval(), listRuns(), loadF1Eval().catch(() => [])]).then(([rows, runs, f1Rows]) => {
-      const byRun = Object.fromEntries(runs.map((r) => [r.run_id, r.condition]));
-      const conditionOf = (r) => (String(r.run_id).startsWith("classic") ? "classic" : byRun[r.run_id]);
-      const n = runs.filter((r) => r.condition).length;
-      setStats({ normal: lapRates(rows, conditionOf, 1), slippery: lapRates(rows, conditionOf, 0.6), runs: n, episodes: rows.length,
-        f1: lapRates(identifyF1Rows(f1Rows, runs), (row) => row.condition), f1Episodes: f1Rows.length });
-    }).catch(() => setStats({ normal: {}, slippery: {}, runs: 0, episodes: 0, f1: {}, f1Episodes: 0 }));
-  }, []);
+    if (mode !== "server") return;
+    let active = true;
+    Promise.all([loadF1EvalV2(), listRuns()]).then(([rows, runs]) => {
+      if (!active) return;
+      const tests = (rows ?? []).filter(({ split }) => split === "test");
+      const entries = summarizeTrials(evaluationRows(identifyF1Rows(tests, runs)));
+      setResults({
+        entries, circuits: new Set(tests.map(({ track_id }) => track_id).filter(Boolean)).size,
+        leaders: summarizeTakeaways(entries).leaders,
+      });
+    }).catch(() => { if (active) setResults({ error: true }); });
+    return () => { active = false; };
+  }, [mode]);
 
-  const best = (rates) => Object.entries(rates).filter(([c]) => c !== "classic" && c !== "raceline").sort((a, b) => b[1] - a[1])[0];
-  const bestNormal = stats && best(stats.normal);
-  const bestSlippery = stats && best(stats.slippery);
-  const bestF1 = stats && best(stats.f1);
+  const leaders = results?.leaders ?? [];
+  const references = results?.entries?.filter(({ condition }) => isReference(condition)) ?? [];
 
   return (
-    <>
-      <div className="page-header">
-        <h2>Des voitures qui apprennent à piloter</h2>
-        <p>Des agents d'apprentissage par renforcement apprennent seuls à conduire une monoplace sur des circuits 2D, par essais
-          et erreurs. On compare plusieurs algorithmes à un pilote classique programmé à la main, puis on mesure ce qui se
-          passe quand la piste devient glissante.</p>
-        <p>La F1 2024 réaliste atteint 343 km/h et son appui aérodynamique augmente l’adhérence à haute vitesse.
-          Sur cinq circuits, les tours simulés sur la trajectoire idéale sont en moyenne 3 % plus lents que les poles de 2024.</p>
-      </div>
+    <div className="home-page">
+      <header className="cover-hero">
+        <div className="cover-copy">
+          <p className="cover-name">F1-RL Lab</p>
+          <h1>Des voitures qui<br className="cover-break" /> apprennent à piloter</h1>
+          <p>Apprentissage par renforcement sur des circuits de Formule 1.</p>
+          <a className="cover-link" href="#/race">Voir un agent piloter <span aria-hidden="true">→</span></a>
+        </div>
+        <CoverTrack />
+      </header>
 
-      <div className="grid-3" style={{ marginBottom: 16 }}>
-        <div className="card">
-          <div className="card-title">1. La voiture perçoit</div>
-          <p className="note" style={{ margin: 0 }}>7 capteurs mesurent la distance aux bords (100 m avec le modèle simplifié, 200 m avec la F1 2024), plus la vitesse,
-            l'angle par rapport à la piste, l'écart au centre et la courbure des virages à venir : 12 nombres.</p>
+      <section className="cover-section" aria-labelledby="cover-results">
+        <div className="cover-section-heading">
+          <h2 id="cover-results">Résultats sur les circuits de test</h2>
+          <p>Série v2 · Taux de tours bouclés · Toutes adhérences testées</p>
         </div>
-        <div className="card">
-          <div className="card-title">2. L'agent décide</div>
-          <p className="note" style={{ margin: 0 }}>Toutes les 0,05 s, il choisit le volant, l'accélérateur et le frein. Il gagne des
-            points en avançant et en bouclant un tour, il en perd s'il sort de la piste.</p>
-        </div>
-        <div className="card">
-          <div className="card-title">3. On évalue</div>
-          <p className="note" style={{ margin: 0 }}>Dans la première série, après 1 million de pas d'entraînement sur 10 circuits, chaque agent roule sur 5
-            circuits qu'il n'a jamais vus, à adhérence normale, humide et glissante.</p>
-          <p className="note" style={{ marginBottom: 0 }}>On teste aussi les agents sur 8 circuits de F1 réels qu’ils n’ont jamais vus.</p>
-        </div>
-      </div>
+        {mode === "fixtures" ? <p className="note">Le serveur est nécessaire pour afficher les résultats v2.</p>
+          : !results ? <p role="status">Chargement des résultats v2…</p>
+          : results.error ? <p className="warn" role="alert">Impossible de charger les résultats v2.</p>
+          : !results.circuits ? <p className="note">Aucun résultat v2 disponible.</p>
+          : <div className="cover-metrics">
+            {leaders.length > 0 && <Tile label={leaders.length === 1 ? "Meilleur agent appris" : "Meilleurs agents à égalité"}
+              value={shortPercent(leaders[0].rate)} detail={leaders.map(({ condition }) => conditionLabel(condition)).join(" et ")}
+              condition={leaders.length === 1 ? leaders[0].condition : undefined} />}
+            {references.map(({ condition, rate }) => <Tile key={condition} label="Pilote de référence"
+              value={shortPercent(rate)} detail={conditionLabel(condition)} condition={condition} />)}
+            <Tile label="Circuits de test" value={results.circuits} detail="Circuits distincts dans l’évaluation v2" />
+          </div>}
+        {results?.entries?.length > 0 && <details className="explanation">
+          <summary>En savoir plus sur les résultats</summary>
+          <p>Le taux est la part des essais de test terminés par un tour complet dans <code>eval_f1_v2.csv</code>. Chaque essai compte
+            une fois. Les pilotes de référence sont programmés et disposent d’informations sur le circuit et l’adhérence.</p>
+        </details>}
+      </section>
 
-      <div className="card-title" style={{ fontSize: 17 }}>Résultats clés <span className="hint">calculés sur les évaluations réelles</span></div>
-      {stats === null ? <p className="note">Chargement…</p> : (
-        <div className="grid-3" style={{ marginBottom: 20 }}>
-          <Tile label="Pilote classique (référence)" value={stats.normal.classic != null ? pct(stats.normal.classic) : "—"}
-                detail="de tours bouclés sur les circuits de test, à toutes les adhérences" color={conditionColor("classic")} />
-          {bestNormal && <Tile label={`Meilleur agent, adhérence normale : ${conditionLabel(bestNormal[0])}`} value={pct(bestNormal[1])}
-                               detail="de tours bouclés sur les 5 circuits de test, jamais vus" color={conditionColor(bestNormal[0])} />}
-          {bestSlippery && <Tile label={`Le plus robuste, piste glissante (μ 0,6) : ${conditionLabel(bestSlippery[0])}`} value={pct(bestSlippery[1])}
-                                 detail="les autres agents ne bouclent presque plus aucun tour" color={conditionColor(bestSlippery[0])} />}
-          <Tile label="Entraînements (1 million de pas chacun)" value={stats.runs} detail={`${stats.episodes} épisodes d'évaluation`} />
-          {bestF1 ? <Tile label={`Meilleur agent sur les circuits de F1 · ${conditionLabel(bestF1[0])}`} value={pct(bestF1[1])}
-                          detail="de tours bouclés, toutes adhérences confondues" color={conditionColor(bestF1[0])} />
-            : stats.f1Episodes > 0 && <Tile label="Évaluation sur les circuits de F1" value={stats.f1Episodes} detail="essais enregistrés" />}
-        </div>
-      )}
+      <section className="cover-section" aria-labelledby="cover-loop">
+        <div className="cover-section-heading"><h2 id="cover-loop">La boucle d’apprentissage</h2></div>
+        <ol className="cover-flow">
+          {STEPS.map(([title, detail, path], index) => <li key={title}>
+            <svg className="flow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={path} /></svg>
+            <div><strong>{title}</strong><span>{detail}</span></div>
+            {index < STEPS.length - 1 && <svg className="flow-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.7" aria-hidden="true"><path d="M3 12h17m-6-6 6 6-6 6" /></svg>}
+          </li>)}
+        </ol>
+      </section>
 
-      {stats && Object.keys(stats.normal).length > 0 && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-title">Tours bouclés sur les circuits de test <span className="hint">adhérence normale · piste glissante</span></div>
-          <table>
-            <thead><tr><th>Agent</th><th className="num">Normale (μ 1,0)</th><th className="num">Glissante (μ 0,6)</th></tr></thead>
-            <tbody>
-              {CONDITIONS.filter((c) => stats.normal[c.id] != null).map((c) => (
-                <tr key={c.id}>
-                  <td><span className="swatch" style={{ background: c.color }} />{c.label} <span className="note">— {c.help}</span></td>
-                  <td className="num">{pct(stats.normal[c.id])}</td>
-                  <td className="num">{stats.slippery[c.id] != null ? pct(stats.slippery[c.id]) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="note">Moyenne des 3 graines (3 entraînements indépendants par algorithme) : la variance entre graines est forte,
-            ces chiffres donnent des tendances. Détails dans Performance Analytics.</p>
+      <section className="cover-section" aria-labelledby="cover-modules">
+        <div className="cover-section-heading"><h2 id="cover-modules">Explorer le labo</h2></div>
+        <div className="grid-3">
+          {MODULES.map(([key, title, description]) => (
+            <a key={key} href={`#/${key}`} className="card module-link">
+              <h3>{title} <span aria-hidden="true">↗</span></h3>
+              <p>{description}</p>
+            </a>
+          ))}
         </div>
-      )}
-
-      <div className="card-title" style={{ fontSize: 17 }}>Par où commencer ?</div>
-      <div className="grid-3">
-        {MODULES.map(([key, title, text]) => (
-          <a key={key} href={`#/${key}`} className="card" style={{ textDecoration: "none", color: "inherit" }}>
-            <div className="card-title">{title} →</div>
-            <p className="note" style={{ margin: 0 }}>{text}</p>
-          </a>
-        ))}
-      </div>
-    </>
+      </section>
+    </div>
   );
 }

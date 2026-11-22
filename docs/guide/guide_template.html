@@ -1,0 +1,173 @@
+<title>Guide F1-RL Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Mise en page : tour de chronométrage (chapitres) à gauche, texte à 70 caractères à droite ;
+   bande de vibreur rouge et blanc en haut, barre de progression « tour » pendant la lecture. */
+:root {
+  --bg: #f4f6f8; --surface: #ffffff; --fg: #14181d; --muted: #59626d; --line: #dce1e7;
+  --accent: #c8281f; --accent-soft: #fbe9e7; --flag: #b98a00; --code-bg: #eef1f4;
+  --font-display: "Titillium Web", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101317; --surface: #171b20; --fg: #e8ebee; --muted: #9ba4ae; --line: #29303a;
+    --accent: #ff5d52; --accent-soft: #3a1d1b; --flag: #f2c230; --code-bg: #1d232a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101317; --surface: #171b20; --fg: #e8ebee; --muted: #9ba4ae; --line: #29303a;
+  --accent: #ff5d52; --accent-soft: #3a1d1b; --flag: #f2c230; --code-bg: #1d232a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { background: var(--bg); color: var(--fg); font: 400 17px/1.65 var(--font-body); }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--flag); outline-offset: 2px; border-radius: 3px; }
+
+.kerb { height: 6px; background: repeating-linear-gradient(90deg, var(--accent) 0 28px, var(--surface) 28px 56px);
+  border-bottom: 1px solid var(--line); }
+.lap { position: fixed; top: 0; left: 0; height: calc(3px + env(safe-area-inset-top, 0px)); width: 0;
+  background: var(--flag); z-index: 20; transition: width .1s linear; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 0 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+header.cover { padding-block: 48px 32px; display: grid; gap: 14px; max-width: 760px; }
+.cover .eyebrow { margin: 0; }
+.cover h1 { font: 700 clamp(2.1rem, 5vw, 3.2rem)/1.08 var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.cover p.lede { margin: 0; color: var(--muted); font-size: 1.1rem; max-width: 62ch; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; padding: 0; list-style: none; }
+.facts li { font: 500 .8rem/1 var(--font-mono); padding: 7px 10px; border: 1px solid var(--line);
+  border-radius: 4px; background: var(--surface); color: var(--muted); }
+.facts b { color: var(--fg); font-weight: 500; }
+
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 48px; align-items: start; }
+
+/* Tour de chronométrage : la liste des chapitres, ordre de lecture conseillé */
+nav.tower { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); }
+.tower h2 { font: 600 .72rem/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+.tower ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.tower li + li { border-top: 1px solid var(--line); }
+.tower a { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 10px; padding: 9px 12px;
+  color: var(--fg); text-decoration: none; font-size: .9rem; line-height: 1.3; }
+.tower a:hover { background: var(--code-bg); }
+.tower .pos { font: 500 .8rem/1 var(--font-mono); color: var(--muted); text-align: center; padding: 5px 0; border-radius: 3px; background: var(--code-bg); font-variant-numeric: tabular-nums; }
+.tower a.active { background: var(--accent-soft); }
+.tower a.active .pos { background: var(--accent); color: #fff; }
+.tower .tools { display: flex; gap: 8px; margin-top: 12px; }
+.tower button { font: 500 .82rem var(--font-body); color: var(--fg); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 5px; padding: 7px 10px; cursor: pointer; }
+.tower button:hover { border-color: var(--muted); }
+
+main { min-width: 0; }
+.chapter { max-width: 72ch; padding-block: 8px 40px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+.chapter:last-child { border-bottom: 0; }
+.eyebrow { font: 600 .74rem/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.chapter > h2 { font: 700 clamp(1.6rem, 3.4vw, 2.15rem)/1.15 var(--font-display); margin: 0 0 18px; text-wrap: balance; }
+.chapter h2:not(:first-of-type), .chapter h3 { font-family: var(--font-display); text-wrap: balance; }
+.chapter h2 + p, .chapter h3 + p { margin-top: 6px; }
+.chapter section h2, .chapter > h2 ~ h2 { font-size: 1.35rem; margin: 34px 0 8px; }
+.chapter h3 { font-size: 1.15rem; margin: 28px 0 6px; }
+.chapter p, .chapter li { text-wrap: pretty; }
+.chapter ul, .chapter ol { padding-left: 1.3em; }
+.chapter li + li { margin-top: 4px; }
+strong { font-weight: 600; }
+code { font: 500 .86em var(--font-mono); background: var(--code-bg); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; line-height: 1.45; }
+pre code { background: none; padding: 0; font-size: .82rem; overflow-wrap: normal; white-space: pre; }
+blockquote { margin: 18px 0; padding: 10px 16px; border-left: 3px solid var(--flag); background: var(--surface); border-radius: 0 6px 6px 0; color: var(--fg); }
+.table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; background: var(--code-bg); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.math.display { display: block; overflow-x: auto; margin: 14px 0; text-align: center; }
+mjx-container { color: var(--fg); }
+footer { color: var(--muted); font-size: .85rem; max-width: 72ch; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  nav.tower { position: static; }
+  .tower ol { display: flex; overflow-x: auto; border-radius: 6px; }
+  .tower li { flex: 0 0 auto; }
+  .tower li + li { border-top: 0; border-left: 1px solid var(--line); }
+  .tower a { grid-template-columns: auto auto; padding: 8px 10px; white-space: nowrap; }
+  body { font-size: 16px; }
+}
+</style>
+
+<div class="lap" id="lap" aria-hidden="true"></div>
+<div class="kerb" aria-hidden="true"></div>
+<div class="wrap">
+  <header class="cover">
+    <p class="eyebrow">L3 Intelligence Artificielle · projet en binôme</p>
+    <h1>Comprendre F1-RL Lab</h1>
+    <p class="lede">Des agents d'apprentissage par renforcement apprennent seuls à piloter une monoplace sur des circuits 2D.
+      Ce guide explique le projet de zéro, dans l'ordre : les bases, la physique, l'environnement, les algorithmes,
+      les résultats, le code, puis les questions probables du professeur.</p>
+    <ul class="facts" aria-label="Le projet en chiffres">
+      <li><b>13</b> algorithmes ou variantes</li>
+      <li><b>8</b> circuits F1 jamais vus en test</li>
+      <li><b>3</b> niveaux d'adhérence : μ 1,0 · 0,8 · 0,6</li>
+      <li>voiture F1 à <b>343</b> km/h</li>
+    </ul>
+  </header>
+
+  <div class="layout">
+    <nav class="tower" aria-label="Chapitres">
+      <h2>Ordre de lecture</h2>
+      <ol id="toc">
+{{NAV}}
+      </ol>
+      <div class="tools">
+        <button type="button" id="theme">Thème clair / sombre</button>
+      </div>
+    </nav>
+    <main>
+{{SECTIONS}}
+      <footer>
+        <p>Chaque chiffre de ce guide vient d'un vrai entraînement, noté dans <code>experiments/JOURNAL.md</code> avec son
+          identifiant, sa configuration et sa graine. Les liens vers les fichiers ouvrent le dépôt du projet.</p>
+      </footer>
+    </main>
+  </div>
+</div>
+
+<script>
+window.MathJax = {
+  tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]] },
+  svg: { fontCache: "global" },
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js" async></script>
+<script>
+(function () {
+  // Barre de progression « tour » et chapitre courant dans la tour de chronométrage
+  const lap = document.getElementById("lap");
+  const links = [...document.querySelectorAll("#toc a")];
+  const chapters = links.map((a) => document.querySelector(a.getAttribute("href")));
+  function onScroll() {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    lap.style.width = (max > 0 ? (100 * scrollY) / max : 0) + "%";
+    let current = 0;
+    chapters.forEach((c, i) => { if (c && c.getBoundingClientRect().top < innerHeight * 0.35) current = i; });
+    links.forEach((a, i) => a.classList.toggle("active", i === current));
+  }
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  // Bascule de thème, mémorisée pour ce lecteur (sans conséquence si le stockage est refusé)
+  const root = document.documentElement;
+  try { const t = localStorage.getItem("guide-theme"); if (t) root.dataset.theme = t; } catch (e) {}
+  document.getElementById("theme").addEventListener("click", () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("guide-theme", root.dataset.theme); } catch (e) {}
+  });
+})();
+</script>

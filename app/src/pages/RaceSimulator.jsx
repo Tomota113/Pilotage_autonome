@@ -26,7 +26,7 @@ function Gauge({ label, value, min = 0, color, left: leftLabel, right: rightLabe
 
 // Profil de vitesse au cours de l'épisode, avec le curseur de lecture
 function SpeedProfile({ frames, index, onSeek, car }) {
-  const w = 900, h = 120, pad = 28;
+  const w = 900, h = 120, pad = 42;
   const { tMax, vMax, x, y, d, slips } = useMemo(() => {
     const tMax = frames.at(-1).t || 1;
     const vMax = frames.reduce((max, f) => Math.max(max, f.v * 3.6), car === "f1_2024" ? 350 : 72);
@@ -37,7 +37,7 @@ function SpeedProfile({ frames, index, onSeek, car }) {
   }, [frames, car]);
   const cur = frames[index];
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 130, cursor: "pointer" }} role="img"
+    <svg viewBox={`0 0 ${w} ${h}`} className="speed-profile" role="img"
          aria-label="Vitesse au cours de l'épisode"
          onClick={(e) => {
            const r = e.currentTarget.getBoundingClientRect();
@@ -46,16 +46,16 @@ function SpeedProfile({ frames, index, onSeek, car }) {
          }}>
       {[0, 0.5, 1].map((k) => (
         <g key={k}>
-          <line x1={pad} x2={w - 8} y1={y((vMax * k) / 3.6)} y2={y((vMax * k) / 3.6)} stroke="#2c313a" />
-          <text x={pad - 4} y={y((vMax * k) / 3.6) + 4} fill="#7d838e" fontSize="10" textAnchor="end">{Math.round(vMax * k)}</text>
+          <line x1={pad} x2={w - 8} y1={y((vMax * k) / 3.6)} y2={y((vMax * k) / 3.6)} stroke="var(--line-2)" />
+          <text x={pad - 4} y={y((vMax * k) / 3.6) + 4} fill="var(--muted)" textAnchor="end">{Math.round(vMax * k)}</text>
         </g>
       ))}
-      {slips.map((f) => <line key={f.t} x1={x(f.t)} x2={x(f.t)} y1={h - 16} y2={h - 12} stroke="#fab219" />)}
-      <path d={d} fill="none" stroke="#3987e5" strokeWidth="2" />
-      <line x1={x(cur.t)} x2={x(cur.t)} y1={8} y2={h - 18} stroke="#e8402f" strokeWidth="1.5" />
-      <circle cx={x(cur.t)} cy={y(cur.v)} r="4" fill="#e8402f" />
-      <text x={w - 8} y={h - 2} fill="#7d838e" fontSize="10" textAnchor="end">temps (s) → · traits jaunes : dérapage</text>
-      <text x={pad} y={10} fill="#7d838e" fontSize="10">km/h</text>
+      {slips.map((f) => <line key={f.t} x1={x(f.t)} x2={x(f.t)} y1={h - 16} y2={h - 12} stroke="var(--warn)" />)}
+      <path d={d} fill="none" stroke="var(--info)" className="chart-stroke" style={{ "--series-width": 2 }} />
+      <line x1={x(cur.t)} x2={x(cur.t)} y1={8} y2={h - 18} stroke="var(--accent)" className="chart-stroke" style={{ "--series-width": 1.5 }} />
+      <circle cx={x(cur.t)} cy={y(cur.v)} r="4" fill="var(--accent)" />
+      <text x={w - 8} y={h - 2} fill="var(--muted)" textAnchor="end">temps (s) → · traits jaunes : dérapage</text>
+      <text x={pad} y={13} fill="var(--muted)">km/h</text>
     </svg>
   );
 }
@@ -95,8 +95,11 @@ export default function RaceSimulator() {
     <>
       <div className="page-header">
         <h2>Race Simulator</h2>
-        <p>Rejoue un vrai épisode d'évaluation : choisis un agent, un circuit de test et une adhérence, puis lance la
-          lecture. La trajectoire est colorée selon la vitesse (bleu lent → rouge rapide).</p>
+        <p>Choisissez un agent, un circuit et une adhérence pour rejouer une évaluation.</p>
+        <details className="explanation">
+          <summary>En savoir plus</summary>
+          <p>La couleur de la trajectoire indique la vitesse, du bleu quand la voiture roule lentement au rouge quand elle accélère.</p>
+        </details>
       </div>
       <ReplayFields replays={replays}>
         <CarSelector car={car} loading={replays === null} setCar={(next) => { setPlaying(false); setCar(next); }} />
@@ -104,7 +107,7 @@ export default function RaceSimulator() {
       {replay && track && frame && (
         <div className="row">
           <div className="grow stack">
-            <div className="card" style={{ padding: 10 }}>
+            <div className="card race-stage">
               <TrackCanvas track={track} trails={[{ ...visuals.trail, count: index + 1, speedColorMax, width: 2.5, alpha: 0.5 }]}
                            draw={ideal.draw} getScene={getScene} animating={playing} height={560} fullscreen>
                 <PlaybackControls />
@@ -116,10 +119,13 @@ export default function RaceSimulator() {
               <SpeedProfile frames={replay.frames} index={index} car={car} onSeek={(i) => { setPlaying(false); setIndex(i); }} />
             </div>
           </div>
-          <div className="stack" style={{ width: 300 }}>
+          <div className="stack race-readings">
             <div className="card">
               <div className="card-title"><span className="swatch" style={{ background: color }} />{conditionLabel(condition)}</div>
-              <p className="note" style={{ marginTop: -4 }}>{CONDITION_BY_ID[condition]?.help}</p>
+              {CONDITION_BY_ID[condition]?.help && <details className="explanation">
+                <summary>En savoir plus sur le pilote</summary>
+                <p>{CONDITION_BY_ID[condition].help}</p>
+              </details>}
               <div className="stat"><div className="label">Vitesse</div><div className="value">{Math.round(frame.v * 3.6)} <small>km/h</small></div></div>
               <div className="stat"><div className="label">Chrono</div><div className="value">{frame.t.toFixed(1)} <small>s</small></div></div>
               <div className="gauge">Progression du tour <span style={{ float: "right" }}>{Math.max(0, 100 * frame.progress).toFixed(0)} % · checkpoint {frame.checkpoint}/20</span>
@@ -133,9 +139,9 @@ export default function RaceSimulator() {
             </div>
             <div className="card">
               <div className="card-title">Commandes de l'agent</div>
-              <Gauge label="Volant" value={frame.action.steer} min={-1} color="#3987e5" left="gauche" right="droite" />
-              <Gauge label="Accélérateur" value={frame.action.throttle} color="#2bb673" />
-              <Gauge label="Frein" value={frame.action.brake} color="#e8402f" />
+              <Gauge label="Volant" value={frame.action.steer} min={-1} color="var(--info)" left="gauche" right="droite" />
+              <Gauge label="Accélérateur" value={frame.action.throttle} color="var(--good)" />
+              <Gauge label="Frein" value={frame.action.brake} color="var(--accent)" />
             </div>
             <div className="card">
               <div className="card-title">Ce que voit la voiture <span className="hint">distance au bord (m)</span></div>

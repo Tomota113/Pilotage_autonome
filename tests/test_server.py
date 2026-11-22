@@ -192,6 +192,16 @@ def test_lists_replays_with_metadata(client, tmp_path):
     assert r["lap_time"] == rows[0]["lap_time"] and r["has_activations"] is False
 
 
+def test_replay_names_of_series_v2_algorithms():
+    from server.app import REPLAY_NAME
+
+    for algo in ("td3", "tqc", "qrdqn", "deep_sarsa", "deep_mc", "ppo", "classic"):
+        match = REPLAY_NAME.fullmatch(f"{algo}_step_1300000_f1_budapest_mu0.60_ep0.json")
+        assert match and match["algo"] == algo and match["track"] == "f1_budapest", algo
+    match = REPLAY_NAME.fullmatch("raceline_none_gen_12_mu1.00_ep0.json")
+    assert match["algo"] == "raceline" and match["track"] == "gen_12"
+
+
 def test_replay_car_comes_from_run_config_or_reference_id(client, tmp_path):
     cases = [
         ("classic_f1_ref", None, "classic", "f1_2024"),

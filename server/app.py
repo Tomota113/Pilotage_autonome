@@ -32,8 +32,9 @@ POLL_INTERVAL = 0.1
 STOP_TIMEOUT = 2.0
 FRAME_INTERVAL = 1 / 20
 COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,239}")
-CHECKPOINT = re.compile(r"step_([0-9]{1,20})\.(zip|npy)")
-REPLAY_NAME = re.compile(r"(?P<algo>[a-z]+)_(?P<checkpoint>step_[0-9]+|none)_(?P<track>[a-z0-9_]+)"
+CHECKPOINT = re.compile(r"step_([0-9]{1,20})\.(zip|npy|pt)")
+# algo : td3 (chiffre) et deep_sarsa / deep_mc (tiret bas) compris
+REPLAY_NAME = re.compile(r"(?P<algo>[a-z][a-z0-9]*(?:_[a-z]+)?)_(?P<checkpoint>step_[0-9]+|none)_(?P<track>[a-z0-9_]+)"
                          r"_mu(?P<mu>[0-9.]+)_ep(?P<episode>[0-9]+)\.json")
 SUMMARY = re.compile(r'"summary":\s*\{([^{}]*)\}\s*\}\s*$')
 

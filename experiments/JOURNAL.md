@@ -231,3 +231,14 @@ vérifiés identiques) :
 
 Temps au tour / pilote classique : PPO 2 × 64 × 1,43 ; PPO μ variable × 1,48 ; PPO × 1,52 ; TQC × 1,85 ;
 Deep MC × 2,81 ; aucun tour d'agent plus rapide que le classique (0/66). Conclusions inchangées.
+
+## Replays de démonstration série v2 (22/11/2026, soir)
+
+`python -m tools.make_showcase --series v2` : pour chaque condition, la graine qui boucle le plus de tours sur
+les circuits F1 (eval_f1_v2.csv), meilleur checkpoint, voiture F1, μ 1,0, sur les 17 circuits réels
+d'entraînement et 6 nouveaux circuits générés à l'échelle F1 (`gen_f1_20` à `gen_f1_25`, 4,0–5,3 km, 14 m de
+large, rayon ≥ 30 m, split « demo », jamais utilisés pour entraîner). Lignes : `results/eval_showcase_v2.csv`.
+Tours bouclés (générés F1 /6, réels d'entraînement /17) : classique 6 + 17 ; trajectoire idéale 6 + 16 (sortie
+à Austin) ; PPO 2 × 64 6 + 14 ; PPO 6 + 12 ; PPO μ variable 6 + 11 ; TQC 5 + 11 ; QR-DQN 5 + 2 ; Deep MC 1 + 4 ;
+SAC 3 + 1 ; SARSA 2 + 1 ; DQN 1 + 1 ; TD3 0 + 1 ; Deep SARSA, Monte-Carlo, Q-Learning 0. Circuit le plus
+facile : Indianapolis (9 agents sur 13) ; le plus difficile : Shanghai (aucun agent).

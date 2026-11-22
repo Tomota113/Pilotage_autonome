@@ -191,6 +191,63 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .analytics-filters { flex-wrap: wrap; padding: 4px 2px; }
 .analytics-filters .module-field { flex: 0 0 auto; }
 .analytics-metric { width: fit-content; max-width: 100%; }
+.analytics-page { min-width: 0; max-width: 1120px; }
+.analytics-page .page-header { margin-bottom: 0; }
+.analytics-intro { display: grid; gap: 10px; }
+.analytics-intro p, .analytics-takeaways ul { margin: 0; }
+.analytics-select { width: fit-content; max-width: 100%; }
+.analytics-select select { max-width: 100%; }
+.analytics-takeaways { border-left: 3px solid var(--info); }
+.analytics-takeaways ul { padding-left: 20px; }
+.analytics-takeaways li + li { margin-top: 6px; }
+.analytics-guide { margin: 0 0 10px; color: var(--muted); max-width: 84ch; }
+.analytics-guide strong { color: var(--text); }
+.analytics-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 14px; padding: 0; list-style: none; }
+.analytics-legend li { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.analytics-key { display: inline-block; flex: none; width: 12px; height: 12px; border-radius: 3px;
+  border: 1px solid var(--line-2); background: var(--chart-color); }
+.analytics-key.dot { width: 9px; height: 9px; border: 0; border-radius: 50%; }
+.analytics-key.line, .analytics-key.dash { width: 19px; height: 0; border: 0; border-radius: 0;
+  border-top: 3px solid var(--chart-color); background: none; }
+.analytics-key.dash { border-top: 2px dashed var(--chart-color); }
+.analytics-scroll { max-width: 100%; overflow-x: auto; }
+.analytics-table-toggle { margin-top: 12px; }
+.analytics-table-toggle .analytics-scroll { margin-top: 6px; max-height: 28rem; overflow: auto; }
+.analytics-table-toggle caption { text-align: left; padding: 8px 9px; color: var(--muted); }
+.analytics-table-toggle th { color: var(--muted); }
+.analytics-table-toggle thead { position: sticky; top: 0; background: var(--panel-2); }
+.analytics-plot { --plot-name: clamp(100px, 19%, 158px); --plot-report: 92px; margin-top: 14px; }
+.analytics-axis, .analytics-plot-row { display: grid; grid-template-columns: var(--plot-name) minmax(0, 1fr) var(--plot-report);
+  align-items: center; column-gap: 10px; }
+.analytics-axis { font-size: 12px; color: var(--muted); }
+.analytics-axis-body { grid-column: 2; position: relative; height: 20px; }
+.analytics-axis-body span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.analytics-axis small { grid-column: 2; text-align: center; margin-bottom: 5px; }
+.analytics-plot-row { min-height: 28px; padding: 2px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.analytics-plot-name { line-height: 1.2; }
+.analytics-plot-svg { display: block; overflow: visible; }
+.analytics-plot-report { text-align: right; font-variant-numeric: tabular-nums; }
+.analytics-plot-report small { display: block; color: var(--muted); font-size: 11px; }
+.analytics-heatmap { margin-top: 12px; min-width: 660px; table-layout: fixed; }
+.analytics-heatmap :is(th, td) { padding: 4px; }
+.analytics-heatmap th { color: var(--muted); text-align: center; overflow-wrap: anywhere; }
+.analytics-heatmap th:first-child { width: 132px; text-align: left; }
+.analytics-heatmap td { position: relative; text-align: center; font-variant-numeric: tabular-nums; }
+.analytics-heatmap td svg { display: block; }
+.analytics-heatmap td span { position: absolute; inset: 0; display: grid; place-items: center; }
+.analytics-series-key { display: flex; flex-wrap: wrap; gap: 4px 14px; border: 1px solid var(--line-2);
+  border-radius: 8px; margin: 10px 0; }
+.analytics-series-key legend { color: var(--muted); font-size: 13px; }
+.analytics-series-key label { display: flex; align-items: center; gap: 5px; font-size: 13px; }
+.analytics-line-wide { max-width: 720px; }
+.analytics-multiples, .analytics-glossary dl { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr)); }
+.analytics-multiple { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.analytics-multiple h4, .analytics-multiple .note { margin: 0 0 4px; }
+.analytics-multiple > svg { font-size: 13px; }
+.analytics-multiple .analytics-table-toggle { margin-top: 4px; }
+.analytics-glossary summary { cursor: pointer; font-weight: 650; }
+.analytics-glossary dt { font-weight: 650; }
+.analytics-glossary dd { margin: 2px 0 0; color: var(--muted); }
 .f1-table { overflow-x: auto; }
 .f1-table tbody th, .f1-table td { white-space: nowrap; }
 

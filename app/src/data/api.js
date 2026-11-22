@@ -95,6 +95,14 @@ export function loadF1EvalV2() {
   return loadF1EvalFile("eval_f1_v2.csv");
 }
 
+export function loadShowcaseEvalV2() {
+  return loadF1EvalFile("eval_showcase_v2.csv");
+}
+
+export function loadAnalyticsEvalV1(checkpoint) {
+  return loadF1EvalFile(checkpoint === "best" ? "eval_best.csv" : "eval.csv");
+}
+
 export async function loadEval() {
   if ((await getMode()) === "fixtures") return fetchJSON(FIXTURES + (await manifest()).eval);
   try {

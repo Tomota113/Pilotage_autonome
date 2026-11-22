@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseCSV } from "./csv.js";
-import { aggregateEvaluation, aggregateLearning } from "../pages/Analytics.jsx";
+import { aggregateEvaluation, aggregateLearning } from "./analytics.js";
 
 describe("parseCSV", () => {
   it("lit les données numériques et conserve les champs vides et textuels (CRLF)", () => {

@@ -1,0 +1,67 @@
+.network-explorer .page-header { margin-bottom: 0; }
+.network-explorer .card > p:last-child,
+.network-flow p,
+.network-chart p { margin-bottom: 0; }
+.network-filter { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; }
+.network-flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 205px), 1fr));
+  gap: 14px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.network-flow > li { position: relative; border-top: 2px solid var(--info); }
+.network-flow > li:last-child { border-top-color: var(--good); }
+.network-flow p { margin-top: 0; color: var(--muted); font-size: 13px; }
+@media (min-width: 1150px) {
+  .network-flow > li:not(:last-child)::after {
+    content: "→" / "";
+    position: absolute;
+    right: -15px;
+    top: 10px;
+    color: var(--muted);
+    background: var(--bg);
+  }
+}
+.network-guide, .network-charts, .network-layers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.network-charts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr)); }
+.network-layers { grid-template-columns: repeat(auto-fit, minmax(min(100%, 195px), 1fr)); }
+.network-chart { margin: 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.network-chart figcaption { display: flex; justify-content: space-between; gap: 8px; }
+.network-chart svg { display: block; width: 100%; fill: var(--muted); font-size: 11px; }
+.network-chart .network-cursor { stroke: var(--text); }
+.network-layers h4 { margin: 0 0 6px; font-size: 13px; }
+.network-readings { margin: 0; padding: 0; list-style: none; }
+.network-readings li, .network-reading-key {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(36px, .64fr) 6ch minmax(9ch, auto);
+  gap: 6px;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.network-reading-key { color: var(--muted); }
+.network-reading-key > :nth-child(2) { grid-column: 2 / 4; text-align: right; }
+.network-reading-key > :last-child { text-align: right; }
+.network-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.network-neurons li { grid-template-columns: max-content minmax(36px, 1fr) 7ch; }
+.network-number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.network-bar { position: relative; height: 9px; border-radius: 4px; background: var(--panel-3); }
+.network-bar::after { content: ""; position: absolute; left: 50%; top: -1px; bottom: -1px; border-left: 1px solid var(--muted); }
+.network-bar > span { position: absolute; inset-block: 0; border-radius: 3px; }
+.network-bar .negative { background: var(--info); }
+.network-bar .positive { background: var(--warn); }
+.network-guide dl { margin-bottom: 0; }
+.network-guide dl div + div { margin-top: 6px; }
+.network-guide dt { font-weight: 650; }
+.network-guide dd { margin: 0; color: var(--muted); }
+.network-overview { margin-top: 12px; font-size: 13px; }
+.network-overview summary { cursor: pointer; }
+.network-overview svg { display: block; width: 100%; fill: var(--text); font-size: 11px; }

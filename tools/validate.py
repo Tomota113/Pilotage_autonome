@@ -29,7 +29,7 @@ from sim.track import SPLITS, Track  # noqa: E402
 # Les fichiers en 1.0 restent valides, mais seulement avec les algorithmes de la 1.0.
 # Version 1.2 de config.yaml (21/11/2026) : options env.car (modèle de voiture) et
 # env.random_start (départs aléatoires), facultatives.
-REPLAY_SCHEMA = "f1rl.replay/1.3"  # 1.3 : nouveaux algorithmes (numérotation alignée sur config.yaml)
+REPLAY_SCHEMA = "f1rl.replay/1.4"  # 1.3 : nouveaux algorithmes ; 1.4 : frames[].q_values (agents à valeurs Q)
 CONFIG_SCHEMA = "f1rl.config/1.3"
 CAR_MODELS = ("v1", "f1_2024")
 ENV_OPTIONAL_1_2 = ("car", "random_start")
@@ -47,6 +47,7 @@ ALGO_ACTION_SPACE = {"qlearning": "discrete9", "sarsa": "discrete9", "montecarlo
                      "dqn": "discrete9", "ppo": "continuous", "sac": "continuous"}
 TABULAR_ALGOS = ("qlearning", "sarsa", "montecarlo")  # table Q sauvegardée en .npy
 DEEP_VALUE_ALGOS = ("deep_sarsa", "deep_mc")  # réseau Q écrit à la main (PyTorch), checkpoint .pt
+Q_VALUE_ALGOS = ("dqn", "qrdqn") + DEEP_VALUE_ALGOS  # agents qui estiment une valeur Q par action
 ALGO_ACTION_SPACE.update({"td3": "continuous", "tqc": "continuous", "qrdqn": "discrete9",
                           "deep_sarsa": "discrete9", "deep_mc": "discrete9"})  # espace par défaut
 # Espaces permis : les algorithmes à actions continues acceptent aussi la pédale unique (1.3)
@@ -151,6 +152,12 @@ def validate_replay(data: dict) -> None:
         _require(_is_int(frame["checkpoint"]) and frame["checkpoint"] >= 0, f"{where}.checkpoint must be an integer >= 0")
         _require(isinstance(frame["slip"], bool) and isinstance(frame["off_track"], bool), f"{where}: slip/off_track must be booleans")
         _require(not (no_network and "activations" in frame), f"{where}: agent {agent['algo']!r} has no activations")
+        if "q_values" in frame:
+            # 1.4 : les 9 valeurs Q (une par action discrete9, ordre de DISCRETE9) des agents à valeurs Q
+            _require(int(str(data["schema"]).rsplit(".", 1)[1]) >= 4, f"{where}.q_values needs schema f1rl.replay/1.4")
+            _require(agent["algo"] in Q_VALUE_ALGOS, f"{where}: agent {agent['algo']!r} has no Q values")
+            _require(isinstance(frame["q_values"], list) and len(frame["q_values"]) == 9
+                     and all(_is_number(v) for v in frame["q_values"]), f"{where}.q_values must be 9 numbers")
         if "activations" in frame:
             _require(isinstance(frame["activations"], list)
                      and all(isinstance(layer, list) and all(_is_number(v) for v in layer) for layer in frame["activations"]),

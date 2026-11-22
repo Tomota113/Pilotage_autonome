@@ -242,3 +242,13 @@ Tours bouclés (générés F1 /6, réels d'entraînement /17) : classique 6 + 17
 à Austin) ; PPO 2 × 64 6 + 14 ; PPO 6 + 12 ; PPO μ variable 6 + 11 ; TQC 5 + 11 ; QR-DQN 5 + 2 ; Deep MC 1 + 4 ;
 SAC 3 + 1 ; SARSA 2 + 1 ; DQN 1 + 1 ; TD3 0 + 1 ; Deep SARSA, Monte-Carlo, Q-Learning 0. Circuit le plus
 facile : Indianapolis (9 agents sur 13) ; le plus difficile : Shanghai (aucun agent).
+
+## Replays : ajout des 9 valeurs Q (22/11/2026, nuit)
+
+Contrat : replay.json passe en **1.4** (`frames[].q_values` : 9 valeurs, ordre de DISCRETE9 ; QR-DQN : moyenne des
+quantiles). `agents/evaluate.py` enregistre ces valeurs pour DQN, QR-DQN, Deep SARSA, Deep MC (un seul passage
+avant par décision ; l'action jouée reste l'argmax des valeurs exactes, comme `predict(deterministic=True)`).
+Les 243 replays existants de ces agents (séries v1 et v2, circuits F1, démonstration, circuit dessiné) ont été
+rejoués : issue et temps au tour identiques aux fichiers d'évaluation d'origine pour les 243 (un premier essai
+prenait l'argmax des valeurs arrondies à 4 décimales et changeait 41 épisodes de QR-DQN par des égalités
+d'arrondi : corrigé avant la régénération finale). Aucun résultat d'évaluation ne change.

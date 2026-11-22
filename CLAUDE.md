@@ -54,9 +54,11 @@ Circuits F1 réels : `tracks/f1_*.json` (source TUM racetrack-database, LGPL-3.0
 supplémentaire : pilote trajectoire idéale (`sim/raceline.py`, `agents/raceline_driver.py`,
 run_id `raceline_ref`, algo `classic`).
 
-Contrat de données : version 1.1 de config.yaml et replay.json (ajout de
-`sarsa` et `montecarlo`) ; les fichiers 1.0 restent valides avec les
-algorithmes de la 1.0.
+Contrat de données : config.yaml en version 1.3 (1.1 : `sarsa`, `montecarlo` ; 1.2 : `env.car`,
+`env.random_start` ; 1.3 : action `pedal`, `reward.k_offtrack_speed`, TD3, TQC, QR-DQN, Deep SARSA,
+Deep MC) ; replay.json en version 1.4 (1.4 : `frames[].q_values`, les 9 valeurs Q des agents DQN,
+QR-DQN, Deep SARSA, Deep MC, dans l'ordre de DISCRETE9). Les anciennes versions restent valides tant
+qu'elles n'utilisent pas les nouveautés.
 
 ## Pile technique
 

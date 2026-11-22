@@ -139,6 +139,7 @@ def test_short_car_training_writes_checkpoints_and_replay(tmp_path, algo, observ
     assert replay["agent"] == {"algo": algo, "checkpoint": "step_400", "train_steps": 400}
     assert replay["network"] == {"layers": [12 + observe_mu, 16, 8, 9], "activation": "relu"}
     assert all([len(layer) for layer in frame["activations"]] == [16, 8] for frame in replay["frames"])
+    assert all(len(frame["q_values"]) == 9 for frame in replay["frames"])  # replay 1.4
 
 
 def test_checkpoint_selection_accepts_pt_and_preserves_other_formats(tmp_path):

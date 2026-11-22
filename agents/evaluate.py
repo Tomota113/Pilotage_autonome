@@ -123,8 +123,24 @@ class SB3Policy:
 
     def act(self, env: F1Env, obs: np.ndarray):
         self._acts = []
+        if self.algo in ("dqn", "qrdqn"):
+            # Un seul passage avant : on garde les 9 valeurs Q et on joue la meilleure (= predict déterministe)
+            import torch
+
+            with torch.no_grad():
+                obs_t, _ = self.model.policy.obs_to_tensor(obs)
+                if self.algo == "dqn":
+                    q = self.model.policy.q_net(obs_t)
+                else:  # QR-DQN : valeur Q = moyenne des quantiles de la distribution des retours
+                    q = self.model.policy.quantile_net(obs_t).mean(dim=1)
+            q = q.reshape(-1)
+            self._q = [round(float(v), 4) for v in q]  # arrondi pour le replay seulement
+            return int(q.argmax().item())  # choix sur les valeurs exactes (l'arrondi pourrait créer des égalités)
         action, _ = self.model.predict(obs, deterministic=True)
         return action
+
+    def q_values(self):
+        return self._q if self.algo in ("dqn", "qrdqn") else None
 
     def activations(self):
         return self._acts if self.with_activations else None
@@ -163,7 +179,12 @@ class DeepValuePolicy:
 
         self._acts = []
         with torch.no_grad():
-            return int(self.model(torch.as_tensor(obs, dtype=torch.float32)).argmax().item())
+            q = self.model(torch.as_tensor(obs, dtype=torch.float32))
+        self._q = [round(float(v), 4) for v in q]
+        return int(q.argmax().item())
+
+    def q_values(self):
+        return self._q
 
     def activations(self):
         return self._acts if self.with_activations else None
@@ -236,6 +257,9 @@ def run_episode(env: F1Env, policy, track_id: str, mu_factor: float, seed: int) 
         acts = policy.activations()
         if acts is not None:
             frame["activations"] = acts
+        q_values = getattr(policy, "q_values", lambda: None)()
+        if q_values is not None:
+            frame["q_values"] = q_values  # replay 1.4 : les 9 valeurs Q, ordre de DISCRETE9
         frames.append(frame)
         obs = next_obs
         if terminated or truncated:

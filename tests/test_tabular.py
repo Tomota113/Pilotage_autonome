@@ -67,4 +67,4 @@ def test_train_and_evaluate_on_the_car(tmp_path, algo):
     replay = json.loads((tmp_path / rows[0]["replay_path"]).read_text(encoding="utf-8"))
     validate_replay(replay)
     assert rows[0]["algo"] == algo and replay["agent"]["algo"] == algo
-    assert replay["schema"] == "f1rl.replay/1.3"
+    assert replay["schema"] == "f1rl.replay/1.4"

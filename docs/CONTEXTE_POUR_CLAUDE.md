@@ -228,8 +228,8 @@ pas de chicane) ; presque tous sortent à la 1re chicane de Monza (16 % du tour)
   « Comment lire ce graphique », tableaux, glossaire.
 - **Neural Network Explorer** : schéma animé 12 entrées (avec valeurs physiques) → 256 → 256 → sorties (volant
   et pédale pour la v2), neurones colorés par activation, liaisons des plus actifs, clic sur un neurone = sa
-  courbe ; courbes de vitesse / volant / pédale ; pas à pas (Espace). Les replays DQN / QR-DQN / Deep SARSA /
-  Deep MC n'enregistrent pas les 9 valeurs Q (seule l'action choisie est affichée).
+  courbe ; courbes de vitesse / volant / pédale ; pas à pas (Espace). Pour DQN / QR-DQN / Deep SARSA / Deep MC
+  (9 actions), barres des 9 valeurs Q à chaque instant, action choisie surlignée (replay 1.4).
 - **Track Designer** (dessiner un circuit, y faire rouler les agents) ; **Training Center** (lancer et suivre un
   entraînement).
 - **Mode présentation** (bouton ou touche P) : textes agrandis, contrastes renforcés, ← → pour changer de page ;
@@ -310,5 +310,6 @@ Zandvoort ont changé depuis) ; les pilotes de référence connaissent μ, pas l
 
 `track.json` (f1rl.track/1.0), `config.yaml` (f1rl.config/**1.3** : 1.1 = SARSA/Monte-Carlo, 1.2 =
 `env.car` et `env.random_start`, 1.3 = action `pedal`, `reward.k_offtrack_speed`, nouveaux algorithmes),
-`replay.json` (f1rl.replay/1.3), `progress.csv`, `eval.csv`. Les anciennes versions restent valides tant
+`replay.json` (f1rl.replay/**1.4** : 1.4 = `frames[].q_values`, 9 valeurs Q des agents à valeurs Q ; QR-DQN :
+moyenne des quantiles), `progress.csv`, `eval.csv`. Les anciennes versions restent valides tant
 qu'elles n'utilisent pas les nouveautés. Validation : `python tools/validate.py <fichiers>`.

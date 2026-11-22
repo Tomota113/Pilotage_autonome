@@ -409,8 +409,10 @@ canvas { display: block; width: 100%; background: var(--canvas-bg); border-radiu
 .designer-stage .canvas-wrap > canvas { height: min(var(--canvas-height), max(330px, 63vh)); }
 
 @media (min-width: 901px) and (max-height: 850px) {
+  [data-presentation="true"] .home-page { gap: .55rem; }
   [data-presentation="true"] .cover-hero { min-height: 0; }
   [data-presentation="true"] .cover-copy { padding: .75rem 1.25rem; }
+  [data-presentation="true"] .cover-copy h1 { font-size: clamp(2.5rem, 4.2vw, 3rem); }
   [data-presentation="true"] .cover-track { max-height: 13rem; }
   /* Garder les commandes principales sous la piste dans le cadre projeté. */
   [data-presentation="true"] :is(.race-stage, .designer-stage) .canvas-wrap > canvas {

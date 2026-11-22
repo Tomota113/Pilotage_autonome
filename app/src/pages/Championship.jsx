@@ -28,6 +28,55 @@ function frameAt(replay, t) {
   return interpolateFrame(replay.frames, t);
 }
 
+export function adjacentRacer(standings, selectedId, step) {
+  if (!standings.length) return null;
+  const index = standings.findIndex((racer) => racer.condition === selectedId);
+  if (index === -1) return standings[step > 0 ? 0 : standings.length - 1].condition;
+  return standings[(index + step + standings.length) % standings.length].condition;
+}
+
+function lapProgress(racer) {
+  return racer.finished ? 100 : Math.max(0, Math.min(100, Math.round(100 * racer.frame.progress)));
+}
+
+function Standings({ racers, selectedId, onSelect, title, compact = false }) {
+  return (
+    <div className={compact ? "fullscreen-standings" : undefined}>
+      <div className="card-title">{title}</div>
+      <div className="standings" role="table" aria-label={title}>
+        <div className="standings-row headings" role="row">
+          <span role="columnheader">#</span><span role="columnheader">Agent</span><span role="columnheader">État</span>
+        </div>
+        <div className="standings-body" role="rowgroup" style={{ "--rows": racers.length }}>
+          {racers.map((racer, index) => {
+            const selected = racer.condition === selectedId;
+            const name = conditionLabel(racer.condition);
+            return (
+              <div key={racer.condition} className={`standings-row racer${selected ? " selected" : ""}`}
+                   role="row" style={{ "--rank": index, "--racer-color": racer.color }}>
+                <span role="cell">{index + 1}</span>
+                <span role="cell">
+                  <button type="button" className="standing-agent" aria-label={`Suivre ${name}`} aria-pressed={selected}
+                          onClick={() => onSelect(racer.condition)}>
+                    <span className="swatch" />{name}
+                  </button>
+                </span>
+                <span role="cell">
+                  {racer.finished ? <span className="chip good finish-chip">
+                      <span role="img" aria-label="Tour terminé">🏁</span> {racer.replay.summary.lap_time.toFixed(1)} s
+                    </span>
+                    : racer.done ? <span className="chip bad">{OUTCOME_LABELS[racer.replay.summary.outcome]}</span>
+                      : `${lapProgress(racer)} %`}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StartLights({ signal }) {
   const go = signal === "go";
   const lit = go ? 0 : signal;
@@ -52,6 +101,7 @@ export default function Championship() {
   const [signal, setSignal] = useState(null);
   const [speed, setSpeed] = useState(2);
   const [showTrails, setShowTrails] = useState(true);
+  const [followedId, setFollowedId] = useState(null);
   const raceTime = useRef(0);
   const countdownStart = useRef(null);
   const playing = phase === "playing";
@@ -72,6 +122,7 @@ export default function Championship() {
     raceTime.current = 0;
     setTime(0);
     setRace(null);
+    setFollowedId(null);
     if (!trackId) return;
     let cancelled = false;
     const byCondition = {};
@@ -181,16 +232,36 @@ export default function Championship() {
     if (a.finished !== b.finished) return a.finished ? -1 : 1;
     return b.frame.progress - a.frame.progress;
   });
+  const followedRank = live.findIndex((racer) => racer.condition === followedId);
+  const followed = live[followedRank];
+  const selectedId = followed?.condition ?? null;
+
+  useEffect(() => {
+    if (!current?.track) return undefined;
+    const onKeyDown = (event) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey
+          || (event.key !== "ArrowUp" && event.key !== "ArrowDown") || !live.length
+          || event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setFollowedId((id) => adjacentRacer(live, id, step));
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [current, live]);
 
   function getScene() {
     const t = raceTime.current;
     return {
-      cars: live.map(({ replay, color, impact }) => ({
-        ...frameAt(replay, t), color, time: t, frames: showTrails ? replay.frames : null,
+      cars: live.map(({ condition, replay, color, impact }) => ({
+        ...frameAt(replay, t), id: condition, color, time: t, frames: showTrails ? replay.frames : null,
         impact: t >= impact?.t ? impact : null,
       })),
     };
   }
+
+  const standingsTitle = playing || (time > 0 && time < duration) ? "Classement en direct"
+    : time >= duration && duration > 0 ? "Classement final" : "Classement";
 
   return (
     <>
@@ -224,57 +295,61 @@ export default function Championship() {
           <div className="row">
             <div className="grow card" style={{ padding: 10 }}>
               {current?.track ? (
-                <div className="race-stage">
-                  <TrackCanvas track={current.track} getScene={getScene} followable={visible.length > 0}
-                               animating={playing} draw={ideal.draw} height={580} />
-                  {signal !== null && <StartLights signal={signal} />}
-                </div>
-              )
-                : current?.error ? <p className="warn" role="alert">Impossible de charger cette course.</p>
+                <TrackCanvas track={current.track} getScene={getScene} followedCarId={selectedId}
+                             onFollowChange={setFollowedId} animating={playing} draw={ideal.draw} height={580}
+                             fullscreen header={
+                               <div className="controls camera-controls">
+                                 <label>Caméra{" "}
+                                   <select value={selectedId ?? ""} onChange={(e) => setFollowedId(e.target.value || null)}>
+                                     <option value="">Vue d’ensemble</option>
+                                     {visible.map((racer) => (
+                                       <option key={racer.condition} value={racer.condition}>Suivre {conditionLabel(racer.condition)}</option>
+                                     ))}
+                                   </select>
+                                 </label>
+                                 {followed && (
+                                   <div className="camera-telemetry" role="group" aria-label="Agent suivi">
+                                     <strong><span className="swatch" style={{ background: followed.color }} />{conditionLabel(selectedId)}</strong>
+                                     <span>{Math.round(followed.frame.v * 3.6)} km/h</span>
+                                     <span>Position {followedRank + 1}/{live.length}</span>
+                                     <span>Tour {lapProgress(followed)} %</span>
+                                   </div>
+                                 )}
+                               </div>
+                             } overlay={
+                               <>
+                                 {signal !== null && <StartLights signal={signal} />}
+                                 {live.length > 0 && <Standings racers={live} selectedId={selectedId} onSelect={setFollowedId}
+                                                               title={standingsTitle} compact />}
+                               </>
+                             }>
+                  <div className="controls">
+                    <button className="primary" onClick={togglePlayback} disabled={!visible.length || starting}>
+                      {starting ? "Départ en cours" : playing ? "Pause" : time > 0 && time < duration ? "Reprendre" : "Départ"}
+                    </button>
+                    <button onClick={start} disabled={!visible.length}>Rejouer le départ</button>
+                    <div className="segmented">
+                      {SPEEDS.map((s) => <button key={s} className={s === speed ? "on" : ""} onClick={() => setSpeed(s)}>×{s}</button>)}
+                    </div>
+                    <input type="range" min={0} max={duration || 1} step={0.05} value={time} style={{ flex: 1, minWidth: 160 }}
+                           disabled={!visible.length || starting} onChange={(e) => seek(Number(e.target.value))} aria-label="Curseur temporel" />
+                    <span className="note">{time.toFixed(1)} s</span>
+                    <label className="note"><input type="checkbox" checked={showTrails} onChange={(e) => setShowTrails(e.target.checked)} /> Traînées</label>
+                    <RacelineToggle {...ideal} />
+                  </div>
+                </TrackCanvas>
+              ) : current?.error ? <p className="warn" role="alert">Impossible de charger cette course.</p>
                 : <p role="status">Chargement de la course…</p>}
-              <div className="controls">
-                <button className="primary" onClick={togglePlayback} disabled={!visible.length || starting}>
-                  {starting ? "Départ en cours" : playing ? "Pause" : time > 0 && time < duration ? "Reprendre" : "Départ"}
-                </button>
-                <button onClick={start} disabled={!visible.length}>Rejouer le départ</button>
-                <div className="segmented">
-                  {SPEEDS.map((s) => <button key={s} className={s === speed ? "on" : ""} onClick={() => setSpeed(s)}>×{s}</button>)}
-                </div>
-                <input type="range" min={0} max={duration || 1} step={0.05} value={time} style={{ flex: 1, minWidth: 160 }}
-                       disabled={!visible.length || starting} onChange={(e) => seek(Number(e.target.value))} aria-label="Curseur temporel" />
-                <span className="note">{time.toFixed(1)} s</span>
-                <label className="note"><input type="checkbox" checked={showTrails} onChange={(e) => setShowTrails(e.target.checked)} /> Traînées</label>
-                <RacelineToggle {...ideal} />
-              </div>
             </div>
             <div className="card" style={{ width: "min(100%, 380px)" }}>
-              <div className="card-title">Classement {playing || (time > 0 && time < duration) ? "en direct" : time >= duration && duration > 0 ? "final" : ""}</div>
-              <div className="standings" role="table" aria-label="Classement">
-                <div className="standings-row headings" role="row">
-                  <span role="columnheader">#</span><span role="columnheader">Agent</span><span role="columnheader">État</span>
-                </div>
-                <div className="standings-body" role="rowgroup" style={{ "--rows": live.length }}>
-                  {live.map((r, k) => (
-                    <div key={r.condition} className="standings-row racer" role="row" style={{ "--rank": k }}>
-                      <span role="cell">{k + 1}</span>
-                      <span role="cell"><span className="swatch" style={{ background: r.color }} />{conditionLabel(r.condition)}</span>
-                      <span role="cell">
-                        {r.finished ? <span className="chip good finish-chip">
-                            <span role="img" aria-label="Tour terminé">🏁</span> {r.replay.summary.lap_time.toFixed(1)} s
-                          </span>
-                          : r.done ? <span className="chip bad">{OUTCOME_LABELS[r.replay.summary.outcome]}</span>
-                            : `${Math.max(0, 100 * r.frame.progress).toFixed(0)} %`}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <Standings racers={live} selectedId={selectedId} onSelect={setFollowedId} title={standingsTitle} />
               <div className="card-title" style={{ marginTop: 16 }}>Participants</div>
               {racers.map((r) => (
                 <label key={r.condition} style={{ display: "block", fontSize: 13, margin: "4px 0" }}>
                   <input type="checkbox" checked={!hidden.has(r.condition)} onChange={() => {
                     const next = new Set(hidden);
                     if (next.has(r.condition)) next.delete(r.condition); else next.add(r.condition);
+                    if (r.condition === selectedId) setFollowedId(null);
                     setHidden(next);
                   }} />{" "}
                   <span className="swatch" style={{ background: r.color }} />{conditionLabel(r.condition)}

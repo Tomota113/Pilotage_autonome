@@ -3,7 +3,7 @@
 // Navigation : molette = zoom autour du curseur, glisser = déplacer (Maj + glisser quand la page
 // édite la piste avec `onPointer`), boutons + / − / recentrer / suivre la voiture.
 // `draw(ctx, view)` ajoute des éléments ; `onPointer(type, [x, y], event, view)` reçoit la souris en mètres.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bounds, SENSOR_ANGLES_DEG, trackBorders } from "../data/geometry.js";
 import { frameIndexAt, interpolateFrame } from "../data/interpolate.js";
 
@@ -11,6 +11,8 @@ const CAR_LENGTH = 5.5; // m
 const KERB_CURVATURE = 1 / 90; // vibreurs dans les virages de rayon < 90 m
 const TRAIL_SECONDS = 2;
 const IMPACT_MS = 420;
+const FOLLOW_ZOOM = 4;
+const FOLLOW_SMOOTHING_MS = 120;
 
 function curvatures(points) {
   const n = points.length;
@@ -36,6 +38,7 @@ export function speedColor(v, vmax = 60) {
 function makeView(width, height, cx, cy, scale) {
   return {
     scale,
+    center: [cx, cy],
     toScreen: ([x, y]) => [width / 2 + (x - cx) * scale, height / 2 - (y - cy) * scale],
     toWorld: ([sx, sy]) => [cx + (sx - width / 2) / scale, cy - (sy - height / 2) / scale],
   };
@@ -159,19 +162,30 @@ function drawFollowMarker(ctx, view, car) {
 
 export default function TrackCanvas({ track, cars = [], trails = [], rays = null, draw = null, onPointer = null,
                                       height = 520, extraPoints, fixedView = null, label,
-                                      followable = true, tools = true, getScene = null, animating = false }) {
+                                      followable = true, followedCarId, onFollowChange, tools = true,
+                                      getScene = null, animating = false, fullscreen = false, header, overlay, children }) {
   const ref = useRef(null);
+  const viewport = useRef(null);
+  const requestedFullscreenExit = useRef(false);
   const drag = useRef(null);
   const background = useRef(null);
   const impacts = useRef(new Map());
   const paint = useRef(null);
   const pending = useRef(null);
+  const followCamera = useRef(null);
   const [zoom, setZoom] = useState(1);
+  const [followZoom, setFollowZoom] = useState(FOLLOW_ZOOM);
+  const followingSelectedCar = followedCarId != null;
+  const activeZoom = followingSelectedCar ? followZoom : zoom;
+  const setActiveZoom = followingSelectedCar ? setFollowZoom : setZoom;
   const zoomRef = useRef(1);
-  zoomRef.current = zoom;
+  zoomRef.current = activeZoom;
   const [center, setCenter] = useState(null); // centre choisi à la main (mètres), sinon cadrage auto
   const [follow, setFollow] = useState(false);
-  const [width, setWidth] = useState(800);
+  const [size, setSize] = useState(null);
+  const { width = 800, height: canvasHeight = height, dpr = 1 } = size ?? {};
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState("");
 
   const geom = useMemo(() => {
     if (!track) return null;
@@ -181,28 +195,117 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
   }, [track]);
 
   // Nouveau circuit : on recadre
-  useEffect(() => { setZoom(1); setCenter(null); }, [track]);
+  useEffect(() => {
+    setZoom(1);
+    setFollowZoom(FOLLOW_ZOOM);
+    setCenter(null);
+    followCamera.current = null;
+  }, [track]);
 
-  // Largeur réelle du canvas (redessin au redimensionnement)
+  // En quittant le suivi, le cadrage libre repart de la vue d'ensemble.
+  useEffect(() => {
+    if (followingSelectedCar) {
+      setZoom(1);
+      setCenter(null);
+    }
+  }, [followingSelectedCar]);
+
+  // Le zoom conserve des coordonnées CSS ; le tampon de dessin suit la densité de l'écran.
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
-    const obs = new ResizeObserver(() => setWidth(el.clientWidth));
+    const measure = () => {
+      const width = el.clientWidth;
+      const height = el.clientHeight;
+      const dpr = window.devicePixelRatio || 1;
+      setSize((previous) => previous?.width === width && previous.height === height && previous.dpr === dpr
+        ? previous
+        : { width, height, dpr });
+    };
+    const obs = new ResizeObserver(measure);
     obs.observe(el);
-    return () => obs.disconnect();
+    window.addEventListener("resize", measure);
+    measure();
+    return () => {
+      obs.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, [geom]);
+
+  const stopFollowing = useCallback(() => {
+    if (onFollowChange) onFollowChange(null);
+    else setFollow(false);
+  }, [onFollowChange]);
+
+  const resetCamera = useCallback(() => {
+    setZoom(1);
+    setCenter(null);
+    stopFollowing();
+  }, [stopFollowing]);
+
+  useEffect(() => {
+    if (!fullscreen || !geom) return undefined;
+    const el = viewport.current;
+    let wasFullscreen = false;
+    const update = () => {
+      const next = document.fullscreenElement === el;
+      if (wasFullscreen && !next) {
+        // Le navigateur peut consommer Échap avant que la page reçoive la touche.
+        if (!requestedFullscreenExit.current && onFollowChange) resetCamera();
+        requestedFullscreenExit.current = false;
+      }
+      wasFullscreen = next;
+      setIsFullscreen(next);
+    };
+    document.addEventListener("fullscreenchange", update);
+    update();
+    return () => document.removeEventListener("fullscreenchange", update);
+  }, [fullscreen, geom, onFollowChange, resetCamera]);
+
+  const toggleFullscreen = useCallback(async () => {
+    const el = viewport.current;
+    if (!el) return;
+    setFullscreenError("");
+    try {
+      if (document.fullscreenElement === el) {
+        requestedFullscreenExit.current = true;
+        await document.exitFullscreen();
+      } else {
+        await el.requestFullscreen();
+      }
+    } catch {
+      requestedFullscreenExit.current = false;
+      setFullscreenError("Plein écran indisponible.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!fullscreen || !geom) return undefined;
+    const onKeyDown = (event) => {
+      if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === "Escape" && onFollowChange) resetCamera();
+      if (event.key.toLowerCase() === "f"
+          && !event.target.closest?.("input:not([type=range]):not([type=checkbox]), select, textarea, [contenteditable]")) {
+        event.preventDefault();
+        toggleFullscreen();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [fullscreen, geom, onFollowChange, resetCamera, toggleFullscreen]);
 
   const fitView = useMemo(() => {
     if (!geom) return null;
     const box = extraPoints?.length ? bounds([...geom.left, ...geom.right, ...extraPoints], 12) : geom.box;
-    const fit = Math.min((width - 32) / (box.maxX - box.minX), (height - 32) / (box.maxY - box.minY));
+    const fit = Math.min(Math.max(1, width - 32) / (box.maxX - box.minX),
+                         Math.max(1, canvasHeight - 32) / (box.maxY - box.minY));
     const target = center ?? [(box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2];
-    return makeView(width, height, target[0], target[1], fit * zoom);
-  }, [center, extraPoints, geom, height, width, zoom]);
+    return makeView(width, canvasHeight, target[0], target[1], fit * activeZoom);
+  }, [activeZoom, canvasHeight, center, extraPoints, geom, width]);
 
   function drawTrack(ctx, view) {
     ctx.fillStyle = "#101418";
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, width, canvasHeight);
     const px = Math.max(1, view.scale); // 1 m en pixels
 
     // Asphalte : surface entre les deux bords (règle pair-impair)
@@ -257,18 +360,38 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
 
   function render(now) {
     const canvas = ref.current;
-    if (!canvas || !geom || !width || !height) return false;
-    const dpr = window.devicePixelRatio || 1;
+    if (!canvas || !geom || !width || !canvasHeight) return false;
     const pixelWidth = Math.round(width * dpr);
-    const pixelHeight = Math.round(height * dpr);
+    const pixelHeight = Math.round(canvasHeight * dpr);
     if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
     if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
     const ctx = canvas.getContext("2d");
     if (!ctx) return false;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const scene = getScene?.() ?? { cars, rays };
-    const followed = follow ? scene.cars[0] : null;
-    const view = fixedView ?? (followed ? makeView(width, height, followed.x, followed.y, fitView.scale) : fitView);
+    const followed = followingSelectedCar
+      ? scene.cars.find((car) => car.id === followedCarId)
+      : (followedCarId === undefined && follow ? scene.cars[0] : null);
+    let view = fixedView ?? fitView;
+    let settling = false;
+    if (followed && !fixedView) {
+      let { x, y } = followed;
+      if (followingSelectedCar) {
+        // Un lissage dépendant du temps garde la même réponse à différentes cadences d'affichage.
+        const previous = followCamera.current;
+        const [cx, cy] = previous?.center ?? canvas._view?.center ?? fitView.center;
+        const elapsed = previous ? Math.min(now - previous.now, 50) : 16;
+        const blend = 1 - Math.exp(-elapsed / FOLLOW_SMOOTHING_MS);
+        x = cx + (x - cx) * blend;
+        y = cy + (y - cy) * blend;
+        settling = Math.hypot(x - followed.x, y - followed.y) * fitView.scale > 0.5;
+        if (!settling) ({ x, y } = followed);
+        followCamera.current = { center: [x, y], now };
+      }
+      view = makeView(width, canvasHeight, x, y, fitView.scale);
+    } else {
+      followCamera.current = null;
+    }
     canvas._view = view;
 
     // On réutilise le fond tant que la caméra reste fixe.
@@ -285,7 +408,7 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
         drawTrack(layerCtx, view);
         background.current = { layer, view, geom, width: pixelWidth, height: pixelHeight, dpr };
       }
-      ctx.drawImage(background.current.layer, 0, 0, width, height);
+      ctx.drawImage(background.current.layer, 0, 0, width, canvasHeight);
     }
 
     // Trajectoires : une couleur, ou la vitesse segment par segment
@@ -329,8 +452,13 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
         ctx.fill();
       });
     }
-    scene.cars.forEach((car) => drawCar(ctx, view, car));
-    if (followed) drawFollowMarker(ctx, view, followed);
+    scene.cars.forEach((car) => {
+      if (car !== followed) drawCar(ctx, view, car);
+    });
+    if (followed) {
+      drawCar(ctx, view, followed);
+      drawFollowMarker(ctx, view, followed);
+    }
     if (draw) draw(ctx, view);
 
     // Le flash continue à s'estomper même si la sortie de piste a arrêté le replay.
@@ -346,7 +474,7 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
       flashing = true;
     }
     impacts.current = currentImpacts;
-    return animating || flashing;
+    return animating || flashing || settling;
   }
 
   function queuePaint() {
@@ -373,14 +501,17 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
     const screen = [e.clientX - r.left, e.clientY - r.top];
     const panGesture = !onPointer || e.shiftKey || e.button === 1;
     if (type === "down" && panGesture && !fixedView) {
-      drag.current = { screen, center: canvas._view.toWorld([width / 2, height / 2]) };
-      setFollow(false);
+      const { center, scale } = canvas._view;
+      drag.current = { screen, center, scale };
+      if (follow || followingSelectedCar) setCenter(center);
+      if (followingSelectedCar) setZoom(activeZoom);
+      stopFollowing();
       canvas.setPointerCapture?.(e.pointerId);
       return;
     }
     if (drag.current) {
       if (type === "move") {
-        const s = canvas._view.scale;
+        const s = drag.current.scale;
         const [cx, cy] = drag.current.center;
         setCenter([cx - (screen[0] - drag.current.screen[0]) / s, cy + (screen[1] - drag.current.screen[1]) / s]);
       } else if (type === "up" || type === "cancel") {
@@ -405,35 +536,43 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
       const nz = Math.min(40, Math.max(0.5, z * Math.exp(-e.deltaY * 0.0015)));
       // Le point sous le curseur reste sous le curseur : le centre se rapproche de lui
       const ratio = z / nz;
-      const c = view.toWorld([width / 2, height / 2]);
       zoomRef.current = nz;
-      setZoom(nz);
-      setCenter([before[0] + (c[0] - before[0]) * ratio, before[1] + (c[1] - before[1]) * ratio]); // ignoré en suivi
+      setActiveZoom(nz);
+      if (!followingSelectedCar) {
+        const [cx, cy] = view.center;
+        setCenter([before[0] + (cx - before[0]) * ratio, before[1] + (cy - before[1]) * ratio]); // ignoré en suivi
+      }
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", onWheel);
-  }, [fixedView, width, height, geom]);
+  }, [fixedView, followingSelectedCar, geom, setActiveZoom]);
 
   const compact = width < 560; // petit canvas : boutons réduits à des symboles
+  const fullscreenLabel = isFullscreen ? "Quitter le plein écran" : "Plein écran";
   if (!track) return <div className="empty">Aucun circuit chargé.</div>;
-  return (
+  const stage = (
     <div className="canvas-wrap">
-      <canvas ref={ref} style={{ height, touchAction: "none", cursor: onPointer ? "crosshair" : "grab" }}
+      <canvas ref={ref} style={{ "--canvas-height": `${height}px`, touchAction: "none", cursor: onPointer ? "crosshair" : "grab" }}
               aria-label={label ?? `Circuit ${track.name}`} tabIndex={onPointer ? 0 : undefined}
               onPointerDown={pointer("down")} onPointerMove={pointer("move")} onPointerUp={pointer("up")}
               onPointerCancel={pointer("cancel")} onDoubleClick={pointer("double")}
               onContextMenu={pointer("context")} />
       {tools && !fixedView && (
         <div className="canvas-tools">
-          <button onClick={() => setZoom((z) => Math.min(40, z * 1.5))} aria-label="Zoomer" title="Zoomer">+</button>
-          <button onClick={() => setZoom((z) => Math.max(0.5, z / 1.5))} aria-label="Dézoomer" title="Dézoomer">−</button>
-          <button onClick={() => { setZoom(1); setCenter(null); setFollow(false); }} title="Recentrer">
+          <button onClick={() => setActiveZoom((z) => Math.min(40, z * 1.5))} aria-label="Zoomer" title="Zoomer">+</button>
+          <button onClick={() => setActiveZoom((z) => Math.max(0.5, z / 1.5))} aria-label="Dézoomer" title="Dézoomer">−</button>
+          <button onClick={resetCamera} title="Recentrer" aria-label="Recentrer">
             {compact ? "⟲" : "Recentrer"}
           </button>
-          {followable && (getScene || cars.length > 0) && (
-            <button className={follow ? "on" : ""} title="Suivre la voiture"
-                    onClick={() => { setFollow(!follow); if (!follow) setZoom((z) => Math.max(z, 4)); }}>
+          {followedCarId === undefined && followable && (getScene || cars.length > 0) && (
+            <button className={follow ? "on" : ""} title="Suivre la voiture" aria-label="Suivre la voiture" aria-pressed={follow}
+                    onClick={() => { setFollow(!follow); if (!follow) setZoom((z) => Math.max(z, FOLLOW_ZOOM)); }}>
               {compact ? "◎" : "Suivre la voiture"}
+            </button>
+          )}
+          {fullscreen && (
+            <button onClick={toggleFullscreen} aria-label={fullscreenLabel} title={`${fullscreenLabel} (F)`}>
+              {compact ? (isFullscreen ? "×" : "⛶") : fullscreenLabel}
             </button>
           )}
         </div>
@@ -441,6 +580,10 @@ export default function TrackCanvas({ track, cars = [], trails = [], rays = null
       {tools && !fixedView && !compact && (
         <div className="canvas-hint">Molette : zoom · glisser{onPointer ? " avec Maj" : ""} : déplacer</div>
       )}
+      {overlay}
+      {fullscreenError && <p className="canvas-error" role="status">{fullscreenError}</p>}
     </div>
   );
+  if (!fullscreen) return stage;
+  return <div className="race-viewport" ref={viewport}>{header}{stage}{children}</div>;
 }

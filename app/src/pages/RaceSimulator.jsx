@@ -106,9 +106,10 @@ export default function RaceSimulator() {
           <div className="grow stack">
             <div className="card" style={{ padding: 10 }}>
               <TrackCanvas track={track} trails={[{ ...visuals.trail, count: index + 1, speedColorMax, width: 2.5, alpha: 0.5 }]}
-                           draw={ideal.draw} getScene={getScene} animating={playing} height={560} />
-              <PlaybackControls />
-              <div className="controls"><RacelineToggle {...ideal} /></div>
+                           draw={ideal.draw} getScene={getScene} animating={playing} height={560} fullscreen>
+                <PlaybackControls />
+                <div className="controls"><RacelineToggle {...ideal} /></div>
+              </TrackCanvas>
             </div>
             <div className="card">
               <div className="card-title">Vitesse au cours de l'épisode <span className="hint">clic = aller à cet instant</span></div>

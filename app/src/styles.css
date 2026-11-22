@@ -117,12 +117,22 @@ tr.clickable:hover td { background: var(--panel-2); }
 .empty { color: var(--muted); padding: 28px; text-align: center; }
 canvas { display: block; width: 100%; background: #101215; border-radius: 8px; }
 .canvas-wrap { position: relative; }
+.canvas-wrap > canvas { height: var(--canvas-height); }
 .canvas-tools { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
 .canvas-tools button { background: #181b20e6; backdrop-filter: blur(4px); padding: 5px 9px; }
 .canvas-hint { position: absolute; left: 12px; bottom: 10px; font-size: 11.5px; color: var(--faint); pointer-events: none; }
+.canvas-error { position: absolute; bottom: 26px; left: 10px; margin: 0; padding: 4px 8px;
+  border-radius: 6px; background: var(--panel); color: var(--warn); }
+.race-viewport:fullscreen { display: flex; flex-direction: column; padding: 10px; background: var(--bg); overflow: auto; }
+.race-viewport:fullscreen > .canvas-wrap { flex: 1; min-height: 120px; }
+.race-viewport:fullscreen > .canvas-wrap > canvas { position: absolute; inset: 0; height: 100%; }
+.race-viewport:fullscreen > .controls { flex: none; }
+.camera-controls { margin-top: 0; font-size: 13px; }
+.camera-controls select { max-width: 100%; }
+.camera-telemetry { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 5px 9px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; font-variant-numeric: tabular-nums; }
 
 /* --- Départ et classement du championnat --- */
-.race-stage { position: relative; }
 .start-lights { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); display: flex; gap: 9px;
   padding: 10px 12px; background: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--radius);
   box-shadow: var(--shadow); pointer-events: none; }
@@ -139,6 +149,23 @@ canvas { display: block; width: 100%; background: #101215; border-radius: 8px; }
 .standings-row.headings { min-height: 32px; color: var(--faint); font-size: 12.5px; }
 .standings-row.racer { position: absolute; inset: 0 0 auto; height: var(--row-height); background: var(--panel);
   transform: translateY(calc(var(--rank) * var(--row-height))); transition: transform 180ms ease-out; }
+.standings-row.racer:hover { background: var(--panel-2); }
+.standings-row.racer.selected { background: var(--info-soft); box-shadow: inset 3px 0 var(--racer-color); }
+.standing-agent { display: block; width: 100%; padding: 0; background: transparent; border: 0;
+  text-align: left; font-size: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.standing-agent .swatch { background: var(--racer-color); }
+.standing-agent::after { content: ""; position: absolute; inset: 0; }
+.standing-agent:focus-visible { outline: none; }
+.standing-agent:focus-visible::after { outline: 2px solid var(--info); outline-offset: -2px; }
+.fullscreen-standings { display: none; }
+.race-viewport:fullscreen .fullscreen-standings { display: block; position: absolute; right: 10px; bottom: 10px;
+  width: min(300px, 68%); max-height: 55%; overflow: auto; padding: 6px 8px; border: 1px solid var(--line-2);
+  border-radius: 8px; background: #181b20f2; }
+.fullscreen-standings .card-title { margin-bottom: 2px; font-size: 13px; }
+.fullscreen-standings .standings { --row-height: 30px; font-size: 12px; }
+.fullscreen-standings .standings-row { gap: 4px; padding: 2px 5px; }
+.fullscreen-standings .standings-row.headings { min-height: 23px; }
+.fullscreen-standings .chip { padding: 1px 5px; font-size: 11px; }
 .finish-chip { animation: finish-chip 550ms ease-out; }
 @keyframes finish-chip {
   from { box-shadow: 0 0 12px var(--good); transform: scale(1.08); }

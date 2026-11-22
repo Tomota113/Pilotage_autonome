@@ -205,3 +205,29 @@ TQC s2, meilleur TQC à l'entraînement, boucle 0/24 ; TQC s0 (0 % de tours à l
 
 Décision : série v2 close. Pistes si on continue : plus de graines pour PPO μ variable et TQC (1 M de pas) ;
 μ variable pour TQC ; budget plus long pour PPO.
+
+## Correction : évaluation v2 refaite depuis la ligne de départ (22/11/2026, soir)
+
+Défaut trouvé grâce à l'application (les voitures ne partaient pas ensemble dans AI Championship) :
+`agents/evaluate.py` reprenait la configuration d'entraînement, donc `env.random_start: true` — les agents
+de la série v2 étaient évalués depuis un point de départ tiré au hasard (le tour complet était bien exigé,
+mais pas depuis la ligne), alors que les pilotes de référence partaient de la ligne. Correctif : l'évaluation
+force `random_start: false` (test `test_evaluation_starts_on_the_line_even_after_random_start_training`).
+Même défaut pour l'évaluation pendant l'entraînement des tabulaires (`train_tabular`), corrigé pour les
+prochains runs : leurs courbes progress.csv v2 viennent de départs aléatoires. Ancien fichier conservé :
+`results/eval_f1_v2_depart_aleatoire.csv`. Nouvelle évaluation `results/eval_f1_v2.csv` (tous les départs
+vérifiés identiques) :
+
+| Condition | μ 1,0 | μ 0,8 | μ 0,6 | Total (avant correction) | Par graine |
+|---|---|---|---|---|---|
+| Pilote classique | 8/8 | 8/8 | 8/8 | 24/24 | — |
+| Pilote trajectoire idéale | 8/8 | 8/8 | 7/8 | 23/24 | — |
+| PPO μ variable | 13/24 | 9/24 | 0/24 | **22/72** (23) | 9 / 5 / 8 |
+| PPO 2 × 64 | 10/24 | 5/24 | 0/24 | 15/72 (15) | 10 / 3 / 2 |
+| TQC | 6/24 | 5/24 | 0/24 | 11/72 (11) | 10 / 1 / 0 |
+| PPO 2 × 256 | 7/24 | 4/24 | 0/24 | 11/72 (11) | 0 / 11 / 0 |
+| Deep Monte-Carlo | 3/24 | 4/24 | 0/24 | 7/72 (5) | 4 / 3 / 0 |
+| Autres (DQN, QR-DQN, SAC, TD3, Deep SARSA, tabulaires) | 0 | 0 | 0 | 0 | — |
+
+Temps au tour / pilote classique : PPO 2 × 64 × 1,43 ; PPO μ variable × 1,48 ; PPO × 1,52 ; TQC × 1,85 ;
+Deep MC × 2,81 ; aucun tour d'agent plus rapide que le classique (0/66). Conclusions inchangées.

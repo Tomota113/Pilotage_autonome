@@ -52,9 +52,9 @@ def smooth_closed(points: np.ndarray, size: int = 5) -> np.ndarray:
     return np.stack([np.convolve(padded[:, c], kernel, mode="valid") for c in range(2)], axis=1)
 
 
-def polar_centerline(rng: np.random.Generator) -> np.ndarray:
+def polar_centerline(rng: np.random.Generator, scale: float = 1.0) -> np.ndarray:
     """Random closed polar curve r(theta) = R0 + sum_k a_k sin(k theta + phi_k), counter-clockwise."""
-    r0 = rng.uniform(230.0, 450.0)
+    r0 = rng.uniform(230.0, 450.0) * scale
     theta = np.linspace(0.0, 2.0 * math.pi, 4000, endpoint=False)
     r = np.full_like(theta, r0)
     for k in HARMONICS:
@@ -86,18 +86,20 @@ def min_gap(points: np.ndarray, spacing: float = SPACING) -> float:
     return float(dist[far].min()) if far.any() else math.inf
 
 
-def is_acceptable(points: np.ndarray) -> bool:
+def is_acceptable(points: np.ndarray, length_range=LENGTH_RANGE, min_radius=MIN_RADIUS,
+                  gap=MIN_GAP) -> bool:
     if len(points) < 50:
         return False
     length = float(np.hypot(*(np.roll(points, -1, axis=0) - points).T).sum())
     return (
-        LENGTH_RANGE[0] <= length <= LENGTH_RANGE[1]
-        and max_curvature(points) <= 1.0 / MIN_RADIUS
-        and min_gap(points) >= MIN_GAP
+        length_range[0] <= length <= length_range[1]
+        and max_curvature(points) <= 1.0 / min_radius
+        and min_gap(points) >= gap
     )
 
 
-def track_dict(points: np.ndarray, track_id: str, name: str, split: str, seed: int | None) -> dict:
+def track_dict(points: np.ndarray, track_id: str, name: str, split: str, seed: int | None,
+               width: float = WIDTH) -> dict:
     """Build a contract-compliant track dictionary from a closed centreline."""
     points = np.round(points, 3)
     n = len(points)
@@ -109,7 +111,7 @@ def track_dict(points: np.ndarray, track_id: str, name: str, split: str, seed: i
         "split": split,
         "seed": seed,
         "centerline": points.tolist(),
-        "width": [WIDTH] * n,
+        "width": [width] * n,
         "mu": [1.0] * n,
         "start": {"index": 0, "heading": round(float(math.atan2(seg[0, 1], seg[0, 0])), 6)},
         "checkpoints": [k * n // N_CHECKPOINTS for k in range(N_CHECKPOINTS)],
@@ -133,6 +135,30 @@ def generate_track(seed: int, split: str) -> dict:
     raise RuntimeError(f"no acceptable circuit found for seed {seed} after {MAX_ATTEMPTS} attempts")
 
 
+# Circuits générés « à l'échelle F1 » (démonstration de la série v2, jamais utilisés pour entraîner) :
+# plus longs, plus larges et aux virages moins serrés que gen_*, comme les vrais circuits.
+F1_SCALE = 1.7
+F1_WIDTH = 14.0
+F1_LENGTH_RANGE = (3000.0, 6000.0)
+F1_MIN_RADIUS = 30.0
+F1_SEEDS = range(20, 26)
+
+
+def generate_f1_track(seed: int) -> dict:
+    """F1-scale random circuit ``gen_f1_<seed>`` (split « demo »)."""
+    rng = np.random.default_rng(seed)
+    for _ in range(MAX_ATTEMPTS):
+        raw = polar_centerline(rng, F1_SCALE)
+        if len(raw) == 0:
+            continue
+        points = resample_closed(smooth_closed(resample_closed(raw)))
+        if is_acceptable(points, F1_LENGTH_RANGE, F1_MIN_RADIUS, 2.0 * F1_WIDTH):
+            data = track_dict(points, f"gen_f1_{seed:02d}", f"Générée F1 {seed:02d}", "demo", seed, F1_WIDTH)
+            Track(data)
+            return data
+    raise RuntimeError(f"no acceptable F1-scale circuit for seed {seed} after {MAX_ATTEMPTS} attempts")
+
+
 def demo_oval(straight: float = 300.0, radius: float = 60.0) -> dict:
     """Simple stadium: two straights joined by two half-circles, counter-clockwise, start on the bottom straight."""
     half = straight / 2.0
@@ -151,6 +177,7 @@ def generate_all() -> list[dict]:
     tracks = [generate_track(seed, "train") for seed in TRAIN_SEEDS]
     tracks += [generate_track(seed, "test") for seed in TEST_SEEDS]
     tracks.append(demo_oval())
+    tracks += [generate_f1_track(seed) for seed in F1_SEEDS]
     return tracks
 
 

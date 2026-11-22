@@ -185,7 +185,8 @@ def train_tabular(cfg: dict, run_dir: Path, run_id: str, tracks_dir: Path = TRAC
     }[cfg["algo"]]
     train_tracks = load_tracks(cfg["tracks"]["train"], tracks_dir)
     env = DiscreteStateWrapper(F1Env(cfg, train_tracks))
-    eval_env = DiscreteStateWrapper(F1Env(cfg, train_tracks))
+    eval_cfg = {**cfg, "env": {**cfg["env"], "random_start": False}}  # évaluation depuis la ligne de départ
+    eval_env = DiscreteStateWrapper(F1Env(eval_cfg, train_tracks))
     agent = agent_cls(env.observation_space.n, env.action_space.n, seed=cfg["seed"], **cfg["hyperparams"])
     agent = train(agent, env, eval_env, cfg["total_steps"], cfg["eval_every"], cfg["eval_episodes"],
                   run_dir / "progress.csv", run_meta(cfg, run_id))

@@ -275,6 +275,10 @@ def evaluate(agent: str, track_ids: list[str], mu_factors: list[float], episodes
     if run_id is None:
         raise ValueError("--run-id is required for the classic and racing-line drivers")
     env_config = copy.deepcopy(config) if config else {}
+    if config and config["env"].get("random_start"):
+        # L'évaluation part toujours de la ligne de départ, même si l'entraînement utilisait des
+        # départs aléatoires (série v2) : mêmes conditions que les pilotes de référence.
+        env_config["env"]["random_start"] = False
     if max_steps is not None:
         env_config.setdefault("env", {})["max_steps"] = max_steps
     if car is not None:

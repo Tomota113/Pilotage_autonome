@@ -91,3 +91,27 @@ def test_evaluate_sb3_checkpoint_with_activations(tmp_path, algo, action_space, 
     acts = replay["frames"][0]["activations"]
     assert [len(layer) for layer in acts] == [64, 64]
     assert rows[0]["mu_mode"] == "fixed" and rows[0]["split"] == "demo"
+
+
+def test_evaluation_starts_on_the_line_even_after_random_start_training(tmp_path):
+    """Série v2 : les runs entraînés avec des départs aléatoires sont évalués depuis la ligne de départ."""
+    import stable_baselines3 as sb3
+
+    cfg = valid_config()
+    cfg["algo"] = "ppo"
+    cfg["schema"] = "f1rl.config/1.3"
+    cfg["env"].update(action_space="continuous", max_steps=20, random_start=True)
+    run_dir = tmp_path / "runs" / "ppo_random_start"
+    (run_dir / "checkpoints").mkdir(parents=True)
+    (run_dir / "config.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
+    model = sb3.PPO("MlpPolicy", F1Env(cfg, load_tracks(["demo_oval"])), seed=0, device="cpu")
+    ckpt = run_dir / "checkpoints" / "step_0.zip"
+    model.save(ckpt)
+
+    starts = []
+    for agent, run_id in ((str(ckpt), None), ("classic", "classic_line")):
+        rows = evaluate(agent, ["demo_oval"], [1.0], run_id=run_id, eval_csv=tmp_path / "eval.csv",
+                        runs_dir=tmp_path / "runs")
+        frame = json.loads((tmp_path / rows[0]["replay_path"]).read_text(encoding="utf-8"))["frames"][0]
+        starts.append((frame["x"], frame["y"]))
+    assert starts[0] == pytest.approx(starts[1], abs=1.0)

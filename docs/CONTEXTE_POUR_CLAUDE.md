@@ -200,24 +200,25 @@ sur 2 cœurs, tout allait 2 à 3 fois moins vite que prévu (TQC ≈ 20 pas/s) ;
 les tabulaires ; 1 graine pour SAC, TD3, QR-DQN, Deep SARSA. Entraînement sur 17 circuits réels, départs
 aléatoires.
 
-**Évaluation sur les 8 circuits F1 jamais vus** (meilleur checkpoint, 1 épisode par circuit et par μ) —
+**Évaluation sur les 8 circuits F1 jamais vus** (meilleur checkpoint, départ sur la ligne, 1 épisode par circuit et par μ ; une première
+évaluation partait par erreur d'un point au hasard, corrigée le 22/11 au soir, écarts minimes) —
 tours bouclés :
 
 | Condition | Graines | μ 1,0 | μ 0,8 | μ 0,6 | Total | Par graine |
 |---|---|---|---|---|---|---|
 | Pilote classique | — | 8/8 | 8/8 | 8/8 | 24/24 | — |
 | Pilote trajectoire idéale | — | 8/8 | 8/8 | 7/8 | 23/24 | sortie à Suzuka, μ 0,6 |
-| PPO μ variable | 3 | 14/24 | 9/24 | 0/24 | **23/72** | 9 / 5 / 9 |
+| PPO μ variable | 3 | 13/24 | 9/24 | 0/24 | **22/72** | 9 / 5 / 8 |
 | PPO 2 × 64 | 3 | 10/24 | 5/24 | 0/24 | 15/72 | 10 / 3 / 2 |
 | PPO 2 × 256 | 3 | 7/24 | 4/24 | 0/24 | 11/72 | 0 / 11 / 0 |
-| TQC | 3 | 6/24 | 5/24 | 0/24 | 11/72 | 9 / 2 / 0 |
-| Deep Monte-Carlo | 3 | 3/24 | 2/24 | 0/24 | 5/72 | 1 / 4 / 0 |
+| TQC | 3 | 6/24 | 5/24 | 0/24 | 11/72 | 10 / 1 / 0 |
+| Deep Monte-Carlo | 3 | 3/24 | 4/24 | 0/24 | 7/72 | 4 / 3 / 0 |
 | DQN, Q-Learning, SARSA, Monte-Carlo | 3 | 0 | 0 | 0 | 0/72 | — |
 | SAC, TD3, QR-DQN, Deep SARSA | 1 | 0 | 0 | 0 | 0/24 | — |
 
 Temps au tour des agents (tours bouclés, rapport au pilote classique, même circuit et même μ) : PPO 2 × 64
-× 1,42 ; PPO μ variable × 1,48 ; PPO × 1,51 ; TQC × 1,79 ; Deep MC × 2,91. Aucun tour d'agent n'est plus
-rapide que le pilote classique (0 sur 65). Monte-Carlo tabulaire et Deep SARSA échouent surtout par arrêt
+× 1,43 ; PPO μ variable × 1,48 ; PPO × 1,52 ; TQC × 1,85 ; Deep MC × 2,81. Aucun tour d'agent n'est plus
+rapide que le pilote classique (0 sur 66). Monte-Carlo tabulaire et Deep SARSA échouent surtout par arrêt
 (voiture immobile, coupée après 100 pas sans progrès) ; les autres par sortie de piste.
 
 **Ce qu'il faut en retenir** :
@@ -230,7 +231,7 @@ rapide que le pilote classique (0 sur 65). Monte-Carlo tabulaire et Deep SARSA �
    conclure.
 5. Les agents sont prudents (≈ 40–50 % plus lents que le pilote classique), loin de la trajectoire idéale.
 6. Une bonne note à l'entraînement ne garantit pas la généralisation : TQC graine 2, le meilleur TQC à
-   l'entraînement, boucle 0/24 ; TQC graine 0 en boucle 9/24.
+   l'entraînement, boucle 0/24 ; TQC graine 0 en boucle 10/24.
 7. Les méthodes tabulaires (même à 5 760 états), DQN, SAC, TD3, QR-DQN et Deep SARSA ne bouclent aucun tour.
 
 Figures : `results/figures_v2/` (courbes d'apprentissage, taux de tours, robustesse à μ, temps au tour).

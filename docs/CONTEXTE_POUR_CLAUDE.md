@@ -8,11 +8,48 @@
 > sa configuration et sa graine) ; si une expérience n'a pas encore été faite, dis-le. **La série v2
 > (voiture F1 réaliste) est entraînée et évaluée** (22/11/2026) : résultats au § 13.
 >
+> **Dernière mise à jour : 22/11/2026, 21 h 30.** Les nouveautés depuis la version précédente de ce
+> document sont résumées au **§ 0** juste en dessous. Un guide débutant en 8 chapitres existe aussi
+> (`docs/guide/`, version web `docs/guide/guide_web.html`) : tu peux t'en servir pour expliquer.
+>
 > Dépôt : https://github.com/Tomota113/Pilotage_autonome (branche `main`). Documents détaillés dans le
 > dépôt : `docs/EXPLICATIONS.md` (mission par mission), `experiments/JOURNAL.md` (tous les runs et
 > résultats), `CLAUDE.md` (règles et modèle physique), `README.md` (commandes).
 
 ---
+
+## 0. Le point au 22/11/2026 au soir (ce qui a changé depuis la version précédente)
+
+1. **Série v2 terminée** (33 entraînements, 0 échec, nuit du 21 au 22/11 et journée du 22). Faute de temps de
+   calcul, l'étudiant a choisi de réduire : 3 graines pour PPO (3 variantes), TQC (graine 0 : 1 M de pas ;
+   graines 1 et 2 : 500 000), DQN, Deep Monte-Carlo et les tabulaires ; 1 graine pour SAC, TD3, QR-DQN et
+   Deep SARSA. Résultats complets au § 13.
+2. **Défaut trouvé grâce à l'application et corrigé** : la première évaluation v2 faisait partir les agents
+   d'un point tiré au hasard (l'option `random_start` de l'entraînement restait active), alors que les pilotes
+   de référence partaient de la ligne. L'évaluation force maintenant le départ sur la ligne (test ajouté) et
+   la série v2 a été réévaluée : écarts minimes (PPO μ variable 22/72 au lieu de 23/72, Deep MC 7/72 au lieu
+   de 5/72), conclusions inchangées. Ancien fichier conservé : `results/eval_f1_v2_depart_aleatoire.csv`.
+3. **Nouveaux circuits de démonstration** : 6 circuits générés « à l'échelle F1 » (`gen_f1_20` à `gen_f1_25`,
+   4,0–5,3 km, 14 m de large, rayon ≥ 30 m, jamais utilisés pour entraîner) + les 17 circuits réels
+   d'entraînement. Les meilleurs agents y ont roulé pour l'application (`results/eval_showcase_v2.csv`) :
+   tours bouclés (générés F1 /6 + réels /17) : classique 6 + 17, trajectoire idéale 6 + 16, PPO 2 × 64
+   6 + 14, PPO 6 + 12, PPO μ variable 6 + 11, TQC 5 + 11, QR-DQN 5 + 2, Deep MC 1 + 4, SAC 3 + 1, SARSA 2 + 1,
+   DQN 1 + 1, TD3 0 + 1, Deep SARSA / Monte-Carlo / Q-Learning 0. Ces circuits incluent des circuits
+   d'entraînement : ce n'est **pas** une mesure de généralisation (la mesure reste le tableau du § 13).
+4. **Circuits dessinés par l'étudiant** : dans le Track Designer, « Enregistrer et faire rouler les agents »
+   enregistre `tracks/custom_<nom>.json` et fait rouler les 2 références + la meilleure graine de chaque
+   algorithme (`tools/custom_race.py`, résultats dans `results/eval_custom.csv`). L'étudiant a dessiné un
+   circuit « ovale » (`custom_ovale`).
+5. **Application refaite pour la projection en soutenance** (détail au § 11) : lecture fluide, AI Championship
+   façon retransmission TV, voiture fantôme et télémétrie, Performance Analytics en onglets, Neural Network
+   Explorer avec le schéma animé des 256 neurones par couche, mode présentation (touche P), thème clair.
+6. **Guide débutant** : `docs/guide/00_LIRE_D_ABORD.md` à `07_questions_du_professeur.md` (bases du RL,
+   simulateur, MDP, algorithmes, protocole et résultats, code, 25 questions probables du professeur), chiffres
+   vérifiés contre le journal ; version web générée par `python tools/build_guide.py`.
+7. **Codex** (agent de code d'OpenAI, modèle gpt-6.2-sol) a écrit une bonne partie de l'interface et le premier
+   jet du guide ; Claude Code a relu, testé et corrigé (ex. grille de départ hors piste, choix des replays,
+   départ aléatoire). Deux commits (`2ed42bd`, `4ac0192`) ont été faits par un outil extérieur non identifié ;
+   leur contenu a été vérifié.
 
 ## 1. Le projet en une phrase
 
@@ -42,11 +79,13 @@ env/        f1_env.py : environnement Gymnasium F1Env (observation, action, réc
 agents/     train.py (entraînement), evaluate.py (évaluation, replays), algorithms.py (SB3/sb3-contrib),
             classic_driver.py, raceline_driver.py, tabular.py + qlearning.py / sarsa.py / monte_carlo.py,
             discretize.py (états discrets), deep_value.py (Deep SARSA, Deep Monte-Carlo)
-tracks/     41 circuits .json (16 générés gen_*/demo_oval, 8 f1_*, 17 real_*)
+tracks/     47 circuits .json (16 générés gen_*/demo_oval, 6 gen_f1_*, 8 f1_*, 17 real_*) + custom_* (dessinés)
 configs/    63 configurations .yaml (24 série v1, 39 série v2)
 tools/      generate_tracks, import_f1_tracks, validate, make_configs, run_night.sh, run_v2.sh,
-            evaluate_all, evaluate_f1, make_showcase, plots, benchmark, start_app.sh
-server/     FastAPI : API des runs, fichiers, trajectoire idéale, replays, WebSocket (Training Center)
+            run_v2_reduced.sh, evaluate_all, evaluate_f1, make_showcase (--series v2), custom_race,
+            plots, benchmark, build_guide, start_app.sh
+server/     FastAPI : API des runs, fichiers, trajectoire idéale, replays, circuits dessinés et leur course
+            (POST /custom-tracks, POST/GET /custom-tracks/{id}/race), WebSocket (Training Center)
 app/        React + Vite + Canvas 2D : 7 modules (voir § 11)
 runs/       un dossier par entraînement (config.yaml, progress.csv, checkpoints/, replays/) — pas dans git
 results/    eval*.csv et figures — pas dans git (régénérables)
@@ -84,6 +123,8 @@ Même bicyclette, plus :
   - **Entraînement série v2** : Austin, Brands Hatch, Hockenheim, Indianapolis, Melbourne, Mexico,
     Montréal, Moscou, Norisring, Nürburgring, Oschersleben, Bahreïn, Interlagos, Sepang, Shanghai,
     Sotchi, Yas Marina.
+- **Générés à l'échelle F1** (démonstration seulement) : `gen_f1_20` à `gen_f1_25`, 4,0–5,3 km, 14 m, rayon ≥ 30 m.
+- **Dessinés** dans le Track Designer : `custom_*` (ex. `custom_ovale`).
 
 ## 6. Le MDP (`env/f1_env.py`)
 
@@ -168,13 +209,31 @@ pas de chicane) ; presque tous sortent à la 1re chicane de Monza (16 % du tour)
 
 ## 11. Application et serveur
 
-- Lancer : `.venv/bin/uvicorn server.app:app --port 8000` puis http://localhost:8000 (application compilée)
-  ou `tools/start_app.sh` (développement, http://localhost:5173).
-- Modules : **Accueil** (projet et chiffres clés) ; **Race Simulator** (rejouer un épisode : circuit zoomable,
-  capteurs, profil de vitesse, trajectoire idéale, choix de la voiture) ; **AI Championship** (tous les
-  agents sur le même circuit, classement en direct) ; **Performance Analytics** (barres, robustesse, courbes
-  d'apprentissage, section circuits F1) ; **Neural Network Explorer** (schéma entrées → couches → sorties) ;
-  **Track Designer** ; **Training Center** (lancer et suivre un entraînement depuis le navigateur).
+- Lancer : `.venv/bin/uvicorn server.app:app --port 8000` puis http://localhost:8000 (application compilée ;
+  après une modification de l'interface : `cd app && npm run build`) ou `tools/start_app.sh` (développement).
+- **Accueil** : couverture de soutenance, 4 chiffres clés calculés depuis `results/eval_f1_v2.csv` (meilleur agent
+  30,6 % = 22/72, pilote classique 100 %, trajectoire idéale 95,8 % = 23/24, 8 circuits de test), boucle
+  « la voiture perçoit → le réseau décide → le simulateur avance → l'agent est récompensé ».
+- **Race Simulator** : rejoue un épisode ; piste dessinée (vibreurs, secteurs, herbe, piste mouillée et pluie à
+  μ 0,8 / 0,6) ; **voiture fantôme** (pilote classique ou trajectoire idéale) avec l'écart en secondes au même
+  point du tour ; **télémétrie** (vitesse, volant, pédale selon la distance) ; tableau de bord ; plein écran (F).
+- **AI Championship** : tous les agents sur un même circuit, départ avec 5 feux, grille en épi (décalage
+  seulement visuel, le long du tracé, effacé 1,5 s après le départ), tour de chronométrage façon TV (écart au
+  leader, gains de places, meilleur tour en violet, SORTIE / ARRÊT), caméra libre ou qui suit une voiture
+  (clic dans le classement, flèches ↑ ↓, Échap), ralenti, podium final. Les circuits sont groupés : F1 de test,
+  réels d'entraînement, générés F1, « Mes circuits », générés v1.
+- **Performance Analytics** : série v2 par défaut (v1 au choix), encadré « Ce qu'il faut retenir » calculé, 7
+  onglets : tours bouclés (point par graine), carte agent × circuit, fins d'essai (tour / sortie / arrêt / temps),
+  chronos relatifs au pilote classique, robustesse à μ, circuits de démonstration, courbes d'apprentissage ;
+  « Comment lire ce graphique », tableaux, glossaire.
+- **Neural Network Explorer** : schéma animé 12 entrées (avec valeurs physiques) → 256 → 256 → sorties (volant
+  et pédale pour la v2), neurones colorés par activation, liaisons des plus actifs, clic sur un neurone = sa
+  courbe ; courbes de vitesse / volant / pédale ; pas à pas (Espace). Les replays DQN / QR-DQN / Deep SARSA /
+  Deep MC n'enregistrent pas les 9 valeurs Q (seule l'action choisie est affichée).
+- **Track Designer** (dessiner un circuit, y faire rouler les agents) ; **Training Center** (lancer et suivre un
+  entraînement).
+- **Mode présentation** (bouton ou touche P) : textes agrandis, contrastes renforcés, ← → pour changer de page ;
+  thème clair pour une salle éclairée.
 - Sans serveur, l'application affiche des données factices `fixture_*.json` marquées « FIXTURE ».
 
 ## 12. Défauts trouvés et corrigés (à savoir expliquer)
@@ -187,7 +246,9 @@ pas de chicane) ; presque tous sortent à la 1re chicane de Monza (16 % du tour)
    flottants ne le comptait jamais → tolérance d'arrondi.
    Les deux ont été trouvés en testant le pilote trajectoire idéale ; toutes les évaluations ont été refaites
    (effet faible sur les agents, conclusions inchangées).
-3. **Premier essai de la série v2 (arrêté)** : PPO avait appris « plein gaz » (frein moyen 0,03), entrant
+3. **Départ aléatoire à l'évaluation (série v2)** : vu dans AI Championship (voitures qui ne partaient pas
+   ensemble) ; l'évaluation héritait de `random_start: true` ; corrigé, série v2 réévaluée (§ 0, § 13).
+4. **Premier essai de la série v2 (arrêté)** : PPO avait appris « plein gaz » (frein moyen 0,03), entrant
    dans les virages à 230–290 km/h pour une limite de 50–160 km/h. Causes : horizon trop court (γ = 0,99 ≈
    5 s), sortie trop peu chère à grande vitesse, gaz et frein séparés et bruités. Corrections : γ = 0,995,
    sortie −(10 + 0,01 v²), action « pédale ».

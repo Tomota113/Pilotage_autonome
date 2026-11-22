@@ -1,12 +1,12 @@
 # F1-RL Lab — état complet du projet (à donner à Claude en conversation)
 
-> **À l'attention de Claude.** Ce document décrit l'état du projet au **21/11/2026**. Tu as déjà
+> **À l'attention de Claude.** Ce document décrit l'état du projet au **22/11/2026**. Tu as déjà
 > expliqué à l'étudiant (L3 Intelligence Artificielle, projet en binôme) une **première version** très
 > différente. Presque tout a changé depuis. Ton rôle : l'aider à **comprendre et défendre** le projet
 > devant son professeur, en français simple et rigoureux. Règles absolues du projet : **aucun résultat
 > inventé** (chaque chiffre vient d'un vrai run, noté dans `experiments/JOURNAL.md` avec son `run_id`,
 > sa configuration et sa graine) ; si une expérience n'a pas encore été faite, dis-le. **La série v2
-> (voiture F1 réaliste) est prête mais pas encore entraînée** : ses résultats n'existent pas encore.
+> (voiture F1 réaliste) est entraînée et évaluée** (22/11/2026) : résultats au § 13.
 >
 > Dépôt : https://github.com/Tomota113/Pilotage_autonome (branche `main`). Documents détaillés dans le
 > dépôt : `docs/EXPLICATIONS.md` (mission par mission), `experiments/JOURNAL.md` (tous les runs et
@@ -115,7 +115,7 @@ Même bicyclette, plus :
 
 ## 8. Les algorithmes
 
-| Famille | Série v1 (fait) | Série v2 (prêt, non entraîné) |
+| Famille | Série v1 | Série v2 |
 |---|---|---|
 | Acteur-critique, actions continues | PPO, PPO μ aléatoire, PPO λ = 0, SAC | PPO, PPO μ variable, PPO 2×64 (ablation), SAC, **TD3**, **TQC** |
 | Q-Learning profond | DQN | DQN, **QR-DQN** (distributionnel) |
@@ -192,21 +192,54 @@ pas de chicane) ; presque tous sortent à la 1re chicane de Monza (16 % du tour)
    5 s), sortie trop peu chère à grande vitesse, gaz et frein séparés et bruités. Corrections : γ = 0,995,
    sortie −(10 + 0,01 v²), action « pédale ».
 
-## 13. Série v2 : ce qui reste à faire
+## 13. Série v2 : résultats réels (voiture F1, circuits réels)
 
-- 13 conditions × 3 graines (`configs/*_f1*_s{0,1,2}.yaml`), voiture F1, 17 circuits réels, départs
-  aléatoires. Débits mesurés sur le PC (i3-1115G4) : PPO ≈ 1 440 pas/s (4 environnements), DQN ≈ 1 380,
-  tabulaires ≈ 2 600, Deep SARSA ≈ 410, TD3 ≈ 185, QR-DQN ≈ 175, SAC ≈ 130, TQC ≈ 66.
-- Durée : ≈ 5 h 30 par graine en 3 files parallèles (`tools/run_v2.sh 0` puis `tools/run_v2.sh`).
-  **Pas encore lancé** : l'étudiant donnera le signal. Ensuite : `python -m tools.evaluate_f1 --series v2`
-  (agents + 2 pilotes de référence sur les 8 circuits F1, 6 000 pas max par épisode) et
-  `python -m tools.plots --series v2`.
-- Sur un essai court de 400 000 pas, la voiture roule mais ne boucle pas encore de tour : on ne sait pas
-  encore si les agents seront bons ; il faut les vrais entraînements.
+**Entraînement** (nuit du 21 au 22/11/2026 et journée du 22, sur le PC i3) : 33 runs, 0 échec. En parallèle
+sur 2 cœurs, tout allait 2 à 3 fois moins vite que prévu (TQC ≈ 20 pas/s) ; l'étudiant a choisi de réduire :
+3 graines pour PPO (3 variantes), TQC (graine 0 : 1 M de pas ; graines 1 et 2 : 500 000), DQN, Deep MC et
+les tabulaires ; 1 graine pour SAC, TD3, QR-DQN, Deep SARSA. Entraînement sur 17 circuits réels, départs
+aléatoires.
+
+**Évaluation sur les 8 circuits F1 jamais vus** (meilleur checkpoint, 1 épisode par circuit et par μ) —
+tours bouclés :
+
+| Condition | Graines | μ 1,0 | μ 0,8 | μ 0,6 | Total | Par graine |
+|---|---|---|---|---|---|---|
+| Pilote classique | — | 8/8 | 8/8 | 8/8 | 24/24 | — |
+| Pilote trajectoire idéale | — | 8/8 | 8/8 | 7/8 | 23/24 | sortie à Suzuka, μ 0,6 |
+| PPO μ variable | 3 | 14/24 | 9/24 | 0/24 | **23/72** | 9 / 5 / 9 |
+| PPO 2 × 64 | 3 | 10/24 | 5/24 | 0/24 | 15/72 | 10 / 3 / 2 |
+| PPO 2 × 256 | 3 | 7/24 | 4/24 | 0/24 | 11/72 | 0 / 11 / 0 |
+| TQC | 3 | 6/24 | 5/24 | 0/24 | 11/72 | 9 / 2 / 0 |
+| Deep Monte-Carlo | 3 | 3/24 | 2/24 | 0/24 | 5/72 | 1 / 4 / 0 |
+| DQN, Q-Learning, SARSA, Monte-Carlo | 3 | 0 | 0 | 0 | 0/72 | — |
+| SAC, TD3, QR-DQN, Deep SARSA | 1 | 0 | 0 | 0 | 0/24 | — |
+
+Temps au tour des agents (tours bouclés, rapport au pilote classique, même circuit et même μ) : PPO 2 × 64
+× 1,42 ; PPO μ variable × 1,48 ; PPO × 1,51 ; TQC × 1,79 ; Deep MC × 2,91. Aucun tour d'agent n'est plus
+rapide que le pilote classique (0 sur 65). Monte-Carlo tabulaire et Deep SARSA échouent surtout par arrêt
+(voiture immobile, coupée après 100 pas sans progrès) ; les autres par sortie de piste.
+
+**Ce qu'il faut en retenir** :
+1. La série v2 généralise : 5 conditions bouclent des tours sur des circuits F1 jamais vus (série v1 :
+   2 tours sur 576 essais). Entraîner sur de vrais circuits avec des départs aléatoires a été décisif.
+2. Meilleur agent : PPO entraîné avec adhérence variable, seul dont les 3 graines bouclent des tours, et
+   meilleur à μ 0,8 (même conclusion qu'en série v1 : la variété à l'entraînement rend robuste).
+3. À μ 0,6, aucun agent ne boucle un tour ; les pilotes de référence, qui connaissent μ, si.
+4. Le grand réseau n'aide pas PPO ici (2 × 64 : 15/72 ; 2 × 256 : 11/72) ; 3 graines ne suffisent pas à
+   conclure.
+5. Les agents sont prudents (≈ 40–50 % plus lents que le pilote classique), loin de la trajectoire idéale.
+6. Une bonne note à l'entraînement ne garantit pas la généralisation : TQC graine 2, le meilleur TQC à
+   l'entraînement, boucle 0/24 ; TQC graine 0 en boucle 9/24.
+7. Les méthodes tabulaires (même à 5 760 états), DQN, SAC, TD3, QR-DQN et Deep SARSA ne bouclent aucun tour.
+
+Figures : `results/figures_v2/` (courbes d'apprentissage, taux de tours, robustesse à μ, temps au tour).
+Détail : `experiments/JOURNAL.md`, `results/eval_f1_v2.csv`.
 
 ## 14. Limites à dire honnêtement
 
-3 graines seulement (forte variance) ; un épisode déterministe par circuit et μ (départ fixe) ; modèle de
+3 graines seulement, voire 1 en série v2 pour SAC, TD3, QR-DQN, Deep SARSA (forte variance) ; budgets
+TQC différents selon la graine ; un épisode déterministe par circuit et μ (départ fixe) ; modèle de
 voiture simplifié malgré l'aéro (pas de transfert de charge, pas de modèle de pneu détaillé, pas d'usure) ;
 trajectoire de courbure minimale ≠ trajectoire de temps minimal exacte ; tracés TUM de ~2019 (Barcelone et
 Zandvoort ont changé depuis) ; les pilotes de référence connaissent μ, pas les agents.

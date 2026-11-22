@@ -162,3 +162,46 @@ SAC, TD3, QR-DQN et Deep SARSA restent à une graine. td3_f1_s1 arrêté à 200 
 Premiers tours bouclés en série v2 (PPO). ppo_f1_s0 : politique bloquée (diagnostic sur 8 départs :
 sorties de piste entre 7 et 21 % du tour, ou arrêt complet sur Shanghai). Grande variance entre graines.
 Ces chiffres sont des évaluations d'entraînement ; l'évaluation sur les circuits F1 suivra.
+
+## Série v2 — fin des entraînements et évaluation sur les 8 circuits F1 (22/11/2026)
+
+Entraînements terminés à 17 h 52 (33 runs, 0 échec ; `tools/run_v2_reduced.sh`). Évaluation
+`python -m tools.evaluate_f1 --series v2` (17 h 52 → 17 h 59) : meilleur checkpoint de chaque run (choisi sur
+les évaluations d'entraînement), voiture F1_2024, 8 circuits F1 jamais vus × μ ∈ {1,0 ; 0,8 ; 0,6}, 1 épisode
+déterministe depuis la ligne de départ, 6 000 pas max. Résultats : `results/eval_f1_v2.csv`, figures
+`results/figures_v2/`.
+
+**Tours bouclés** (24 essais par graine) :
+
+| Condition | Graines | μ 1,0 | μ 0,8 | μ 0,6 | Total | Par graine (s0 / s1 / s2) |
+|---|---|---|---|---|---|---|
+| Pilote classique | — | 8/8 | 8/8 | 8/8 | 24/24 | — |
+| Pilote trajectoire idéale | — | 8/8 | 8/8 | 7/8 | 23/24 | — (sortie à Suzuka, μ 0,6) |
+| PPO μ variable (2 × 256) | 3 | 14/24 | 9/24 | 0/24 | **23/72** | 9 / 5 / 9 |
+| PPO 2 × 64 (ablation) | 3 | 10/24 | 5/24 | 0/24 | 15/72 | 10 / 3 / 2 |
+| PPO (2 × 256) | 3 | 7/24 | 4/24 | 0/24 | 11/72 | 0 / 11 / 0 |
+| TQC | 3 (s0 : 1 M pas ; s1, s2 : 500 000) | 6/24 | 5/24 | 0/24 | 11/72 | 9 / 2 / 0 |
+| Deep Monte-Carlo | 3 | 3/24 | 2/24 | 0/24 | 5/72 | 1 / 4 / 0 |
+| DQN, Q-Learning, SARSA, Monte-Carlo | 3 | 0 | 0 | 0 | 0/72 chacun | — |
+| SAC, TD3, QR-DQN, Deep SARSA | 1 | 0 | 0 | 0 | 0/24 chacun | — |
+
+**Temps au tour** (tours bouclés seulement, rapport au pilote classique sur le même circuit et le même μ) :
+PPO 2 × 64 × 1,42 en moyenne (1,19 à 1,65), PPO μ variable × 1,48, PPO × 1,51, TQC × 1,79, Deep MC × 2,91.
+Aucun des 65 tours d'agents n'est plus rapide que le pilote classique. Temps de référence à μ 1,0 (classique /
+trajectoire idéale, s) : Monza 100,5 / 91,4 ; Spa 128,4 / 113,7 ; Silverstone 120,6 / 95,7 ; Suzuka 113,7 / 98,5 ;
+Hungaroring 102,4 / 89,5 ; Barcelone 101,8 / 88,6 ; Red Bull Ring 83,2 / 76,2 ; Zandvoort 94,2 / 83,4.
+
+**Échecs** (épisodes sans tour) : Monte-Carlo tabulaire s'arrête presque toujours (67 « arrêt » sur 72 :
+100 pas sans progrès, hypothèse de la voiture immobile confirmée) ; Deep SARSA idem (18/24) ; Deep MC roule
+trop lentement (37 épisodes coupés à 6 000 pas) ; les autres sortent surtout de piste.
+
+**Lecture.** (1) Par rapport à la série v1 (2 tours sur 576 essais sur ces circuits), la série v2 généralise :
+5 conditions bouclent des tours sur des circuits F1 jamais vus. (2) Le meilleur est PPO entraîné avec μ variable,
+le seul dont les 3 graines bouclent des tours ; c'est aussi le meilleur à μ 0,8. (3) À μ 0,6, aucun agent ne
+boucle un tour (les deux pilotes de référence, qui connaissent μ, oui). (4) Le grand réseau n'aide pas PPO ici
+(2 × 64 : 15/72, 2 × 256 : 11/72), mais 3 graines ne suffisent pas pour conclure. (5) Les agents sont prudents :
+≈ 40 à 50 % plus lents que le pilote classique. (6) Bonne note à l'entraînement ≠ bonne généralisation :
+TQC s2, meilleur TQC à l'entraînement, boucle 0/24 ; TQC s0 (0 % de tours à l'entraînement) en boucle 9/24.
+
+Décision : série v2 close. Pistes si on continue : plus de graines pour PPO μ variable et TQC (1 M de pas) ;
+μ variable pour TQC ; budget plus long pour PPO.

@@ -7,4 +7,7 @@ export default {
   gamma_d: { tex: String.raw`\gamma = 0{,}99 \;\longrightarrow\; \gamma = 0{,}995`, px: 36, color: "#F2C230", label: "γ = 0,99 → γ = 0,995" },
   crash_d: { tex: String.raw`-10 \;\longrightarrow\; -\left(10 + 0{,}01\,v^{2}\right)`, px: 36, color: "#F2C230", label: "−10 → −(10 + 0,01 v²)" },
   pedal_d: { tex: String.raw`-1\ (\text{frein}) \;\le\; u \;\le\; +1\ (\text{gaz})`, px: 36, color: "#F2C230", label: "pédale entre −1 et +1" },
+  ql: { tex: String.raw`Q(s,a) \;\leftarrow\; Q(s,a) + \alpha\Big[\, r + \gamma\,{\color{#F2C230}\max_{a'} Q(s',a')} - Q(s,a) \,\Big]`, px: 40, color: "#E9ECEF", label: "Q(s,a) ← Q(s,a) + α [ r + γ max sur a' de Q(s',a') − Q(s,a) ]" },
+  sarsa: { tex: String.raw`Q(s,a) \;\leftarrow\; Q(s,a) + \alpha\Big[\, r + \gamma\,{\color{#F2C230}Q(s',a')} - Q(s,a) \,\Big]`, px: 40, color: "#E9ECEF", label: "Q(s,a) ← Q(s,a) + α [ r + γ Q(s',a') − Q(s,a) ]" },
+  mc: { tex: String.raw`Q(s,a) \;\leftarrow\; Q(s,a) + \alpha\Big[\, {\color{#F2C230}G_t} - Q(s,a) \,\Big] \qquad {\color{#F2C230}G_t} = r_t + \gamma\, r_{t+1} + \gamma^{2} r_{t+2} + \cdots`, px: 40, color: "#E9ECEF", label: "Q(s,a) ← Q(s,a) + α [ G_t − Q(s,a) ], avec G_t = r_t + γ r_t+1 + γ² r_t+2 + …" },
 };

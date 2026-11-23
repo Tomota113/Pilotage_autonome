@@ -1,0 +1,16 @@
+<section id="mdp" class="light" data-transition="fade">
+<div class="kerb"></div>
+<div class="head">
+<p class="eyebrow">La récompense</p>
+<h2>Avancer vite, sans sortir de la piste</h2>
+</div>
+<p class="formula rise" style="background:#FBFAF7; border-color:#E4E0D7; color:#14181D;">r = 0,1 · Δs − 0,01 − (10 + 0,01 · v²) · [sortie] + 50 · [tour] − 0,05 · |Δδ|</p>
+<div class="cards">
+<div class="card rise" style="--i:1;"><p class="label">0,1 · Δs</p><p class="text">Les mètres gagnés le long de la piste, plafonnés pour qu’on ne puisse pas couper.</p></div>
+<div class="card rise" style="--i:2;"><p class="label">− (10 + 0,01 v²)</p><p class="text">Une sortie coûte d’autant plus cher qu’on roule vite : environ −79 à 300 km/h, contre −10 avant.</p></div>
+<div class="card rise" style="--i:3;"><p class="label">+ 50 et 20 checkpoints</p><p class="text">Le tour ne compte que si les 20 points de passage sont franchis dans l’ordre.</p></div>
+</div>
+<p class="small soft rise" style="--i:4; width:1500px;">Fin d’un épisode : sortie de piste ou tour bouclé ; coupé après 3 000 pas ou 100 pas sans progrès. γ = 0,995 : l’agent tient compte d’environ 10 s de course devant lui.</p>
+<div class="footer"><span>F1-RL Lab</span><span class="num"></span></div>
+<aside>La récompense est le cœur du problème. On récompense la progression le long de la ligne centrale, on retire un petit coût par pas pour pousser à aller vite, et on pénalise la sortie de piste. Cette pénalité dépend de la vitesse au carré, comme l’énergie cinétique, une idée reprise de Gran Turismo Sophy de Sony AI. Le dernier terme pénalise les coups de volant brusques. Les checkpoints empêchent de tricher en coupant le circuit.</aside>
+</section>

@@ -1,0 +1,16 @@
+<section id="vitesse" class="light" data-transition="fade">
+<div class="kerb"></div>
+<div class="head">
+<p class="eyebrow">Vitesse</p>
+<h2>Quand ils bouclent, les agents roulent prudemment</h2>
+</div>
+<div class="cards">
+<div class="card rise"><p class="label">PPO petit réseau</p><p class="value">× 1,43</p><p class="text">le temps au tour du pilote classique</p></div>
+<div class="card rise" style="--i:1;"><p class="label">PPO adhérence variable</p><p class="value">× 1,48</p><p class="text">le temps au tour du pilote classique</p></div>
+<div class="card rise" style="--i:2;"><p class="label">TQC</p><p class="value">× 1,85</p><p class="text">le temps au tour du pilote classique</p></div>
+<div class="card rise" style="--i:3;"><p class="label">Deep Monte-Carlo</p><p class="value">× 2,81</p><p class="text">le temps au tour du pilote classique</p></div>
+</div>
+<p class="rise" style="--i:4; width:1500px;"><b>0 tour sur 66</b> bouclés par un agent est plus rapide que le pilote classique, qui ne vise pourtant que 85 % de la vitesse limite des virages.</p>
+<div class="footer"><span>Même circuit, même adhérence · moyennes sur les tours bouclés</span><span class="num"></span></div>
+<aside>Les tours bouclés par les agents sont lents : environ 40 à 50 % plus lents que le pilote classique pour PPO. Les agents ont appris à survivre plus qu’à aller vite, ce qui est logique : une sortie coûte très cher dans la récompense. Le pilote trajectoire idéale, lui, est encore plus rapide que le classique.</aside>
+</section>

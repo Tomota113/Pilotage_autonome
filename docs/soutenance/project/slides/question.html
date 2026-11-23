@@ -1,0 +1,14 @@
+<section id="question" class="light" data-transition="fade">
+<div class="kerb"></div>
+<div class="head">
+<p class="eyebrow">La question</p>
+<h2 style="width:1500px;">Un agent peut-il apprendre seul à boucler un tour sur un circuit qu’il n’a jamais vu ?</h2>
+</div>
+<div class="cards">
+<div class="card rise"><p class="label">Apprendre seul</p><p class="text">Aucune trajectoire à imiter : l’agent essaie, reçoit une récompense, et corrige sa façon de piloter.</p></div>
+<div class="card rise" style="--i:1;"><p class="label">Généraliser</p><p class="text">On le teste sur 8 vrais circuits de F1 qu’il n’a jamais vus pendant l’entraînement.</p></div>
+<div class="card rise" style="--i:2;"><p class="label">Rester fiable</p><p class="text">On baisse l’adhérence : piste humide (μ × 0,8), puis glissante (μ × 0,6).</p></div>
+</div>
+<div class="footer"><span>F1-RL Lab</span><span class="num"></span></div>
+<aside>Trois mots résument le projet. Apprendre seul : contrairement à l’apprentissage supervisé, on ne donne aucune bonne réponse, seulement une récompense. Généraliser : un bon agent doit savoir piloter ailleurs que là où il a appris. Rester fiable : on mesure ce qui se passe quand la piste glisse, sans prévenir l’agent, qui n’observe pas l’adhérence.</aside>
+</section>

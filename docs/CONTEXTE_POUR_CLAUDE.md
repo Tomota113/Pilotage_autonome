@@ -142,7 +142,7 @@ Même bicyclette, plus :
   série v2) ; `discrete9` (3 directions × gaz/roue libre/frein).
 - **Récompense** : r = 0,1·Δs − 0,01 − (10 + k_v·v²)·[sortie] + 50·[tour] − 0,05·|Δδ|. Δs = progression
   projetée sur la ligne centrale, plafonnée à ±(v·dt + 1 m) (un saut plus grand = virage coupé).
-  **Série v2 : k_v = 0,01** (sortie à 300 km/h ≈ −90 au lieu de −10, idée de Gran Turismo Sophy).
+  **Série v2 : k_v = 0,01** (sortie à 300 km/h ≈ −79 au lieu de −10, idée de Gran Turismo Sophy).
 - **Checkpoints** : 20, validés un par un dans l'ordre ; le 20e (ligne d'arrivée) = tour validé.
 - **Fin** : `terminated` (sortie de piste ou tour) ; `truncated` (3 000 pas, ou 100 pas sans progrès).
 - **Série v2 : `random_start`** : l'épisode d'entraînement part d'un point au hasard (checkpoints répartis

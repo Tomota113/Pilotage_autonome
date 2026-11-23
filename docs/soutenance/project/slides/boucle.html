@@ -1,0 +1,19 @@
+<section id="boucle" data-transition="fade">
+<div class="kerb"></div>
+<div class="head">
+<p class="eyebrow">Le principe</p>
+<h2>La boucle d’apprentissage par renforcement</h2>
+</div>
+<div class="loop">
+<div class="step rise"><p class="label">1. PERÇOIT</p><p class="text">12 nombres : 7 distances aux bords, vitesse, angle, écart au centre, 2 courbures à venir.</p></div>
+<x-shape kind="arrow-right" class="arrow"></x-shape>
+<div class="step rise" style="--i:1;"><p class="label">2. DÉCIDE</p><p class="text">Un réseau de neurones choisit le volant et la pédale (frein ← 0 → gaz).</p></div>
+<x-shape kind="arrow-right" class="arrow"></x-shape>
+<div class="step rise" style="--i:2;"><p class="label">3. AGIT</p><p class="text">Le simulateur fait avancer la voiture : pas de 0,01 s, une décision toutes les 0,05 s.</p></div>
+<x-shape kind="arrow-right" class="arrow"></x-shape>
+<div class="step rise" style="--i:3;"><p class="label">4. EST NOTÉ</p><p class="text">Récompense : + pour avancer et boucler le tour, − pour sortir de la piste.</p></div>
+</div>
+<p class="soft rise" style="--i:4; width:1500px;">Après des millions d’essais, l’agent garde les décisions qui rapportent le plus de récompense sur la durée.</p>
+<div class="footer"><span>F1-RL Lab</span><span class="num"></span></div>
+<aside>Voici la boucle que suit chaque agent, 20 fois par seconde de course simulée. Il perçoit 12 nombres normalisés, son réseau décide d’une commande, le simulateur physique fait avancer la voiture, puis l’environnement donne une récompense. L’algorithme d’apprentissage ajuste le réseau pour maximiser la somme des récompenses futures, pondérée par gamma.</aside>
+</section>

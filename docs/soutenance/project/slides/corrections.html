@@ -1,0 +1,15 @@
+<section id="corrections" data-transition="fade">
+<div class="kerb"></div>
+<div class="head">
+<p class="eyebrow">Série v2 : premier essai</p>
+<h2>L’agent avait appris à rouler plein gaz</h2>
+</div>
+<p class="soft rise" style="width:1500px;">Frein moyen 0,03 : il entrait dans les virages à 230–290 km/h pour une limite de 50 à 160 km/h. Trois causes, trois corrections.</p>
+<div class="cards">
+<div class="card rise" style="--i:1;"><p class="label">Horizon trop court</p><p class="text">Avec γ = 0,99, l’agent ne « voyait » qu’environ 5 s devant lui.</p><p class="text"><b>→ γ = 0,995, environ 10 s.</b></p></div>
+<div class="card rise" style="--i:2;"><p class="label">Sortie trop peu chère</p><p class="text">−10, quelle que soit la vitesse.</p><p class="text"><b>→ −(10 + 0,01 v²), environ −79 à 300 km/h.</b></p></div>
+<div class="card rise" style="--i:3;"><p class="label">Exploration difficile</p><p class="text">Gaz et frein séparés, bruités indépendamment.</p><p class="text"><b>→ une seule pédale, de −1 (frein) à +1 (gaz).</b></p></div>
+</div>
+<div class="footer"><span>F1-RL Lab</span><span class="num"></span></div>
+<aside>Le premier essai de la série v2 a échoué d’une manière intéressante : PPO avait trouvé qu’accélérer à fond rapportait plus que freiner, parce qu’il ne voyait pas assez loin et que sortir ne coûtait presque rien. On a corrigé les trois causes en même temps, donc on ne peut pas isoler l’effet de chacune ; c’est une limite à assumer.</aside>
+</section>

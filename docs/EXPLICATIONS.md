@@ -312,7 +312,7 @@ La mémoire récente de SARSA et les mises à jour en fin d'épisode de Monte-Ca
 - Premier essai PPO (2,4 M de pas) : la politique apprise était « plein gaz » (frein moyen 0,03) ; la voiture
   entrait dans les virages à 230–290 km/h pour une limite de 50 à 160 km/h. Trois causes, trois corrections :
   1. horizon trop court : avec γ = 0,99, l'agent ne « voit » qu'≈ 5 s devant lui ; γ = 0,995 (≈ 10 s) ;
-  2. sortie trop peu chère : −10, quelle que soit la vitesse ; désormais −(10 + 0,01 v²), ≈ −90 à 300 km/h
+  2. sortie trop peu chère : −10, quelle que soit la vitesse ; désormais −(10 + 0,01 v²), ≈ −79 à 300 km/h
      (idée reprise de Gran Turismo Sophy, Sony AI : la pénalité suit l'énergie cinétique) ;
   3. exploration difficile : accélérateur et frein séparés et bruités ; action « pédale » unique
      (−1 = plein frein … +1 = plein gaz), qui interdit d'appuyer sur les deux à la fois.

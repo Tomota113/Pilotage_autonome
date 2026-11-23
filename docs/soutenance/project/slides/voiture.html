@@ -1,0 +1,15 @@
+<section id="voiture" class="light" data-transition="fade">
+<div class="kerb"></div>
+<div class="head">
+<p class="eyebrow">Le simulateur</p>
+<h2>Une voiture de F1 réaliste, calibrée sur les poles 2024</h2>
+</div>
+<div class="cards">
+<div class="card rise"><p class="label">Vitesse de pointe</p><p class="value">343 km/h</p><p class="text">0 à 100 km/h en 2,4 s ; de 300 à 100 km/h en 88 m.</p></div>
+<div class="card rise" style="--i:1;"><p class="label">Aérodynamique</p><p class="text">Appui qui augmente avec la vitesse : environ 1,8 g d’adhérence à l’arrêt, environ 6 g à 300 km/h.</p></div>
+<div class="card rise" style="--i:2;"><p class="label">Calibrage</p><p class="value">≈ 3 %</p><p class="text">d’écart moyen avec les poles officielles 2024 (Suzuka +0,8 %, Silverstone +1,2 %, Monza +3,2 %).</p></div>
+</div>
+<p class="small soft rise" style="--i:3; width:1500px;">Modèle bicyclette + cercle de friction ; 800 kg, environ 700 kW, traînée et résistance au roulement. La première version du projet utilisait une voiture simplifiée à 228 km/h.</p>
+<div class="footer"><span>F1-RL Lab</span><span class="num"></span></div>
+<aside>Le simulateur est écrit en NumPy. La voiture suit un modèle bicyclette, et le cercle de friction limite l’accélération totale : freiner fort en virage réduit le virage possible. La version F1 ajoute la puissance, la traînée et surtout l’appui aérodynamique. Pour vérifier qu’elle est crédible, on a comparé le temps au tour sur la trajectoire idéale aux poles officielles 2024 : environ 3 % d’écart en moyenne, sans sur-ajuster les paramètres.</aside>
+</section>

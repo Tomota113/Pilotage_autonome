@@ -1,0 +1,15 @@
+<section id="lecons" data-transition="fade">
+<div class="kerb"></div>
+<div class="head">
+<p class="eyebrow">Ce que l’on a appris</p>
+<h2>Quatre enseignements</h2>
+</div>
+<div class="cards" style="flex-wrap:wrap;">
+<div class="card rise" style="flex:1 1 700px;"><p class="label">Les données d’entraînement comptent</p><p class="text">Des circuits réels et des départs aléatoires : de 2 tours sur 576 essais (v1) à 66 tours bouclés sur des circuits jamais vus (v2).</p></div>
+<div class="card rise" style="flex:1 1 700px; --i:1;"><p class="label">La variété rend robuste</p><p class="text">Entraîné avec une adhérence variable, PPO boucle le plus de tours et ses 3 graines y arrivent.</p></div>
+<div class="card rise" style="flex:1 1 700px; --i:2;"><p class="label">Plus grand n’est pas mieux</p><p class="text">PPO avec un réseau 2 × 64 boucle 15 tours sur 72, contre 11 avec 2 × 256 ; à confirmer avec plus de graines.</p></div>
+<div class="card rise" style="flex:1 1 700px; --i:3;"><p class="label">Bien apprendre ≠ bien généraliser</p><p class="text">La graine 2 de TQC, la meilleure à l’entraînement, boucle 0 tour sur 24 ; la graine 0 en boucle 10.</p></div>
+</div>
+<div class="footer"><span>F1-RL Lab</span><span class="num"></span></div>
+<aside>Premier enseignement : ce sont surtout les données d’entraînement qui ont fait la différence entre les deux séries. Deuxième : la variété d’adhérence à l’entraînement donne l’agent le plus robuste. Troisième : le grand réseau n’aide pas PPO ici, mais trois graines ne suffisent pas pour l’affirmer. Quatrième : un bon score à l’entraînement ne garantit pas la réussite sur des circuits inconnus. Enfin, les méthodes tabulaires échouent, même avec 5 760 états : le découpage est trop grossier pour freiner au bon moment.</aside>
+</section>

@@ -1,0 +1,20 @@
+<section id="robustesse" data-transition="fade">
+<div class="kerb"></div>
+<div class="head">
+<p class="eyebrow">Robustesse à l’adhérence</p>
+<h2>Sur piste glissante, aucun agent ne boucle un tour</h2>
+</div>
+<table class="dark-table rise" style="color:#E9ECEF;">
+<tr style="background:#1E242B;"><th style="width:40%;">Tours bouclés</th><th style="text-align:right;">μ 1,0 (normal)</th><th style="text-align:right;">μ 0,8 (humide)</th><th style="text-align:right;">μ 0,6 (glissant)</th></tr>
+<tr><td>Pilote classique</td><td style="text-align:right;">8 / 8</td><td style="text-align:right;">8 / 8</td><td style="text-align:right;">8 / 8</td></tr>
+<tr><td>Pilote trajectoire idéale</td><td style="text-align:right;">8 / 8</td><td style="text-align:right;">8 / 8</td><td style="text-align:right;">7 / 8</td></tr>
+<tr style="background:#3A1D1B;"><td>PPO adhérence variable</td><td style="text-align:right;">13 / 24</td><td style="text-align:right;">9 / 24</td><td style="text-align:right;">0 / 24</td></tr>
+<tr><td>PPO petit réseau 2 × 64</td><td style="text-align:right;">10 / 24</td><td style="text-align:right;">5 / 24</td><td style="text-align:right;">0 / 24</td></tr>
+<tr><td>PPO 2 × 256</td><td style="text-align:right;">7 / 24</td><td style="text-align:right;">4 / 24</td><td style="text-align:right;">0 / 24</td></tr>
+<tr><td>TQC</td><td style="text-align:right;">6 / 24</td><td style="text-align:right;">5 / 24</td><td style="text-align:right;">0 / 24</td></tr>
+<tr><td>Deep Monte-Carlo</td><td style="text-align:right;">3 / 24</td><td style="text-align:right;">4 / 24</td><td style="text-align:right;">0 / 24</td></tr>
+</table>
+<p class="small soft rise" style="--i:1; width:1500px;">Entraîné avec une adhérence variable, PPO est le meilleur agent sur piste humide. Les pilotes programmés connaissent l’adhérence ; les agents ne l’observent pas.</p>
+<div class="footer"><span>Source : results/eval_f1_v2.csv</span><span class="num"></span></div>
+<aside>Quand l’adhérence baisse, les agents perdent beaucoup. Sur piste humide, PPO entraîné avec une adhérence variable reste le meilleur, avec 9 tours sur 24. Sur piste glissante, aucun agent ne boucle un tour, alors que les deux pilotes programmés y arrivent presque toujours. Il faut le dire : les pilotes programmés connaissent l’adhérence et adaptent leur vitesse, les agents ne la perçoivent pas. On retrouve la conclusion de la série v1 : la variété à l’entraînement rend plus robuste.</aside>
+</section>

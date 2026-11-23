@@ -1,0 +1,16 @@
+<section id="algos" data-transition="fade">
+<div class="kerb"></div>
+<div class="head">
+<p class="eyebrow">Les algorithmes</p>
+<h2>13 algorithmes ou variantes, 2 pilotes de référence</h2>
+</div>
+<div class="cards">
+<div class="card rise"><p class="label">Acteur-critique</p><p class="text">PPO · PPO adhérence variable · PPO petit réseau 2 × 64 · SAC · TD3 · TQC</p><p class="small soft">Actions continues : volant et pédale.</p></div>
+<div class="card rise" style="--i:1;"><p class="label">Valeurs Q profondes</p><p class="text">DQN · QR-DQN · Deep SARSA · Deep Monte-Carlo</p><p class="small soft">9 actions : 3 directions × gaz, roue libre, frein.</p></div>
+<div class="card rise" style="--i:2;"><p class="label">Tabulaires</p><p class="text">Q-Learning · SARSA · Monte-Carlo</p><p class="small soft">Une table de 5 760 états discrets.</p></div>
+<div class="card rise" style="--i:3;"><p class="label">Références</p><p class="text">Pilote classique · Pilote trajectoire idéale</p><p class="small soft">Programmés à la main ; ils connaissent l’adhérence.</p></div>
+</div>
+<p class="small soft rise" style="--i:4; width:1500px;">Réseaux de 2 couches de 256 neurones. Stable-Baselines3 et sb3-contrib pour PPO, SAC, TD3, TQC, DQN, QR-DQN ; Deep SARSA, Deep Monte-Carlo et les tabulaires écrits à la main.</p>
+<div class="footer"><span>F1-RL Lab</span><span class="num"></span></div>
+<aside>On compare trois familles. Les méthodes acteur-critique, comme PPO et SAC, produisent directement des commandes continues. Les méthodes à valeurs Q, comme DQN, notent chacune des 9 actions possibles et jouent la meilleure. Les méthodes tabulaires font la même chose avec une table au lieu d’un réseau. Q-Learning vise la meilleure action suivante, SARSA l’action réellement jouée, Monte-Carlo le retour complet de l’épisode. Les deux pilotes de référence ne s’entraînent pas : le classique suit le centre de la piste avec une marge, l’autre suit une trajectoire de courbure minimale avec un profil de vitesse optimal.</aside>
+</section>

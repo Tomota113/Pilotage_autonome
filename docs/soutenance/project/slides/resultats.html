@@ -1,0 +1,19 @@
+<section id="resultats" class="light" data-transition="fade">
+<div class="kerb"></div>
+<div class="head">
+<p class="eyebrow">Résultats · 8 circuits F1 jamais vus · 3 adhérences</p>
+<h2>PPO entraîné avec une adhérence variable boucle le plus de tours</h2>
+</div>
+<div class="bars">
+<div class="bar-row"><p class="name">Pilote classique</p><div class="track"><div class="fill ref" style="width:100%;"></div></div><p class="val">24 / 24 · 100 %</p></div>
+<div class="bar-row"><p class="name">Trajectoire idéale</p><div class="track"><div class="fill ref" style="width:95.8%; --i:1;"></div></div><p class="val">23 / 24 · 95,8 %</p></div>
+<div class="bar-row"><p class="name">PPO adhérence variable</p><div class="track"><div class="fill best" style="width:30.6%; --i:2;"></div></div><p class="val">22 / 72 · 30,6 %</p></div>
+<div class="bar-row"><p class="name">PPO petit réseau 2 × 64</p><div class="track"><div class="fill" style="width:20.8%; --i:3;"></div></div><p class="val">15 / 72 · 20,8 %</p></div>
+<div class="bar-row"><p class="name">PPO 2 × 256</p><div class="track"><div class="fill" style="width:15.3%; --i:4;"></div></div><p class="val">11 / 72 · 15,3 %</p></div>
+<div class="bar-row"><p class="name">TQC</p><div class="track"><div class="fill" style="width:15.3%; --i:5;"></div></div><p class="val">11 / 72 · 15,3 %</p></div>
+<div class="bar-row"><p class="name">Deep Monte-Carlo</p><div class="track"><div class="fill" style="width:9.7%; --i:6;"></div></div><p class="val">7 / 72 · 9,7 %</p></div>
+</div>
+<p class="small soft">0 tour pour DQN, QR-DQN, SAC, TD3, Deep SARSA, Q-Learning, SARSA et Monte-Carlo. Taux de tours bouclés, toutes graines et adhérences confondues.</p>
+<div class="footer"><span>Source : results/eval_f1_v2.csv</span><span class="num"></span></div>
+<aside>Voici le résultat principal. Les deux pilotes programmés bouclent presque tous les tours. Parmi les agents, PPO entraîné avec une adhérence variable est le meilleur : 22 tours sur 72 essais, et c’est le seul dont les trois graines bouclent des tours. Cinq conditions bouclent des tours ; les huit autres aucun. C’est une vraie progression par rapport à la série v1, mais on reste loin des pilotes programmés.</aside>
+</section>

@@ -1,0 +1,92 @@
+/* Soutenance F1-RL Lab : asphalte sombre, vibreur rouge et blanc, jaune des écrans de chronométrage.
+   Échelle typographique : 120 / 72 / 44 / 32 / 24 px. */
+:root {
+  --asphalt: #14181D;
+  --asphalt-2: #1E242B;
+  --line: #313942;
+  --paper: #F3F1EC;
+  --paper-2: #E4E0D7;
+  --ink: #14181D;
+  --ink-soft: #4A5260;
+  --text-soft: #B9C1CA;
+  --kerb: #C8281F;
+  --kerb-text: #B3261E;
+  --timing: #F2C230;
+  --blue: #5AA2E8;
+  --orange: #E8833A;
+}
+section {
+  padding: 128px 128px 160px;
+  background: var(--asphalt);
+  color: #E9ECEF;
+  font-family: 'Public Sans', Arial, sans-serif;
+  counter-increment: page;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+section.light { background: var(--paper); color: var(--ink); }
+section.accent { background: var(--kerb); color: #FBF7F2; }
+h1 { font-family: 'Oswald', Arial, sans-serif; font-size: 120px; font-weight: 700; line-height: 1.02; }
+h2 { font-family: 'Oswald', Arial, sans-serif; font-size: 72px; font-weight: 600; line-height: 1.08; }
+h3 { font-family: 'Oswald', Arial, sans-serif; font-size: 44px; font-weight: 500; line-height: 1.12; }
+p { font-size: 32px; line-height: 1.4; }
+.eyebrow { font-size: 24px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; color: var(--timing); }
+.light .eyebrow { color: var(--kerb-text); }
+.accent .eyebrow { color: #FBF7F2; }
+.soft { color: var(--text-soft); }
+.light .soft { color: var(--ink-soft); }
+.small { font-size: 24px; line-height: 1.35; }
+.head { display: flex; flex-direction: column; gap: 12px; }
+
+/* Bande de vibreur en haut de chaque diapositive */
+.kerb { position: absolute; left: 0; top: 0; width: 1920px; height: 14px;
+  background: repeating-linear-gradient(90deg, #C8281F 0px, #C8281F 48px, #F3F1EC 48px, #F3F1EC 96px); }
+.footer { position: absolute; left: 128px; bottom: 64px; width: 1664px; display: flex; justify-content: space-between;
+  font-size: 24px; color: var(--text-soft); }
+.light .footer { color: var(--ink-soft); }
+.footer .num::after { content: counter(page); }
+
+/* Cartes */
+.cards { display: flex; gap: 32px; }
+.card { flex: 1; background: var(--asphalt-2); border: 2px solid var(--line); border-radius: 14px; padding: 40px;
+  display: flex; flex-direction: column; gap: 16px; }
+.light .card { background: #FBFAF7; border-color: var(--paper-2); }
+.card .label { font-size: 24px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--timing); }
+.light .card .label { color: var(--kerb-text); }
+.card .value { font-family: 'Oswald', Arial, sans-serif; font-size: 72px; font-weight: 600; line-height: 1.0; }
+.card .text { font-size: 28px; line-height: 1.35; }
+
+/* Boucle d'apprentissage */
+.loop { display: flex; align-items: center; gap: 20px; }
+.step { flex: 1; background: var(--asphalt-2); border: 2px solid var(--line); border-radius: 14px; padding: 36px;
+  display: flex; flex-direction: column; gap: 14px; }
+.step .label { font-size: 24px; font-weight: 700; letter-spacing: 3px; color: var(--timing); }
+.step .text { font-size: 28px; line-height: 1.35; }
+.arrow { width: 56px; height: 28px; background: var(--timing); }
+
+/* Barres de résultats */
+.bars { display: flex; flex-direction: column; gap: 16px; }
+.bar-row { display: grid; grid-template-columns: 470px 1fr 300px; gap: 28px; align-items: center; }
+.bar-row .name { font-size: 30px; font-weight: 600; }
+.bar-row .val { font-size: 28px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.track { height: 38px; background: var(--paper-2); border-radius: 6px; overflow: hidden; }
+.fill { height: 38px; border-radius: 6px; background: var(--blue);
+  animation: grow 800ms ease-out both; animation-delay: calc(var(--i, 0) * 110ms); }
+.fill.ref { background: #8C939C; }
+.fill.best { background: var(--kerb); }
+@keyframes grow { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+
+/* Tableaux */
+table { font-size: 28px; color: var(--ink); width: 100%; }
+.dark-table { color: #E9ECEF; }
+
+/* Apparition douce, échelonnée */
+.rise { animation: rise 600ms ease-out both; animation-delay: calc(var(--i, 0) * 120ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Grand chiffre */
+.big { font-family: 'Oswald', Arial, sans-serif; font-size: 300px; font-weight: 700; line-height: 0.95; }
+.formula { font-family: 'Oswald', Arial, sans-serif; font-size: 44px; font-weight: 500; background: var(--asphalt-2);
+  border: 2px solid var(--line); border-radius: 14px; padding: 32px 40px; }
+.pill { font-size: 24px; font-weight: 700; padding: 8px 18px; border-radius: 999px; background: var(--timing); color: var(--ink); }

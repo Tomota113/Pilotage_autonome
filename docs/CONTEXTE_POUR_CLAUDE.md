@@ -8,7 +8,7 @@
 > sa configuration et sa graine) ; si une expérience n'a pas encore été faite, dis-le. **La série v2
 > (voiture F1 réaliste) est entraînée et évaluée** (22/11/2026) : résultats au § 13.
 >
-> **Dernière mise à jour : 22/11/2026, 21 h 30.** Les nouveautés depuis la version précédente de ce
+> **Dernière mise à jour : 23/11/2026.** Les nouveautés depuis la version précédente de ce
 > document sont résumées au **§ 0** juste en dessous. Un guide débutant en 8 chapitres existe aussi
 > (`docs/guide/`, version web `docs/guide/guide_web.html`) : tu peux t'en servir pour expliquer.
 >
@@ -18,7 +18,7 @@
 
 ---
 
-## 0. Le point au 22/11/2026 au soir (ce qui a changé depuis la version précédente)
+## 0. Le point au 23/11/2026 (ce qui a changé depuis la version du 21/11)
 
 1. **Série v2 terminée** (33 entraînements, 0 échec, nuit du 21 au 22/11 et journée du 22). Faute de temps de
    calcul, l'étudiant a choisi de réduire : 3 graines pour PPO (3 variantes), TQC (graine 0 : 1 M de pas ;
@@ -50,6 +50,12 @@
    jet du guide ; Claude Code a relu, testé et corrigé (ex. grille de départ hors piste, choix des replays,
    départ aléatoire). Deux commits (`2ed42bd`, `4ac0192`) ont été faits par un outil extérieur non identifié ;
    leur contenu a été vérifié.
+8. **Valeurs Q dans les replays** (nuit du 22 au 23/11) : le format replay.json passe en **1.4** avec le champ
+   `frames[].q_values` (les 9 valeurs Q, une par action discrète, ordre de DISCRETE9 ; pour QR-DQN, moyenne des
+   quantiles). Les 243 replays de DQN, QR-DQN, Deep SARSA et Deep MC ont été rejoués : issue et temps au tour
+   identiques aux évaluations d'origine, aucun résultat ne change. Le Neural Network Explorer affiche ces 9
+   barres, action choisie surlignée. À savoir expliquer : un agent « à valeurs Q » note chaque action possible
+   (la récompense future qu'il en attend) et joue celle qui a la meilleure note.
 
 ## 1. Le projet en une phrase
 

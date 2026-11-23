@@ -56,12 +56,13 @@
    identiques aux évaluations d'origine, aucun résultat ne change. Le Neural Network Explorer affiche ces 9
    barres, action choisie surlignée. À savoir expliquer : un agent « à valeurs Q » note chaque action possible
    (la récompense future qu'il en attend) et joue celle qui a la meilleure note.
-9. **Diaporama de soutenance** (23/11) : 18 diapositives avec notes de présentation, sources dans
+9. **Diaporama de soutenance** (23/11) : 20 diapositives (19 + 1 annexe) avec notes de présentation, sources dans
    `docs/soutenance/` (format Slides de claude.ai, exportable en PowerPoint ou PDF). Plan : le problème
    (couverture avec le tracé réel de Monza, question) ; le laboratoire (boucle RL, voiture F1 calibrée, circuits,
    récompense) ; la méthode (algorithmes, **règles de mise à jour de Q-Learning, SARSA et Monte-Carlo**,
-   protocole) ; les résultats (échec v1 2/576, premier essai v2 « plein gaz » et ses 3 corrections, tours
-   bouclés, robustesse, vitesse) ; le bilan (4 enseignements, défauts et limites, démo, conclusion). À compléter
+   **formules des méthodes profondes DQN, PPO, SAC**, protocole) ; les résultats (échec v1 2/576, premier essai v2 « plein gaz » et ses 3 corrections, tours
+   bouclés, robustesse, vitesse) ; le bilan (4 enseignements, défauts et limites, démo, conclusion) ; **annexe** après « Questions ? » avec les
+   formules de TD3, TQC, QR-DQN, Deep SARSA et Deep Monte-Carlo, à montrer seulement si le professeur demande. À compléter
    par l'étudiant : noms et date sur la couverture. Toutes les formules sont en LaTeX, rendues en SVG par MathJax
    (`docs/soutenance/formules/`) : l'étudiant veut des formules mises en forme, jamais en texte brut.
 10. **Correction d'un chiffre** : une sortie de piste à 300 km/h coûte 10 + 0,01 × (83,3 m/s)² ≈ **−79**, et non −90
@@ -73,6 +74,17 @@ Formules à savoir expliquer (mises à jour tabulaires, α = 0,1, γ = 0,995 en 
 - Monte-Carlo (première visite) : Q(s,a) ← Q(s,a) + α [ G_t − Q(s,a) ], G_t = r_t + γ r_{t+1} + γ² r_{t+2} + … ;
 - pas de terme futur si l'épisode est *terminé* (sortie, tour), mais un terme futur conservé s'il est seulement
   *tronqué* (temps limite). Quand tu expliques ces formules à l'étudiant, écris-les en LaTeX.
+
+Formules des méthodes profondes (réglages réels : bibliothèques Stable-Baselines3 / sb3-contrib par défaut, γ = 0,995) :
+- DQN : L(θ) = E[ ℓ( r + γ max_a′ Q_θ⁻(s′,a′) − Q_θ(s,a) ) ], ℓ = perte de Huber, θ⁻ = copie figée du réseau ;
+- PPO : L^CLIP(θ) = E_t[ min( ρ_t Â_t , clip(ρ_t, 1−ε, 1+ε) Â_t ) ], ρ_t = π_θ(a_t|s_t) / π_θ_old(a_t|s_t),
+  ε = 0,2, avantage Â estimé par GAE (λ = 0,95) ;
+- SAC : J(π) = Σ_t E[ r_t + α 𝓗(π(·|s_t)) ], α (coefficient d'entropie) réglé automatiquement ;
+- TD3 : y = r + γ min_{j=1,2} Q_φj⁻(s′, μ_θ⁻(s′) + ε̃), ε̃ = clip(𝒩(0; 0,2), −0,5, 0,5), acteur mis à jour un pas sur deux ;
+- TQC : 2 critiques × 25 quantiles ; cibles y_i = r + γ ( z_(i)(s′,a′) − α log π(a′|s′) ) pour les 46 plus petites
+  des 50 estimations (on retire les 2 plus hautes de chaque critique) ;
+- QR-DQN : a* = argmax_a′ (1/N) Σ_j z_j(s′,a′), cibles y_j = r + γ z⁻_j(s′,a*) (perte de Huber par quantile) ;
+- Deep SARSA : L(θ) = E[ ℓ( r + γ Q_θ⁻(s′,a′) − Q_θ(s,a) ) ] ; Deep Monte-Carlo : L(θ) = E[ ℓ( G_t − Q_θ(s,a) ) ].
 
 ## 1. Le projet en une phrase
 

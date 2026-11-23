@@ -31,6 +31,14 @@ Le volant positif commande la gauche. Par exemple, l’action discrète **5** si
 
 ## La récompense, terme par terme
 
+À chaque décision, l’environnement calcule :
+
+$$
+r_t \;=\; 0{,}1\,\Delta s \;-\; 0{,}01 \;-\; \bigl(10 + k_v\,v^{2}\bigr)\,\mathbf{1}_{\text{sortie}} \;+\; 50\,\mathbf{1}_{\text{tour}} \;-\; 0{,}05\,\lvert\Delta\delta\rvert
+$$
+
+avec $k_v=0{,}01$ en v2. Exemple : une sortie à 300 km/h ($v\approx83{,}3$ m/s) coûte $10+0{,}01\times83{,}3^2\approx79$ points.
+
 | Terme | Effet |
 |---|---|
 | $+0{,}1\,\Delta s$ | Récompense l’avance signée en mètres sur la ligne centrale. Un recul donne une contribution négative. |

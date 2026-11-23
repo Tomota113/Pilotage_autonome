@@ -496,6 +496,11 @@ A(v)=\mu_{\mathrm{route}}\,\mu_{\mathrm{pneu}}\,(g+k_Lv^2).
 </table></div>
 <p>Le volant positif commande la gauche. Par exemple, l’action discrète <strong>5</strong> signifie <strong>tout droit + frein</strong>. En v2, les agents à actions continues utilisent <code>pedal</code> et les agents à actions discrètes conservent <code>discrete9</code>. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/env/f1_env.py" target="_blank" rel="noopener"><code>env/f1_env.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/tools/make_configs.py" target="_blank" rel="noopener"><code>tools/make_configs.py</code></a></p>
 <h2>La récompense, terme par terme</h2>
+<p>À chaque décision, l’environnement calcule :</p>
+<p><span class="math display">\[
+r_t \;=\; 0{,}1\,\Delta s \;-\; 0{,}01 \;-\; \bigl(10 + k_v\,v^{2}\bigr)\,\mathbf{1}_{\text{sortie}} \;+\; 50\,\mathbf{1}_{\text{tour}} \;-\; 0{,}05\,\lvert\Delta\delta\rvert
+\]</span></p>
+<p>avec <span class="math">\(k_v=0{,}01\)</span> en v2. Exemple : une sortie à 300 km/h (<span class="math">\(v\approx83{,}3\)</span> m/s) coûte <span class="math">\(10+0{,}01\times83{,}3^2\approx79\)</span> points.</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -716,6 +721,47 @@ y=r+\gamma\left[\min_i Q^-_i(s',a')-\alpha_{\rm ent}\log\pi(a'\mid s')\right].
 <p>L’acteur maximise en moyenne <span class="math">\(\min_i Q_i(s,a)-\alpha_{\rm ent}\log\pi(a\mid s)\)</span> pour des actions tirées de sa politique. L’entropie favorise une politique qui garde de la diversité. <span class="math">\(\alpha_{\rm ent}\)</span> règle son poids.</p>
 <p><strong>TD3.</strong> Une politique cible déterministe donne <span class="math">\(a'\)</span>, à laquelle on ajoute un petit bruit borné et on applique les bornes de l’action. Les deux critiques sont ajustés vers <span class="math">\(y=r+\gamma\min_i Q^-_i(s',a')\)</span>. L’acteur est optimisé moins souvent et maximise en moyenne <span class="math">\(Q_1(s,\pi(s))\)</span>. À la collecte, <code>train.py</code> ajoute aussi un bruit d’exploration.</p>
 <p><strong>TQC.</strong> Les critiques cibles renvoient des quantiles pour une action <span class="math">\(a'\)</span> tirée de la politique. Le code rassemble et trie ces valeurs, écarte les plus hautes, puis forme <span class="math">\(y_j=r+\gamma[z^-_j-\alpha_{\rm ent}\log\pi(a'\mid s')]\)</span> pour chaque valeur retenue. Les critiques apprennent par perte de Huber pondérée par quantile. Pour l’acteur, on maximise la moyenne des quantiles prédits par les critiques courants, avec le terme d’entropie comme dans SAC. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/algorithms.py" target="_blank" rel="noopener"><code>agents/algorithms.py</code></a> · <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/agents/train.py" target="_blank" rel="noopener"><code>agents/train.py</code></a></p>
+<h2>Récapitulatif : toutes les formules</h2>
+<p>Les mêmes formules que dans le diaporama, au même endroit. <span class="math">\(\theta^-\)</span> et <span class="math">\(\phi^-\)</span> sont des copies figées des réseaux, <span class="math">\(\ell\)</span> la perte de Huber, <span class="math">\(\gamma=0{,}995\)</span> en v2.</p>
+<p><strong>Tabulaires</strong> (<span class="math">\(\alpha=0{,}1\)</span>) : seule la cible change.</p>
+<p><span class="math display">\[
+\text{Q-Learning :}\quad Q(s,a)\leftarrow Q(s,a)+\alpha\Bigl[r+\gamma\max_{a'}Q(s',a')-Q(s,a)\Bigr]
+\]</span></p>
+<p><span class="math display">\[
+\text{SARSA :}\quad Q(s,a)\leftarrow Q(s,a)+\alpha\Bigl[r+\gamma\,Q(s',a')-Q(s,a)\Bigr]
+\]</span></p>
+<p><span class="math display">\[
+\text{Monte-Carlo :}\quad Q(s,a)\leftarrow Q(s,a)+\alpha\Bigl[G_t-Q(s,a)\Bigr],\qquad G_t=r_t+\gamma\,r_{t+1}+\gamma^{2}r_{t+2}+\cdots
+\]</span></p>
+<p><strong>Réseaux de valeurs Q</strong> : la même cible, apprise par un réseau qui voit les 12 observations exactes.</p>
+<p><span class="math display">\[
+\text{DQN :}\quad \mathcal{L}(\theta)=\mathbb{E}\Bigl[\ell\bigl(r+\gamma\max_{a'}Q_{\theta^-}(s',a')-Q_\theta(s,a)\bigr)\Bigr]
+\]</span></p>
+<p><span class="math display">\[
+\text{Deep SARSA :}\quad \mathcal{L}(\theta)=\mathbb{E}\Bigl[\ell\bigl(r+\gamma\,Q_{\theta^-}(s',a')-Q_\theta(s,a)\bigr)\Bigr]
+\qquad
+\text{Deep MC :}\quad \mathcal{L}(\theta)=\mathbb{E}\Bigl[\ell\bigl(G_t-Q_\theta(s,a)\bigr)\Bigr]
+\]</span></p>
+<p><span class="math display">\[
+\text{QR-DQN :}\quad a^*=\arg\max_{a'}\frac{1}{N}\sum_{j=1}^{N}z_j(s',a'),\qquad y_j=r+\gamma\,z^-_j(s',a^*)
+\]</span></p>
+<p><strong>Acteurs-critiques</strong> :</p>
+<p><span class="math display">\[
+\text{PPO :}\quad \mathcal{L}^{\mathrm{CLIP}}(\theta)=\mathbb{E}_t\Bigl[\min\bigl(\rho_t\hat A_t,\;\mathrm{clip}(\rho_t,1-\epsilon,1+\epsilon)\,\hat A_t\bigr)\Bigr],\qquad \rho_t=\frac{\pi_\theta(a_t\mid s_t)}{\pi_{\theta_{\mathrm{old}}}(a_t\mid s_t)}
+\]</span></p>
+<p>avec <span class="math">\(\epsilon=0{,}2\)</span> : le rapport <span class="math">\(\rho_t\)</span> est gardé entre 0,8 et 1,2, la politique change par petits pas ; <span class="math">\(\hat A_t\)</span> est estimé par GAE (<span class="math">\(\lambda=0{,}95\)</span>).</p>
+<p><span class="math display">\[
+\text{SAC :}\quad J(\pi)=\sum_t\mathbb{E}\Bigl[r_t+\alpha\,\mathcal{H}\bigl(\pi(\cdot\mid s_t)\bigr)\Bigr]
+\]</span></p>
+<p>le coefficient d’entropie <span class="math">\(\alpha\)</span> est réglé automatiquement.</p>
+<p><span class="math display">\[
+\text{TD3 :}\quad y=r+\gamma\min_{j=1,2}Q_{\phi_j^-}\bigl(s',\,\mu_{\theta^-}(s')+\tilde\varepsilon\bigr),\qquad \tilde\varepsilon=\mathrm{clip}\bigl(\mathcal{N}(0;\,0{,}2),\,-0{,}5,\,0{,}5\bigr)
+\]</span></p>
+<p>l’acteur est mis à jour un pas sur deux.</p>
+<p><span class="math display">\[
+\text{TQC :}\quad y_i=r+\gamma\bigl(z_{(i)}(s',a')-\alpha\log\pi(a'\mid s')\bigr),\qquad i=1,\dots,46
+\]</span></p>
+<p>2 critiques × 25 quantiles = 50 estimations triées ; on garde les 46 plus petites (les 2 plus hautes de chaque critique sont retirées).</p>
 <h2>Les pilotes de référence appliquent une formule de commande</h2>
 <p>Les deux pilotes visent un point en avant. Si <span class="math">\(d_{\rm visée}\)</span> est la distance de visée et <span class="math">\(\phi\)</span> l’angle entre le cap et la direction du point, la formule de poursuite est <span class="math">\(\delta_{\rm cible}=\arctan(2L\sin\phi/d_{\rm visée})\)</span>. Du gaz est ajouté si la voiture roule sous sa vitesse cible, du frein si elle roule au-dessus. Ils lisent l’adhérence effective dans l’environnement.</p>
 <ul>

@@ -75,6 +75,66 @@ L’acteur maximise en moyenne $\min_i Q_i(s,a)-\alpha_{\rm ent}\log\pi(a\mid s)
 
 **TQC.** Les critiques cibles renvoient des quantiles pour une action $a'$ tirée de la politique. Le code rassemble et trie ces valeurs, écarte les plus hautes, puis forme $y_j=r+\gamma[z^-_j-\alpha_{\rm ent}\log\pi(a'\mid s')]$ pour chaque valeur retenue. Les critiques apprennent par perte de Huber pondérée par quantile. Pour l’acteur, on maximise la moyenne des quantiles prédits par les critiques courants, avec le terme d’entropie comme dans SAC. [`agents/algorithms.py`](../../agents/algorithms.py) · [`agents/train.py`](../../agents/train.py)
 
+## Récapitulatif : toutes les formules
+
+Les mêmes formules que dans le diaporama, au même endroit. $\theta^-$ et $\phi^-$ sont des copies figées des réseaux, $\ell$ la perte de Huber, $\gamma=0{,}995$ en v2.
+
+**Tabulaires** ($\alpha=0{,}1$) : seule la cible change.
+
+$$
+\text{Q-Learning :}\quad Q(s,a)\leftarrow Q(s,a)+\alpha\Bigl[r+\gamma\max_{a'}Q(s',a')-Q(s,a)\Bigr]
+$$
+
+$$
+\text{SARSA :}\quad Q(s,a)\leftarrow Q(s,a)+\alpha\Bigl[r+\gamma\,Q(s',a')-Q(s,a)\Bigr]
+$$
+
+$$
+\text{Monte-Carlo :}\quad Q(s,a)\leftarrow Q(s,a)+\alpha\Bigl[G_t-Q(s,a)\Bigr],\qquad G_t=r_t+\gamma\,r_{t+1}+\gamma^{2}r_{t+2}+\cdots
+$$
+
+**Réseaux de valeurs Q** : la même cible, apprise par un réseau qui voit les 12 observations exactes.
+
+$$
+\text{DQN :}\quad \mathcal{L}(\theta)=\mathbb{E}\Bigl[\ell\bigl(r+\gamma\max_{a'}Q_{\theta^-}(s',a')-Q_\theta(s,a)\bigr)\Bigr]
+$$
+
+$$
+\text{Deep SARSA :}\quad \mathcal{L}(\theta)=\mathbb{E}\Bigl[\ell\bigl(r+\gamma\,Q_{\theta^-}(s',a')-Q_\theta(s,a)\bigr)\Bigr]
+\qquad
+\text{Deep MC :}\quad \mathcal{L}(\theta)=\mathbb{E}\Bigl[\ell\bigl(G_t-Q_\theta(s,a)\bigr)\Bigr]
+$$
+
+$$
+\text{QR-DQN :}\quad a^*=\arg\max_{a'}\frac{1}{N}\sum_{j=1}^{N}z_j(s',a'),\qquad y_j=r+\gamma\,z^-_j(s',a^*)
+$$
+
+**Acteurs-critiques** :
+
+$$
+\text{PPO :}\quad \mathcal{L}^{\mathrm{CLIP}}(\theta)=\mathbb{E}_t\Bigl[\min\bigl(\rho_t\hat A_t,\;\mathrm{clip}(\rho_t,1-\epsilon,1+\epsilon)\,\hat A_t\bigr)\Bigr],\qquad \rho_t=\frac{\pi_\theta(a_t\mid s_t)}{\pi_{\theta_{\mathrm{old}}}(a_t\mid s_t)}
+$$
+
+avec $\epsilon=0{,}2$ : le rapport $\rho_t$ est gardé entre 0,8 et 1,2, la politique change par petits pas ; $\hat A_t$ est estimé par GAE ($\lambda=0{,}95$).
+
+$$
+\text{SAC :}\quad J(\pi)=\sum_t\mathbb{E}\Bigl[r_t+\alpha\,\mathcal{H}\bigl(\pi(\cdot\mid s_t)\bigr)\Bigr]
+$$
+
+le coefficient d’entropie $\alpha$ est réglé automatiquement.
+
+$$
+\text{TD3 :}\quad y=r+\gamma\min_{j=1,2}Q_{\phi_j^-}\bigl(s',\,\mu_{\theta^-}(s')+\tilde\varepsilon\bigr),\qquad \tilde\varepsilon=\mathrm{clip}\bigl(\mathcal{N}(0;\,0{,}2),\,-0{,}5,\,0{,}5\bigr)
+$$
+
+l’acteur est mis à jour un pas sur deux.
+
+$$
+\text{TQC :}\quad y_i=r+\gamma\bigl(z_{(i)}(s',a')-\alpha\log\pi(a'\mid s')\bigr),\qquad i=1,\dots,46
+$$
+
+2 critiques × 25 quantiles = 50 estimations triées ; on garde les 46 plus petites (les 2 plus hautes de chaque critique sont retirées).
+
 ## Les pilotes de référence appliquent une formule de commande
 
 Les deux pilotes visent un point en avant. Si $d_{\rm visée}$ est la distance de visée et $\phi$ l’angle entre le cap et la direction du point, la formule de poursuite est $\delta_{\rm cible}=\arctan(2L\sin\phi/d_{\rm visée})$. Du gaz est ajouté si la voiture roule sous sa vitesse cible, du frein si elle roule au-dessus. Ils lisent l’adhérence effective dans l’environnement.

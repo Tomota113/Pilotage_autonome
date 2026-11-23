@@ -56,6 +56,23 @@
    identiques aux évaluations d'origine, aucun résultat ne change. Le Neural Network Explorer affiche ces 9
    barres, action choisie surlignée. À savoir expliquer : un agent « à valeurs Q » note chaque action possible
    (la récompense future qu'il en attend) et joue celle qui a la meilleure note.
+9. **Diaporama de soutenance** (23/11) : 18 diapositives avec notes de présentation, sources dans
+   `docs/soutenance/` (format Slides de claude.ai, exportable en PowerPoint ou PDF). Plan : le problème
+   (couverture avec le tracé réel de Monza, question) ; le laboratoire (boucle RL, voiture F1 calibrée, circuits,
+   récompense) ; la méthode (algorithmes, **règles de mise à jour de Q-Learning, SARSA et Monte-Carlo**,
+   protocole) ; les résultats (échec v1 2/576, premier essai v2 « plein gaz » et ses 3 corrections, tours
+   bouclés, robustesse, vitesse) ; le bilan (4 enseignements, défauts et limites, démo, conclusion). À compléter
+   par l'étudiant : noms et date sur la couverture. Toutes les formules sont en LaTeX, rendues en SVG par MathJax
+   (`docs/soutenance/formules/`) : l'étudiant veut des formules mises en forme, jamais en texte brut.
+10. **Correction d'un chiffre** : une sortie de piste à 300 km/h coûte 10 + 0,01 × (83,3 m/s)² ≈ **−79**, et non −90
+   comme écrit auparavant (corrigé partout).
+
+Formules à savoir expliquer (mises à jour tabulaires, α = 0,1, γ = 0,995 en série v2) :
+- Q-Learning (hors politique) : Q(s,a) ← Q(s,a) + α [ r + γ max_a′ Q(s′,a′) − Q(s,a) ] ;
+- SARSA (sur politique) : Q(s,a) ← Q(s,a) + α [ r + γ Q(s′,a′) − Q(s,a) ], a′ = action réellement jouée ;
+- Monte-Carlo (première visite) : Q(s,a) ← Q(s,a) + α [ G_t − Q(s,a) ], G_t = r_t + γ r_{t+1} + γ² r_{t+2} + … ;
+- pas de terme futur si l'épisode est *terminé* (sortie, tour), mais un terme futur conservé s'il est seulement
+  *tronqué* (temps limite). Quand tu expliques ces formules à l'étudiant, écris-les en LaTeX.
 
 ## 1. Le projet en une phrase
 

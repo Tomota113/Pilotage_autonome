@@ -62,7 +62,7 @@ Sur les tests finaux v2, elles ne bouclent aucun tour. Une explication plausible
 
 ### 16. Qu’est-ce que DQN change par rapport à Q-Learning ?
 
-Il remplace la table par un réseau qui estime les valeurs des commandes à partir des observations. Il garde une cible qui utilise le maximum, calculé avec un réseau cible. [Chapitre 04](04_algorithmes.md)
+Il remplace la table par un réseau qui estime les valeurs des commandes à partir des observations. Il garde une cible qui utilise le maximum, calculé avec un réseau cible. Dans le Neural Network Explorer, les 9 barres d’un agent DQN sont exactement ces valeurs Q, une par action, et la voiture joue l’action dont la barre est la plus haute (pour QR-DQN, chaque barre est la moyenne de ses quantiles). [Chapitre 04](04_algorithmes.md) · [Chapitre 06](06_code_et_application.md)
 
 ### 17. Comment résumer PPO, SAC, TD3 et TQC ?
 

@@ -1,6 +1,6 @@
 # F1-RL Lab — instructions pour Claude Code
 
-Projet universitaire de L3 Intelligence Artificielle, en binôme.
+Projet universitaire de L3 Intelligence Artificielle, en trinôme.
 Des agents de Deep Reinforcement Learning apprennent à piloter une monoplace
 sur des circuits 2D. Le projet compare plusieurs algorithmes à un pilote
 classique et mesure leur robustesse à une baisse d'adhérence.
@@ -42,7 +42,7 @@ PC principal : Intel Core i3, pas de GPU utile. Donc :
   l'étudiant (ablation PPO 2 × 64 pour mesurer l'effet), 1 thread PyTorch par entraînement ;
 - mesurer le débit (pas/seconde) avant de fixer un budget d'entraînement ;
 - entraînements longs lancés la nuit sur ce PC uniquement (`tools/run_night.sh`),
-  SAC compris (≈ 1 h 30 pour 1 M de pas) ; ni Colab ni le PC du binôme.
+  SAC compris (≈ 1 h 30 pour 1 M de pas) ; ni Colab ni les PC des autres membres du trinôme.
   Claude peut les lancer lui-même quand tout est prêt.
 
 Débits mesurés sur l'i3-1115G4 (20 000 pas) : simulateur seul ≈ 10 000 pas/s,

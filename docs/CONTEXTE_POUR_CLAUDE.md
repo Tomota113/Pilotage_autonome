@@ -1,7 +1,7 @@
 # F1-RL Lab — état complet du projet (à donner à Claude en conversation)
 
 > **À l'attention de Claude.** Ce document décrit l'état du projet au **22/11/2026**. Tu as déjà
-> expliqué à l'étudiant (L3 Intelligence Artificielle, projet en binôme) une **première version** très
+> expliqué à l'étudiant (L3 Intelligence Artificielle, projet en trinôme) une **première version** très
 > différente. Presque tout a changé depuis. Ton rôle : l'aider à **comprendre et défendre** le projet
 > devant son professeur, en français simple et rigoureux. Règles absolues du projet : **aucun résultat
 > inventé** (chaque chiffre vient d'un vrai run, noté dans `experiments/JOURNAL.md` avec son `run_id`,

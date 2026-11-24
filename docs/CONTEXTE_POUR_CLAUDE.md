@@ -20,7 +20,7 @@
 
 ## 0. Le point au 23/11/2026 (ce qui a changé depuis la version du 21/11)
 
-1. **Série v2 terminée** (33 entraînements, 0 échec, nuit du 21 au 22/11 et journée du 22). Faute de temps de
+1. **Série v2 terminée** (31 entraînements, 0 échec, nuit du 21 au 22/11 et journée du 22). Faute de temps de
    calcul, l'étudiant a choisi de réduire : 3 graines pour PPO (3 variantes), TQC (graine 0 : 1 M de pas ;
    graines 1 et 2 : 500 000), DQN, Deep Monte-Carlo et les tabulaires ; 1 graine pour SAC, TD3, QR-DQN et
    Deep SARSA. Résultats complets au § 13.
@@ -290,7 +290,7 @@ pas de chicane) ; presque tous sortent à la 1re chicane de Monza (16 % du tour)
 
 ## 13. Série v2 : résultats réels (voiture F1, circuits réels)
 
-**Entraînement** (nuit du 21 au 22/11/2026 et journée du 22, sur le PC i3) : 33 runs, 0 échec. En parallèle
+**Entraînement** (nuit du 21 au 22/11/2026 et journée du 22, sur le PC i3) : 31 runs, 0 échec. En parallèle
 sur 2 cœurs, tout allait 2 à 3 fois moins vite que prévu (TQC ≈ 20 pas/s) ; l'étudiant a choisi de réduire :
 3 graines pour PPO (3 variantes), TQC (graine 0 : 1 M de pas ; graines 1 et 2 : 500 000), DQN, Deep MC et
 les tabulaires ; 1 graine pour SAC, TD3, QR-DQN, Deep SARSA. Entraînement sur 17 circuits réels, départs

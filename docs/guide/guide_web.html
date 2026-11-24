@@ -130,6 +130,7 @@ footer { color: var(--muted); font-size: .85rem; max-width: 72ch; }
 <li><a href="#ch05"><span class="pos">05</span><span class="name">Protocole et résultats</span></a></li>
 <li><a href="#ch06"><span class="pos">06</span><span class="name">Du code à l’écran</span></a></li>
 <li><a href="#ch07"><span class="pos">07</span><span class="name">25 questions du professeur</span></a></li>
+<li><a href="#ch08"><span class="pos">08</span><span class="name">Bilan de la série v2</span></a></li>
       </ol>
       <div class="tools">
         <button type="button" id="theme">Thème clair / sombre</button>
@@ -185,6 +186,10 @@ footer { color: var(--muted); font-size: .85rem; max-width: 72ch; }
 <tr>
 <td><a href="#ch07">07 — Questions du professeur</a></td>
 <td>Comment répondre à l’oral avec un exemple ou une source.</td>
+</tr>
+<tr>
+<td><a href="#ch08">08 — Bilan de la série v2</a></td>
+<td>Ce que la série v2 a donné, circuit par circuit, et comment les agents échouent.</td>
 </tr>
 </tbody>
 </table></div>
@@ -1345,6 +1350,479 @@ experiments/JOURNAL.md   Historique des expériences
 <p>Dans AI Championship, les départs des agents v2 étaient décalés. L’évaluation héritait du départ aléatoire de l’entraînement. Le code force désormais le départ sur la ligne et les résultats v2 ont été recalculés. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#correction--évaluation-v2-refaite-depuis-la-ligne-de-départ-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, correction v2</a></p>
 <h3>25. Un beau replay suffit-il à prouver la généralisation ?</h3>
 <p>Pour la mesurer, je cite le tableau qui rassemble toutes les graines disponibles sur les circuits réservés. Un replay de démonstration v2 illustre la conduite d’une graine sélectionnée sur un épisode. Les tracés de démonstration comprennent aussi des circuits d’entraînement. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#replays-de-démonstration-série-v2-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Replays de démonstration série v2 »</a></p></section>
+<section class="chapter" id="ch08" aria-labelledby="ch08-t"><p class="eyebrow">Chapitre 08</p><h2 id="ch08-t">Bilan de la série v2</h2><p>Ce chapitre rassemble tout ce qu’il faut savoir sur la série v2 pour présenter les diapositives 10 à 17. Il reprend le journal d’expériences dans l’ordre où les choses se sont passées, puis détaille les résultats circuit par circuit et la manière dont les agents échouent. Tous les chiffres viennent de <code>results/eval_f1_v2.csv</code>, l’évaluation corrigée, depuis la ligne de départ. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md#correction--évaluation-v2-refaite-depuis-la-ligne-de-départ-22112026-soir" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Correction : évaluation v2 refaite depuis la ligne de départ »</a></p>
+<h2>En une phrase</h2>
+<p>Avec une voiture de F1 réaliste et 17 circuits réels pour s’entraîner, 5 conditions sur 13 bouclent des tours sur 8 circuits de F1 jamais vus : <strong>66 tours</strong> en tout, contre 2 sur 576 essais en série v1. Le meilleur agent est PPO entraîné avec une adhérence variable, mais aucun agent ne boucle un tour sur piste glissante, et tous restent plus lents que le pilote classique.</p>
+<h2>Ce qui s’est passé, dans l’ordre</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Date</th>
+<th>Étape</th>
+<th>Ce qui s’est passé</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>21/11</td>
+<td>Premier essai v2</td>
+<td>PPO, 2,4 millions de pas : 0 tour. Diagnostic : plein gaz (gaz moyen 0,96, frein 0,03), entrée en virage à 230–290 km/h pour une limite de 50 à 160 km/h. Essai arrêté.</td>
+</tr>
+<tr>
+<td>21/11</td>
+<td>Trois corrections</td>
+<td>Pédale unique (−1 frein … +1 gaz), sortie qui coûte −(10 + 0,01 v²), γ porté de 0,99 à 0,995. Les trois en même temps.</td>
+</tr>
+<tr>
+<td>21/11, 20 h 39</td>
+<td>Lancement</td>
+<td>13 conditions × 3 graines, en 3 files parallèles sur l’Intel Core i3.</td>
+</tr>
+<tr>
+<td>22/11, 8 h 50</td>
+<td>Budget réduit</td>
+<td>En parallèle, les débits chutent (SAC 42 pas/s au lieu de 131, TQC ≈ 21 au lieu de 66). Les 3 graines complètes auraient demandé ≈ 38 h de plus. Décision : réduire les graines.</td>
+</tr>
+<tr>
+<td>22/11, 17 h 52</td>
+<td>Fin des entraînements</td>
+<td>Tous les entraînements prévus sont terminés, sans échec.</td>
+</tr>
+<tr>
+<td>22/11, 17 h 59</td>
+<td>Première évaluation</td>
+<td>8 circuits de test × 3 adhérences, meilleur checkpoint de chaque entraînement.</td>
+</tr>
+<tr>
+<td>22/11, soir</td>
+<td>Défaut repéré, évaluation refaite</td>
+<td>Dans AI Championship, les voitures ne partaient pas ensemble : l’évaluation gardait le départ aléatoire de l’entraînement. Départ sur la ligne forcé, tout réévalué. Conclusions inchangées.</td>
+</tr>
+</tbody>
+</table></div>
+<p><a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Série v2 — préparation », « nuit du 21 au 22/11 », « fin des entraînements » et « Correction »</a></p>
+<h2>Pourquoi certains algorithmes n’ont qu’une graine</h2>
+<p>Les trois files tournent en même temps sur un processeur à 2 cœurs. Les algorithmes qui réutilisent beaucoup de transitions passées (SAC, TD3, TQC, QR-DQN) sont les plus lents. Le budget a donc été réparti ainsi :</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Graines</th>
+<th>Conditions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3 graines</td>
+<td>PPO (3 variantes), TQC, DQN, Deep Monte-Carlo, Q-Learning, SARSA, Monte-Carlo</td>
+</tr>
+<tr>
+<td>1 graine</td>
+<td>SAC, TD3, QR-DQN, Deep SARSA</td>
+</tr>
+</tbody>
+</table></div>
+<p>TQC a <strong>1 million</strong> de pas en graine 0 et <strong>500 000</strong> en graines 1 et 2. Les résultats à une graine sont les moins sûrs : un 0 peut venir d’un mauvais tirage. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « Série v2 — nuit du 21 au 22/11/2026 »</a></p>
+<h2>Le résultat principal</h2>
+<p>Chaque graine est testée sur 8 circuits × 3 adhérences, soit 24 essais. Trois graines font donc 72 essais. Les pilotes de référence ne s’entraînent pas : ils sont testés une fois, sur 24 essais.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>μ 1,0</th>
+<th>μ 0,8</th>
+<th>μ 0,6</th>
+<th>Total</th>
+<th>Par graine (0 / 1 / 2)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pilote classique</td>
+<td>8/8</td>
+<td>8/8</td>
+<td>8/8</td>
+<td>24/24</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Pilote trajectoire idéale</td>
+<td>8/8</td>
+<td>8/8</td>
+<td>7/8</td>
+<td>23/24</td>
+<td>—</td>
+</tr>
+<tr>
+<td>PPO adhérence variable</td>
+<td>13/24</td>
+<td>9/24</td>
+<td>0/24</td>
+<td><strong>22/72</strong></td>
+<td>9 / 5 / 8</td>
+</tr>
+<tr>
+<td>PPO petit réseau 2 × 64</td>
+<td>10/24</td>
+<td>5/24</td>
+<td>0/24</td>
+<td>15/72</td>
+<td>10 / 3 / 2</td>
+</tr>
+<tr>
+<td>TQC</td>
+<td>6/24</td>
+<td>5/24</td>
+<td>0/24</td>
+<td>11/72</td>
+<td>10 / 1 / 0</td>
+</tr>
+<tr>
+<td>PPO 2 × 256</td>
+<td>7/24</td>
+<td>4/24</td>
+<td>0/24</td>
+<td>11/72</td>
+<td>0 / 11 / 0</td>
+</tr>
+<tr>
+<td>Deep Monte-Carlo</td>
+<td>3/24</td>
+<td>4/24</td>
+<td>0/24</td>
+<td>7/72</td>
+<td>4 / 3 / 0</td>
+</tr>
+<tr>
+<td>DQN, Q-Learning, SARSA, Monte-Carlo</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0/72 chacun</td>
+<td>—</td>
+</tr>
+<tr>
+<td>SAC, TD3, QR-DQN, Deep SARSA</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0/24 chacun</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<p>Ce qu’il faut savoir lire :</p>
+<ul>
+<li><strong>PPO adhérence variable</strong> est le seul agent dont les trois graines bouclent des tours. C’est lui qui a le plus de tours au total et sur piste humide.</li>
+<li><strong>PPO 2 × 256</strong> dépend beaucoup de la graine : 0, 11, puis 0. Ses 11 tours viennent tous de la graine 1.</li>
+<li>Sur piste glissante (μ 0,6), <strong>aucun agent</strong> ne boucle un tour. Les deux pilotes de référence y arrivent, mais ils connaissent l’adhérence, ce que les agents ne savent pas.</li>
+</ul>
+<h2>Circuit par circuit</h2>
+<p>Le tableau répartit les 66 tours bouclés par des agents (toutes conditions, graines et adhérences). Ce décompte a été calculé le 24/11/2026 à partir de <code>results/eval_f1_v2.csv</code>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Circuit de test</th>
+<th style="text-align: right;">Tours bouclés par des agents</th>
+<th style="text-align: right;">Dont PPO adhérence variable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Zandvoort</td>
+<td style="text-align: right;">15</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr>
+<td>Hungaroring</td>
+<td style="text-align: right;">14</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr>
+<td>Silverstone</td>
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr>
+<td>Suzuka</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td>Red Bull Ring</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td>Barcelone</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr>
+<td>Spa</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>Monza</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table></div>
+<p>Par adhérence, les 66 tours se répartissent en <strong>39</strong> à μ 1,0, <strong>27</strong> à μ 0,8 et <strong>0</strong> à μ 0,6.</p>
+<p>Monza et Spa sont les plus difficiles pour les agents : 2 et 3 tours seulement. Monza est aussi le circuit où les agents de la série v1 sortaient à la première chicane. Le tableau ne dit pas pourquoi certains circuits sont plus durs ; une piste à creuser serait de comparer les vitesses d’entrée dans les chicanes.</p>
+<h2>Comment les agents échouent</h2>
+<p>Un épisode sans tour se termine de trois façons : <strong>sortie de piste</strong>, <strong>arrêt</strong> (100 pas sans progresser : la voiture s’est presque immobilisée) ou <strong>temps écoulé</strong> (6 000 pas sans finir le tour). Décompte calculé le 24/11/2026 à partir de <code>results/eval_f1_v2.csv</code> :</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Condition</th>
+<th style="text-align: right;">Essais</th>
+<th style="text-align: right;">Tours</th>
+<th style="text-align: right;">Sorties</th>
+<th style="text-align: right;">Arrêts</th>
+<th style="text-align: right;">Temps écoulé</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PPO adhérence variable</td>
+<td style="text-align: right;">72</td>
+<td style="text-align: right;">22</td>
+<td style="text-align: right;">46</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>PPO 2 × 64</td>
+<td style="text-align: right;">72</td>
+<td style="text-align: right;">15</td>
+<td style="text-align: right;">52</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td>PPO 2 × 256</td>
+<td style="text-align: right;">72</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">53</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td>TQC</td>
+<td style="text-align: right;">72</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">55</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>Deep Monte-Carlo</td>
+<td style="text-align: right;">72</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">27</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">35</td>
+</tr>
+<tr>
+<td>DQN</td>
+<td style="text-align: right;">72</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">70</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>Q-Learning</td>
+<td style="text-align: right;">72</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">72</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>SARSA</td>
+<td style="text-align: right;">72</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">48</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>Monte-Carlo</td>
+<td style="text-align: right;">72</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">70</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>SAC</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>TD3</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>QR-DQN</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">20</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>Deep SARSA</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">17</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table></div>
+<p>Trois comportements différents :</p>
+<ul>
+<li><strong>La plupart sortent de piste</strong> : ils vont trop vite pour le virage.</li>
+<li><strong>Monte-Carlo tabulaire et Deep SARSA s’arrêtent</strong> : la voiture s’immobilise, ce que le journal a vérifié pour Monte-Carlo. Explication plausible : à l’arrêt, on ne sort jamais, donc on évite la grosse pénalité de sortie.</li>
+<li><strong>Deep Monte-Carlo roule trop lentement</strong> : la moitié de ses essais (35 sur 72) dépassent 6 000 pas sans finir le tour.</li>
+</ul>
+<p>Ces décomptes viennent de l’évaluation corrigée. Le journal cite des nombres un peu différents (67 arrêts pour Monte-Carlo, 37 temps écoulés pour Deep Monte-Carlo) : ils datent de la première évaluation, avec départ aléatoire.</p>
+<h2>Le temps au tour</h2>
+<p>Pour chaque tour bouclé, on divise le temps de l’agent par celui du pilote classique, sur le même circuit et à la même adhérence. Un rapport de 1,48 veut dire 48 % plus lent.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Agent</th>
+<th style="text-align: right;">Rapport moyen</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PPO 2 × 64</td>
+<td style="text-align: right;">× 1,43</td>
+</tr>
+<tr>
+<td>PPO adhérence variable</td>
+<td style="text-align: right;">× 1,48</td>
+</tr>
+<tr>
+<td>PPO 2 × 256</td>
+<td style="text-align: right;">× 1,52</td>
+</tr>
+<tr>
+<td>TQC</td>
+<td style="text-align: right;">× 1,85</td>
+</tr>
+<tr>
+<td>Deep Monte-Carlo</td>
+<td style="text-align: right;">× 2,81</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Aucun des 66 tours</strong> n’est plus rapide que le pilote classique, qui ne vise pourtant que 85 % de la vitesse limite des virages. Les agents ont appris à ne pas sortir plutôt qu’à aller vite.</p>
+<p>Pour donner un ordre de grandeur, voici les temps des deux pilotes de référence à μ 1,0 :</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Circuit</th>
+<th style="text-align: right;">Pilote classique (s)</th>
+<th style="text-align: right;">Trajectoire idéale (s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Monza</td>
+<td style="text-align: right;">100,50</td>
+<td style="text-align: right;">91,45</td>
+</tr>
+<tr>
+<td>Spa</td>
+<td style="text-align: right;">128,35</td>
+<td style="text-align: right;">113,70</td>
+</tr>
+<tr>
+<td>Silverstone</td>
+<td style="text-align: right;">120,65</td>
+<td style="text-align: right;">95,70</td>
+</tr>
+<tr>
+<td>Suzuka</td>
+<td style="text-align: right;">113,70</td>
+<td style="text-align: right;">98,50</td>
+</tr>
+<tr>
+<td>Hungaroring</td>
+<td style="text-align: right;">102,45</td>
+<td style="text-align: right;">89,50</td>
+</tr>
+<tr>
+<td>Barcelone</td>
+<td style="text-align: right;">101,80</td>
+<td style="text-align: right;">88,65</td>
+</tr>
+<tr>
+<td>Red Bull Ring</td>
+<td style="text-align: right;">83,20</td>
+<td style="text-align: right;">76,15</td>
+</tr>
+<tr>
+<td>Zandvoort</td>
+<td style="text-align: right;">94,20</td>
+<td style="text-align: right;">83,35</td>
+</tr>
+</tbody>
+</table></div>
+<p>Valeurs tirées de <code>results/eval_f1_v2.csv</code>. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « fin des entraînements »</a></p>
+<h2>Bien apprendre n’est pas bien généraliser</h2>
+<p>Deux exemples tirés du journal montrent qu’un bon score à l’entraînement ne prédit pas le test :</p>
+<ul>
+<li><strong>TQC</strong> : la graine 2, la meilleure à l’entraînement, boucle <strong>0/24</strong> au test. La graine 0, qui n’avait bouclé aucun tour pendant ses évaluations d’entraînement, en boucle <strong>10/24</strong>.</li>
+<li><strong>PPO 2 × 256</strong> : la graine 0 est restée bloquée pendant tout l’entraînement (récompense finale 33,5, contre 386,3 pour la graine 1). Au test, elle boucle 0 tour et la graine 1 en boucle 11.</li>
+</ul>
+<p>C’est pour cela que le protocole teste sur des circuits séparés, et qu’il faut plusieurs graines avant de conclure. <a href="https://github.com/Tomota113/Pilotage_autonome/blob/main/experiments/JOURNAL.md" target="_blank" rel="noopener"><code>experiments/JOURNAL.md</code>, « nuit du 21 au 22/11 » et « fin des entraînements »</a></p>
+<h2>Ce qu’on peut affirmer, et ce qu’on ne peut pas</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>On peut dire</th>
+<th>On ne peut pas dire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>La série v2 généralise mieux que la v1 : 66 tours contre 2.</td>
+<td>Laquelle des modifications (voiture, circuits réels, départs aléatoires, récompense, γ, pédale) a fait la différence : elles ont changé ensemble.</td>
+</tr>
+<tr>
+<td>PPO adhérence variable est le meilleur agent de cette expérience, et ses 3 graines bouclent des tours.</td>
+<td>Que PPO est le meilleur algorithme en général : SAC, TD3, QR-DQN et Deep SARSA n’ont qu’une graine.</td>
+</tr>
+<tr>
+<td>Sur ces essais, le petit réseau 2 × 64 fait mieux que le 2 × 256 (15 contre 11).</td>
+<td>Qu’un petit réseau est meilleur : les écarts entre graines sont plus grands que l’écart entre les deux.</td>
+</tr>
+<tr>
+<td>Aucun agent ne boucle un tour à μ 0,6.</td>
+<td>Que les agents ne pourront jamais rouler sur piste glissante : ils n’observent pas μ, une estimation de l’adhérence pourrait changer cela.</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Questions à préparer</h2>
+<p><strong>Pourquoi n’avoir pas fait 3 graines partout ?</strong> Le calcul se fait sur un seul PC portable sans carte graphique. En parallèle, les algorithmes les plus lents tournaient entre 20 et 60 pas par seconde : les 3 graines complètes auraient demandé environ 38 heures de plus.</p>
+<p><strong>Pourquoi les méthodes tabulaires font-elles 0 ?</strong> Q-Learning sort de piste à chaque essai. SARSA et surtout Monte-Carlo s’arrêtent souvent. La table regroupe des situations qui demandent des freinages différents, et 9 actions limitent la finesse. C’est une explication plausible, pas démontrée.</p>
+<p><strong>Les chiffres ont-ils changé après la correction du départ ?</strong> Très peu : PPO adhérence variable passe de 23 à 22 tours, Deep Monte-Carlo de 5 à 7, les autres ne bougent pas. Les conclusions sont les mêmes.</p>
+<p><strong>Pourquoi Monza est-il si difficile ?</strong> On constate que les agents y bouclent 2 tours seulement, mais l’expérience ne mesure pas la cause. Le journal de la série v1 avançait une hypothèse : des chicanes après de longues lignes droites, qui demandent de freiner très fort et au bon moment.</p></section>
       <footer>
         <p>Chaque chiffre de ce guide vient d'un vrai entraînement, noté dans <code>experiments/JOURNAL.md</code> avec son
           identifiant, sa configuration et sa graine. Les liens vers les fichiers ouvrent le dépôt du projet.</p>

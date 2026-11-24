@@ -324,3 +324,13 @@ La mémoire récente de SARSA et les mises à jour en fin d'épisode de Monte-Ca
 - Réseaux 2 × 256 au lieu de 2 × 64 ; la condition `ppo_f1_net64` mesure l'effet de la taille du réseau.
 - 13 conditions × 3 graines. Débits mesurés et files équilibrées : ≈ 5 h 30 par graine en 3 files
   parallèles (`tools/run_v2.sh 0` pour une graine, `tools/run_v2.sh` pour les trois).
+
+## Préparation de l'oral : bilan de la série v2 et correction « 33 → 31 » (24/11/2026)
+
+- Nouveau chapitre du guide `docs/guide/08_bilan_serie_v2.md` : la série v2 dans l'ordre chronologique, les
+  résultats circuit par circuit et la manière dont les agents échouent (sortie, arrêt, temps écoulé). Ces deux
+  derniers tableaux sont recalculés depuis `results/eval_f1_v2.csv` (évaluation corrigée, départ sur la ligne) ;
+  leurs totaux retombent sur ceux du journal (66 tours d'agents).
+- Le nombre d'entraînements v2 était noté « 33 » ; `runs/` et `results/eval_f1_v2.csv` n'en contiennent que
+  31 (9 conditions × 3 graines + 4 conditions × 1 graine). Corrigé dans la diapositive « Protocole », le journal
+  (avec mention de l'erreur) et le document de contexte. Aucun résultat ne change.

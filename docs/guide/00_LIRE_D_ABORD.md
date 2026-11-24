@@ -24,6 +24,7 @@
 | [05 — Protocole et résultats](05_protocole_et_resultats.md) | D’où vient un score et jusqu’où on peut l’interpréter. |
 | [06 — Code et application](06_code_et_application.md) | Comment une expérience devient un résultat et un replay. |
 | [07 — Questions du professeur](07_questions_du_professeur.md) | Comment répondre à l’oral avec un exemple ou une source. |
+| [08 — Bilan de la série v2](08_bilan_serie_v2.md) | Ce que la série v2 a donné, circuit par circuit, et comment les agents échouent. |
 
 ## Vocabulaire minimal
 

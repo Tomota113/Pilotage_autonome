@@ -165,7 +165,7 @@ Ces chiffres sont des évaluations d'entraînement ; l'évaluation sur les circu
 
 ## Série v2 — fin des entraînements et évaluation sur les 8 circuits F1 (22/11/2026)
 
-Entraînements terminés à 17 h 52 (33 runs, 0 échec ; `tools/run_v2_reduced.sh`). Évaluation
+Entraînements terminés à 17 h 52 (31 runs, 0 échec — d’abord noté « 33 » par erreur, corrigé le 24/11 d’après `runs/` et `results/eval_f1_v2.csv` ; `tools/run_v2_reduced.sh`). Évaluation
 `python -m tools.evaluate_f1 --series v2` (17 h 52 → 17 h 59) : meilleur checkpoint de chaque run (choisi sur
 les évaluations d'entraînement), voiture F1_2024, 8 circuits F1 jamais vus × μ ∈ {1,0 ; 0,8 ; 0,6}, 1 épisode
 déterministe depuis la ligne de départ, 6 000 pas max. Résultats : `results/eval_f1_v2.csv`, figures
